@@ -1,0 +1,19 @@
+services:
+  traicr-server:
+    build:
+      context: .
+    environment:
+      TRAICR_ADMIN_TOKEN: "${TRAICR_ADMIN_TOKEN:?TRAICR_ADMIN_TOKEN must be set}"
+      TRAICR_DATA_DIR: /data
+      TRAICR_LISTEN_ADDRESS: ":8080"
+    ports:
+      - "8080:8080"
+    read_only: true
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - traicr-data:/data
+
+volumes:
+  traicr-data:

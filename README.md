@@ -2,7 +2,7 @@
 
 Traicr collects, preserves, and searches one person's AI coding traces across multiple macOS and Linux machines.
 
-The project is currently in the design phase. Implementation has not started.
+The Go foundation is implemented. Trace collection, archive import, and search behavior will arrive in later milestones.
 
 ## Planned sources
 
@@ -22,6 +22,31 @@ Traicr has two Go applications:
 - A Docker-hosted server with a search API and Web UI
 
 Collectors create lossless Trace ZIPs. The server retains their native Source Records, derives common searchable Events, deduplicates sessions across machines and revisions, and indexes text in SQLite.
+
+## Development
+
+Run the complete local checks and builds:
+
+```sh
+make all
+make test-race
+```
+
+Release metadata is supplied explicitly, so repeated builds with the same inputs are deterministic:
+
+```sh
+make build VERSION=v0.1.0 COMMIT="$(git rev-parse HEAD)" BUILD_DATE=2026-08-22T10:00:00Z
+```
+
+Start the foundation server with Docker Compose:
+
+```sh
+export TRAICR_ADMIN_TOKEN='replace-with-a-long-random-token'
+docker compose up --build
+curl http://localhost:8080/healthz
+```
+
+The Compose service uses one persistent `/data` volume and a read-only container filesystem. The server refuses to start when `TRAICR_ADMIN_TOKEN` is absent.
 
 ## Documentation
 

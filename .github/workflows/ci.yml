@@ -1,0 +1,81 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24.x"
+          cache: true
+      - run: make lint
+      - run: make test
+      - run: make test-race
+
+  collector-build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        goos:
+          - darwin
+          - linux
+        goarch:
+          - amd64
+          - arm64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24.x"
+          cache: true
+      - name: Build collector for ${{ matrix.goos }}/${{ matrix.goarch }}
+        env:
+          CGO_ENABLED: "0"
+          GOARCH: ${{ matrix.goarch }}
+          GOOS: ${{ matrix.goos }}
+        run: go build -trimpath -o bin/traicr-${GOOS}-${GOARCH} ./cmd/traicr
+
+  server-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24.x"
+          cache: true
+      - name: Build Linux server
+        env:
+          CGO_ENABLED: "0"
+          GOOS: linux
+        run: go build -trimpath -o bin/traicr-server ./cmd/traicr-server
+      - name: Build server image
+        run: docker build --tag traicr-server:test .
+      - name: Reject startup without an admin token
+        run: |
+          if docker run --rm traicr-server:test; then
+            echo "server unexpectedly started without TRAICR_ADMIN_TOKEN"
+            exit 1
+          fi
+      - name: Start read-only server image
+        run: >-
+          docker run --detach --rm
+          --name traicr-server
+          --read-only
+          --env TRAICR_ADMIN_TOKEN=test-token
+          --mount type=volume,src=traicr-test-data,dst=/data
+          --publish 8080:8080
+          traicr-server:test
+      - name: Verify non-root health endpoint
+        run: |
+          test "$(docker exec traicr-server id -u)" = "10001"
+          curl --fail --retry 10 --retry-connrefused --retry-delay 1 http://127.0.0.1:8080/healthz
