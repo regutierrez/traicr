@@ -58,24 +58,17 @@ jobs:
           CGO_ENABLED: "0"
           GOOS: linux
         run: go build -trimpath -o bin/traicr-server ./cmd/traicr-server
-      - name: Build server image
-        run: docker build --tag traicr-server:test .
-      - name: Reject startup without an admin token
-        run: |
-          if docker run --rm traicr-server:test; then
-            echo "server unexpectedly started without TRAICR_ADMIN_TOKEN"
-            exit 1
-          fi
-      - name: Start read-only server image
-        run: >-
-          docker run --detach --rm
-          --name traicr-server
-          --read-only
-          --env TRAICR_ADMIN_TOKEN=test-token
-          --mount type=volume,src=traicr-test-data,dst=/data
-          --publish 8080:8080
-          traicr-server:test
-      - name: Verify non-root health endpoint
-        run: |
-          test "$(docker exec traicr-server id -u)" = "10001"
-          curl --fail --retry 10 --retry-connrefused --retry-delay 1 http://127.0.0.1:8080/healthz
+
+  end-to-end:
+    runs-on: ubuntu-latest
+    needs:
+      - test
+      - server-build
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24.x"
+          cache: true
+      - name: Test production container and Compose deployment
+        run: go test -count=1 -tags=e2e -timeout=5m ./test/e2e

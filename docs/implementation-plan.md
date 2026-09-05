@@ -2,6 +2,8 @@
 
 This plan delivers the accepted [system design](./design.md) as reviewable vertical slices. Each milestone must leave the repository buildable and tested. Harness adapters are added only after the archive, import, deduplication, and search contracts work end to end.
 
+Milestones 1 through 9 deliver the first-release MVP. Mutation testing begins only after that MVP is complete so feature delivery establishes the behavior and test suite before mutation analysis hardens it.
+
 ## Repository layout
 
 ```text
@@ -287,6 +289,26 @@ Add one adapter at a time. Each adapter includes discovery, collection, Source R
 - A fresh macOS or Linux machine can download one collector binary, collect a supported trace, and upload it without Go or another runtime.
 - A fresh Debian server can start Traicr from Docker Compose with one token and one volume.
 - The complete adapter, import, deduplication, search, UI, deletion, and renormalization test suite passes.
+
+## Milestone 10: Post-MVP mutation testing
+
+### Work
+
+- Select and pin a Go mutation-testing tool, then commit its configuration and direct developer commands.
+- Mutate production Go code while continuing to express permanent checks as ordinary `*_test.go` behavior tests.
+- Establish and review a baseline across the unit-test packages without rebuilding the Docker end-to-end environment for every mutant.
+- Classify surviving mutants as missing behavior checks, equivalent mutations, unnecessary production logic, or tool limitations.
+- Add or strengthen ordinary tests for meaningful survivors and simplify production code when a survivor exposes unnecessary logic.
+- Run diff-scoped mutation analysis on pull requests and periodic full analysis separately from the ordinary unit and end-to-end suites.
+- Introduce mutation-score enforcement only after the baseline is reviewed, using a threshold that prevents regression rather than an arbitrary target.
+- Keep generated mutants, temporary worktrees, and reports out of version control.
+
+### Acceptance
+
+- A documented, reproducible command runs mutation analysis from a clean checkout with the pinned tool version.
+- Every surviving mutant in security, archive validation, import, deduplication, authentication, and search decision logic is either killed by a behavior test or explicitly classified.
+- CI reports mutation results for changed Go code within an acceptable runtime.
+- The enforced mutation threshold is derived from a reviewed baseline and does not require Docker end-to-end execution for each mutant.
 
 ## Fixture and compatibility policy
 

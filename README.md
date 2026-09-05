@@ -32,6 +32,14 @@ make all
 make test-race
 ```
 
+Run the Docker-backed end-to-end tests explicitly:
+
+```sh
+go test -count=1 -tags=e2e -timeout=5m ./test/e2e
+```
+
+The end-to-end build tag keeps Docker-dependent tests out of ordinary `go test ./...` runs.
+
 Release metadata is supplied explicitly, so repeated builds with the same inputs are deterministic:
 
 ```sh
