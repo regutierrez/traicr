@@ -6,6 +6,8 @@ WORKDIR /src
 COPY go.mod go.sum ./
 COPY cmd ./cmd
 COPY internal ./internal
+COPY migrations ./migrations
+COPY web ./web
 
 ARG VERSION=development
 ARG COMMIT=unknown
