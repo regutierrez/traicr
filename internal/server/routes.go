@@ -56,6 +56,7 @@ func NewHTTPHandler(configuration config.ServerConfig, database *store.Store, lo
 	mux.Handle("POST /logout", app.browser(app.logout))
 	mux.Handle("GET /{$}", app.browser(app.searchPage))
 	mux.Handle("GET /traces/{id}", app.browser(app.tracePage))
+	mux.Handle("GET /traces/{id}/events", app.browser(app.eventsAPI))
 	mux.Handle("POST /traces/{id}/delete", app.browser(app.deletePage))
 	mux.Handle("GET /events/{id}/sources", app.browser(app.sourcesPage))
 	mux.Handle("GET /revisions/{id}/sources", app.browser(app.revisionPage))

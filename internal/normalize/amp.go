@@ -2,6 +2,7 @@ package normalize
 
 import (
 	"context"
+	"encoding/json"
 	"io/fs"
 
 	"github.com/regutierrez/traicr/internal/domain"
@@ -22,7 +23,7 @@ func normalizeAmp(ctx context.Context, sourceFS fs.FS) (domain.Normalization, er
 	}
 	var events []domain.Event
 	var warnings []domain.Warning
-	for _, message := range messages {
+	for messageIndex, message := range messages {
 		if err := ctx.Err(); err != nil {
 			return domain.Normalization{}, err
 		}
@@ -42,13 +43,21 @@ func normalizeAmp(ctx context.Context, sourceFS fs.FS) (domain.Normalization, er
 		if !isBlocks {
 			blocks = []any{map[string]any{"type": "text", "text": contentText(content)}}
 		}
+		messageKey := nativeKey("amp-message", id, message)
+		parentMessageKey := ""
+		if parent != "" {
+			parentMessageKey = nativeKey("amp-message", parent, nil)
+		}
 		for index, raw := range blocks {
 			if err := ctx.Err(); err != nil {
 				return domain.Normalization{}, err
 			}
 			block := object(raw)
 			kind := firstString(block, "type", "kind")
-			event := domain.Event{Role: role, Model: model, Timestamp: messageTimestamp, Sources: source("source/export.json", 0)}
+			// Native exports can omit IDs and timestamps. Preserve their message
+			// order separately from stable event identity for transcript rendering.
+			metadata, _ := json.Marshal(map[string]any{"transcript_message": messageKey, "transcript_parent": parentMessageKey, "transcript_order": messageIndex, "transcript_block": index})
+			event := domain.Event{Role: role, Model: model, Timestamp: messageTimestamp, Sources: source("source/export.json", 0), Metadata: metadata}
 			if parent != "" {
 				event.ParentKey = nativeKey("message", parent, nil)
 			}
@@ -60,7 +69,8 @@ func normalizeAmp(ctx context.Context, sourceFS fs.FS) (domain.Normalization, er
 			case "tool_use", "tool_call", "function_call":
 				event.Kind = "tool_call"
 				event.Tool = firstString(block, "name", "tool")
-				event.CallID = firstString(block, "toolUseID", "providerToolUseId", "callId", "call_id", "id")
+				// Amp results refer to its native tool-use ID, not the provider's ID.
+				event.CallID = firstString(block, "toolUseID", "id", "providerToolUseId", "callId", "call_id")
 				event.Text = readableJSON(firstValue(block, "input", "arguments"))
 			case "tool_result", "function_call_output":
 				event.Kind = "tool_result"

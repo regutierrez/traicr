@@ -60,5 +60,6 @@ The Compose service uses one persistent `/data` volume and a read-only container
 
 - [Domain language](./CONTEXT.md)
 - [System design](./docs/design.md)
+- [Transcript browsing and Pi viewer](./docs/transcript-viewer.md)
 - [Implementation plan](./docs/implementation-plan.md)
 - [Architecture decisions](./docs/adr/)

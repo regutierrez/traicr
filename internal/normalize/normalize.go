@@ -9,7 +9,9 @@ import (
 
 func Version(harness string) int {
 	switch harness {
-	case "pi", "claude-code", "cursor-agent", "cursor", "amp", "opencode", "codex", "grok-build":
+	case "amp":
+		return 2
+	case "pi", "claude-code", "cursor-agent", "cursor", "opencode", "codex", "grok-build":
 		return 1
 	default:
 		return 0

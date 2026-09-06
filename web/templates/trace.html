@@ -1,6 +1,6 @@
 {{ define "trace" }}
   {{ template "header" . }}
-  <a class="back" href="/">← Back to search</a>
+  <a class="back" href="/traces/{{ .Trace.ID }}">← Back to transcript</a>
   <section class="page-heading">
     <div>
       <p class="eyebrow">{{ .Trace.Harness }} / TRACE</p>
@@ -58,7 +58,7 @@
       {{ end }}{{ if .NextCursor }}
         <a
           class="button secondary next"
-          href="/traces/{{ .Trace.ID }}?cursor={{ .NextCursor }}"
+          href="/traces/{{ .Trace.ID }}?view=records&amp;cursor={{ .NextCursor }}"
         >
           Next events →
         </a>

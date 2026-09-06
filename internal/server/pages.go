@@ -62,8 +62,8 @@ func (app *application) searchPage(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
 	started := time.Now()
-	page, err := app.store.Search(ctx, query)
 	if strings.HasPrefix(r.URL.Path, "/api/") {
+		page, err := app.store.Search(ctx, query)
 		if err != nil {
 			app.failure(w, err)
 			return
@@ -71,7 +71,8 @@ func (app *application) searchPage(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, page)
 		return
 	}
-	data := map[string]any{"Title": "Find the work behind the code.", "Query": query, "Results": page.Results, "Elapsed": time.Since(started).Milliseconds(), "Harnesses": []string{"amp", "claude-code", "codex", "cursor", "cursor-agent", "grok-build", "opencode", "pi"}}
+	page, err := app.store.TranscriptCards(ctx, query)
+	data := map[string]any{"Title": "Your sessions.", "Query": query, "Cards": page.Cards, "Elapsed": time.Since(started).Milliseconds(), "Harnesses": []string{"amp", "claude-code", "codex", "cursor", "cursor-agent", "grok-build", "opencode", "pi"}}
 	if err != nil {
 		if !errors.Is(err, store.ErrInvalidQuery) {
 			app.failure(w, err)
@@ -98,6 +99,14 @@ func (app *application) tracePage(w http.ResponseWriter, r *http.Request) {
 	}
 	if strings.HasPrefix(r.URL.Path, "/api/") {
 		writeJSON(w, trace)
+		return
+	}
+	if r.URL.Query().Get("view") != "records" {
+		title := trace.Title
+		if title == "" {
+			title = trace.NativeTraceID
+		}
+		app.render(w, r, "transcript", map[string]any{"Title": title, "Trace": trace})
 		return
 	}
 	limit, ok := pageLimit(w, r)
