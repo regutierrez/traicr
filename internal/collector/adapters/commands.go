@@ -20,7 +20,7 @@ import (
 
 const (
 	commandTimeout = 30 * time.Second
-	listLimit      = 1000
+	listLimit      = 500
 	maxListBytes   = 32 << 20
 	maxExportBytes = 512 << 20
 )

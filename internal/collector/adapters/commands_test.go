@@ -1,10 +1,52 @@
 package adapters
 
 import (
+	"context"
+	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 )
+
+func TestAmpListPaginatesWithinCLILimit(t *testing.T) {
+	if os.Getenv("TRAICR_TEST_AMP_LIST") == "1" {
+		args := os.Args
+		limit, _ := strconv.Atoi(args[len(args)-3])
+		offset, _ := strconv.Atoi(args[len(args)-1])
+		if limit <= 0 || limit > 500 {
+			fmt.Fprintln(os.Stderr, "--limit must be an integer <= 500")
+			os.Exit(1)
+		}
+		entries := make([]map[string]string, 0)
+		for i := offset; i < offset+limit && i < 501; i++ {
+			entries = append(entries, map[string]string{"id": fmt.Sprintf("T-%d", i), "updated": "2026-09-06T00:00:00Z"})
+		}
+		json.NewEncoder(os.Stdout).Encode(entries)
+		os.Exit(0)
+	}
+	binary, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	command := filepath.Join(dir, "amp")
+	if err := os.WriteFile(command, []byte("#!/bin/sh\nexec \"$TRAICR_TEST_BINARY\" -test.run=^TestAmpListPaginatesWithinCLILimit$ -- \"$@\"\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("TRAICR_TEST_AMP_LIST", "1")
+	t.Setenv("TRAICR_TEST_BINARY", binary)
+	traces, warnings := (commandAdapter{name: "amp", executable: command}).listAmp(context.Background())
+	if len(warnings) != 0 || len(traces) != 501 {
+		t.Fatalf("Amp pagination: %d traces, warnings: %+v", len(traces), warnings)
+	}
+	for i, trace := range traces {
+		if trace.ID != fmt.Sprintf("T-%d", i) {
+			t.Fatalf("Amp trace %d: %q", i, trace.ID)
+		}
+	}
+}
 
 func TestCommandListSchemasMatchAmpAndOpenCode(t *testing.T) {
 	amp, err := parseAmpList([]byte(`[{"id":"T-1","title":"Thread","updated":"2026-09-06T00:00:00Z","tree":"","messageCount":3}]`))

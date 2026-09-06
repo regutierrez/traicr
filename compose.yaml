@@ -6,6 +6,8 @@ services:
       TRAICR_ADMIN_TOKEN: "${TRAICR_ADMIN_TOKEN:?TRAICR_ADMIN_TOKEN must be set}"
       TRAICR_DATA_DIR: /data
       TRAICR_LISTEN_ADDRESS: ":8080"
+      # SQLite needs writable disk space for temporary tables and sorting.
+      TMPDIR: /data/tmp
     ports:
       - "8080:8080"
     read_only: true
