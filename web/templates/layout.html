@@ -1,0 +1,42 @@
+{{ define "header" }}
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="htmx-config" content='{"allowEval":false,"allowScriptTags":false,"historyCacheSize":0,"includeIndicatorStyles":false}'>
+    <title>{{ .Title }} · Traicr</title>
+    <link rel="stylesheet" href="/static/app.css">
+    <script src="/static/htmx.min.js" defer></script>
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="Traicr home">
+        <span class="brand-icon">t</span>traicr
+        <span class="private">PRIVATE ARCHIVE</span>
+      </a>
+      {{ if not .Login }}
+        <nav aria-label="Main navigation">
+          <a href="/" {{ if eq .Page "search" }}aria-current="page"{{ end }}>Search</a>
+          <a href="/imports" {{ if eq .Page "imports" }}aria-current="page"{{ end }}>Imports</a>
+          <a href="/machines" {{ if eq .Page "machines" }}aria-current="page"{{ end }}>Machines</a>
+        </nav>
+        <form action="/logout" method="post">
+          <input type="hidden" name="csrf" value="{{ .CSRF }}">
+          <button class="quiet" type="submit">Log out ↗</button>
+        </form>
+      {{ end }}
+    </header>
+    <main id="main" class="{{ if .Login }}login-layout{{ end }}">
+{{ end }}
+
+{{ define "footer" }}
+    </main>
+    <footer class="footer">
+      <span>TRAICR / YOUR WORK, PRESERVED.</span>
+      <span>Native records. One searchable archive.</span>
+    </footer>
+  </body>
+</html>
+{{ end }}

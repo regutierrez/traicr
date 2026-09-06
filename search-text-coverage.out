@@ -1,0 +1,23 @@
+mode: set
+github.com/regutierrez/traicr/internal/search/text.go:15.2,15.16 1 1
+github.com/regutierrez/traicr/internal/search/text.go:16.3,17.1 1 0
+github.com/regutierrez/traicr/internal/search/text.go:18.2,19.37 2 1
+github.com/regutierrez/traicr/internal/search/text.go:20.3,21.53 2 1
+github.com/regutierrez/traicr/internal/search/text.go:22.4,23.1 1 0
+github.com/regutierrez/traicr/internal/search/text.go:24.3,25.23 2 1
+github.com/regutierrez/traicr/internal/search/text.go:26.4,26.9 1 1
+github.com/regutierrez/traicr/internal/search/text.go:28.3,29.36 2 1
+github.com/regutierrez/traicr/internal/search/text.go:30.4,31.1 1 0
+github.com/regutierrez/traicr/internal/search/text.go:33.2,33.15 1 1
+github.com/regutierrez/traicr/internal/search/text.go:37.2,37.53 1 1
+github.com/regutierrez/traicr/internal/search/text.go:38.3,39.1 1 1
+github.com/regutierrez/traicr/internal/search/text.go:41.2,41.82 1 1
+github.com/regutierrez/traicr/internal/search/text.go:42.3,42.59 1 1
+github.com/regutierrez/traicr/internal/search/text.go:43.4,44.1 1 1
+github.com/regutierrez/traicr/internal/search/text.go:46.2,46.33 1 0
+github.com/regutierrez/traicr/internal/search/text.go:50.2,54.1 6 1
+github.com/regutierrez/traicr/internal/search/text.go:55.2,56.48 6 1
+github.com/regutierrez/traicr/internal/search/text.go:57.3,58.1 1 1
+github.com/regutierrez/traicr/internal/search/text.go:59.2,59.52 1 1
+github.com/regutierrez/traicr/internal/search/text.go:60.3,61.1 1 0
+github.com/regutierrez/traicr/internal/search/text.go:62.2,62.24 1 1

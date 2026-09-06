@@ -1,0 +1,3 @@
+{"type":"session","id":"pi-one","cwd":"/tmp/example","version":3}
+{"type":"message","id":"m1","parentId":null,"role":"user","content":"hello"}
+{"type":"extension-record","id":"x1","future":{"kept":true}}

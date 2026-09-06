@@ -52,6 +52,9 @@ func TestDeleteTraceRemovesMoreThanOneBatchOfObjects(t *testing.T) {
 }
 
 func TestDeleteCleanupErrorIsReturnedAndGCRecovers(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root bypasses directory write permissions")
+	}
 	database, dataDir := openMaintenanceStore(t)
 	input := traceInput("machine", "cleanup-error", "2026-08-22T10:00:00Z", "Cleanup", nil)
 	report, err := database.Import(context.Background(), input.manifest, input.files, normalizer(nil, "unsupported", 1), nil)

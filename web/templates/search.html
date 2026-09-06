@@ -1,0 +1,216 @@
+{{ define "search" }}
+  {{ template "header" . }}
+  <section class="page-heading">
+    <div>
+      <p class="eyebrow">THE TRACE ARCHIVE</p>
+      <h1>{{ .Title }}</h1>
+      <p class="subtitle">
+        Prompts, reasoning, tools, and the paths you took. Across every machine.
+      </p>
+    </div>
+    <span class="status">
+      <span></span>
+      Private by design
+    </span>
+  </section>
+  <form
+    class="search-form"
+    action="/"
+    method="get"
+    hx-get="/"
+    hx-target="#results"
+    hx-select="#results"
+    hx-swap="outerHTML"
+    hx-push-url="true"
+    hx-indicator="#searching"
+  >
+    <div class="search-row">
+      <label class="search-label" for="query">Search your traces</label>
+      <input
+        id="query"
+        name="q"
+        type="search"
+        value="{{ .Query.Query }}"
+        placeholder="A thought, a function, a file path…"
+        autocomplete="off"
+      />
+      <select name="mode" aria-label="Search mode">
+        <option
+          value="fulltext"
+          {{ if eq .Query.Mode "fulltext" }}selected{{ end }}
+        >
+          Full-text
+        </option>
+        <option value="exact" {{ if eq .Query.Mode "exact" }}selected{{ end }}>
+          Exact text
+        </option>
+        <option value="regex" {{ if eq .Query.Mode "regex" }}selected{{ end }}>
+          Regular expression
+        </option>
+      </select>
+      <button type="submit">
+        Search
+        <span aria-hidden="true">↵</span>
+      </button>
+    </div>
+    <details class="filters">
+      <summary>
+        Narrow your search
+        <span>Harness, model, machine, and more</span>
+      </summary>
+      <div class="filter-grid">
+        <label>
+          Harness
+          <select name="harness">
+            <option value="">All harnesses</option>
+            {{ range $h := .Harnesses }}
+              <option
+                value="{{ $h }}"
+                {{ if eq $.Query.Harness $h }}selected{{ end }}
+              >
+                {{ $h }}
+              </option>
+            {{ end }}
+          </select>
+        </label>
+        <label>
+          Model
+          <input
+            name="model"
+            value="{{ .Query.Model }}"
+            placeholder="Model ID"
+          />
+        </label>
+        <label>
+          Machine
+          <input
+            name="machine"
+            value="{{ .Query.Machine }}"
+            placeholder="Machine ID"
+          />
+        </label>
+        <label>
+          Repository
+          <input
+            name="repository"
+            value="{{ .Query.Repository }}"
+            placeholder="Remote URL or local identity"
+          />
+        </label>
+        <label>
+          From
+          <input type="date" name="after" value="{{ .Query.After }}" />
+        </label>
+        <label>
+          Before
+          <input type="date" name="before" value="{{ .Query.Before }}" />
+        </label>
+        <label>
+          Role
+          <input
+            name="role"
+            value="{{ .Query.Role }}"
+            placeholder="user, assistant, tool…"
+          />
+        </label>
+        <label>
+          Event kind
+          <input
+            name="kind"
+            value="{{ .Query.Kind }}"
+            placeholder="message, tool_call…"
+          />
+        </label>
+        <label>
+          Tool
+          <input
+            name="tool"
+            value="{{ .Query.Tool }}"
+            placeholder="Tool name"
+          />
+        </label>
+      </div>
+    </details>
+  </form>
+  <section id="results" aria-live="polite">
+    <div class="section-bar">
+      <h2>
+        {{ if .Query.Query }}Search results{{ else }}Recent events{{ end }}
+      </h2>
+      <span>
+        {{ len .Results }} on this page · {{ .Elapsed }} ms
+        <span id="searching" class="htmx-indicator">Searching…</span>
+      </span>
+    </div>
+    {{ if .Error }}
+      <div class="notice error" role="alert">{{ .Error }}</div>
+    {{ end }}
+    {{ range .Results }}
+      <article class="result">
+        <div class="result-meta">
+          <span class="badge">{{ .Harness }}</span>
+          <span>{{ .Role }}</span>
+          <span>{{ .Kind }}</span>
+          {{ if .Model }}
+            <span>{{ .Model }}</span>
+          {{ end }}
+          <time>{{ .Timestamp }}</time>
+        </div>
+        <h3>
+          <a
+            href="/traces/{{ .TraceID }}?event={{ .EventID }}#event-{{ .EventID }}"
+          >
+            {{ if .TraceTitle }}
+              {{ .TraceTitle }}
+            {{ else }}
+              Untitled trace
+            {{ end }}
+            <span aria-hidden="true">↗</span>
+          </a>
+        </h3>
+        <pre class="snippet">{{ mark .Snippet $.Query }}</pre>
+        <div class="result-bottom">
+          <span>
+            {{ if .Repository }}
+              {{ .Repository }}
+            {{ else }}
+              No repository recorded
+            {{ end }}
+          </span>
+          <a href="/events/{{ .EventID }}/sources">Source Records →</a>
+        </div>
+      </article>
+    {{ else }}
+      {{ if not .Error }}
+        <div class="empty">
+          <span class="empty-icon">⌕</span>
+          <h3>
+            {{ if .Query.Query }}
+              No matching events
+            {{ else }}
+              Your archive starts here
+            {{ end }}
+          </h3>
+          <p>
+            {{ if .Query.Query }}
+              Try another search mode, remove a filter, or use a shorter phrase.
+            {{ else }}
+              Collect traces on a source machine, then upload the ZIPs. Your
+              original records stay intact.
+            {{ end }}
+          </p>
+          {{ if not .Query.Query }}
+            <pre>
+traicr collect --output ./exports
+traicr upload ./exports/*.zip</pre
+            >
+          {{ end }}
+        </div>
+      {{ end }}
+    {{ end }}
+    {{ if .Next }}
+      <a class="button secondary next" href="{{ .Next }}">Next results →</a>
+    {{ end }}
+  </section>
+  {{ template "footer" . }}
+{{ end }}

@@ -1,0 +1,7 @@
+{"type":"session","version":3,"id":"session-fixture","timestamp":"2026-01-01T00:00:00Z","cwd":"/workspace/example"}
+{"type":"message","id":"reply","parentId":"prompt","timestamp":"2026-01-01T00:00:02Z","message":{"role":"assistant","provider":"example-provider","model":"example-model","content":[{"type":"thinking","thinking":"Check the fixture."},{"type":"toolCall","id":"call-1","name":"read","arguments":{"path":"fixture.txt"}}]}}
+{"type":"message","id":"prompt","parentId":null,"timestamp":"2026-01-01T00:00:01Z","message":{"role":"user","content":"Read the fixture."}}
+{"type":"message","id":"result","parentId":"reply","timestamp":"2026-01-01T00:00:03Z","message":{"role":"toolResult","toolCallId":"call-1","toolName":"read","content":"fixture contents"}}
+{"type":"model_change","id":"model","parentId":"result","timestamp":"2026-01-01T00:00:04Z","provider":"example-provider","modelId":"example-model-2"}
+{"type":"compaction","id":"compact","parentId":"model","timestamp":"2026-01-01T00:00:05Z","summary":"Earlier fixture activity summarized.","firstKeptEntryId":"result","tokensBefore":100}
+{"type":"branch_summary","id":"branch","parentId":"prompt","timestamp":"2026-01-01T00:00:06Z","fromId":"prompt","summary":"Alternate fixture branch."}

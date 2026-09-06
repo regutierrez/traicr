@@ -1,0 +1,3 @@
+{"table":"cursorDiskKV","key":"composerData:composer-fixture","value":"{\"composerId\":\"composer-fixture\",\"fullConversationHeadersOnly\":[{\"bubbleId\":\"bubble-user\",\"type\":1},{\"bubbleId\":\"bubble-assistant\",\"type\":2}]}"}
+{"table":"cursorDiskKV","key":"bubbleId:composer-fixture:bubble-user","value":"{\"bubbleId\":\"bubble-user\",\"type\":1,\"text\":\"Inspect fixture.txt\"}"}
+{"table":"cursorDiskKV","key":"bubbleId:composer-fixture:bubble-assistant","value":"{\"bubbleId\":\"bubble-assistant\",\"type\":2,\"text\":\"Fixture inspected.\",\"model\":\"example-model\"}"}

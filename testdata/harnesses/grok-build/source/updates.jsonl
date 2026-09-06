@@ -1,0 +1,3 @@
+{"timestamp":1767744000,"method":"session/update","params":{"sessionId":"session-fixture","_meta":{"eventId":"event-user"},"update":{"sessionUpdate":"user_message_chunk","content":{"type":"text","text":"Inspect fixture.txt"}}}}
+{"timestamp":1767744001,"method":"session/update","params":{"sessionId":"session-fixture","_meta":{"eventId":"event-tool"},"update":{"sessionUpdate":"tool_call","toolCallId":"call-1","title":"read","input":{"path":"fixture.txt"}}}}
+{"timestamp":1767744002,"method":"session/update","params":{"sessionId":"session-fixture","_meta":{"eventId":"event-result"},"update":{"sessionUpdate":"tool_call_update","toolCallId":"call-1","status":"completed","content":{"type":"text","text":"fixture contents"}}}}
