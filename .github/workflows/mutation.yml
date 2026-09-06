@@ -1,0 +1,61 @@
+name: Mutation testing
+
+on:
+  pull_request:
+    paths:
+      - "**.go"
+      - "go.mod"
+      - "go.sum"
+  schedule:
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  changed-go:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.27.x"
+          cache: true
+      - name: Mutate changed Go code
+        env:
+          GREMLINS_WORKERS: "2"
+        run: ./scripts/mutation.sh changed "origin/${{ github.base_ref }}" artifacts/mutation-changed.json
+      - name: Upload mutation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mutation-changed
+          path: artifacts/mutation-changed.json
+          if-no-files-found: warn
+
+  full-baseline:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.27.x"
+          cache: true
+      - name: Mutate all Go code
+        env:
+          GREMLINS_WORKERS: "2"
+        run: ./scripts/mutation.sh full artifacts/mutation-full.json
+      - name: Upload mutation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mutation-full
+          path: artifacts/mutation-full.json
+          if-no-files-found: warn
