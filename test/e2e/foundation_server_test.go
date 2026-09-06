@@ -124,8 +124,11 @@ func TestFoundationServerImage(t *testing.T) {
 		}
 
 		rootResponse := requestServer(t, http.MethodGet, serverURL+"/")
-		if rootResponse.statusCode != http.StatusNotFound {
-			t.Errorf("GET / status = %d, want %d", rootResponse.statusCode, http.StatusNotFound)
+		if rootResponse.statusCode != http.StatusOK {
+			t.Errorf("GET / status = %d, want %d", rootResponse.statusCode, http.StatusOK)
+		}
+		if !strings.HasPrefix(rootResponse.contentType, "text/html") || !strings.Contains(string(rootResponse.body), "Open your archive") {
+			t.Errorf("GET / did not serve the login page: Content-Type=%q body=%q", rootResponse.contentType, rootResponse.body)
 		}
 
 		postHealthResponse := requestServer(t, http.MethodPost, serverURL+"/healthz")
