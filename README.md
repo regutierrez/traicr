@@ -2,7 +2,7 @@
 
 Traicr collects, preserves, and searches one person's AI coding traces across multiple macOS and Linux machines.
 
-The Go foundation is implemented. Trace collection, archive import, and search behavior will arrive in later milestones.
+The client collects and uploads traces. The server imports, stores, and searches them.
 
 ## Planned sources
 
@@ -22,6 +22,74 @@ Traicr has two Go applications:
 - A Docker-hosted server with a search API and Web UI
 
 Collectors create lossless Trace ZIPs. The server retains their native Source Records, derives common searchable Events, deduplicates sessions across machines and revisions, and indexes text in SQLite.
+
+## Installation
+
+### Client with Go
+
+Install Go 1.27 or newer, then install the collector on each source machine:
+
+```sh
+go install github.com/regutierrez/traicr/cmd/traicr@latest
+```
+
+Go installs `traicr` into `$GOBIN`, or `$GOPATH/bin` when `GOBIN` is unset (normally `$HOME/go/bin`). Add that directory to your `PATH`.
+
+To install from a local checkout into `$HOME/.local/bin` instead:
+
+```sh
+GOBIN="$HOME/.local/bin" go install ./cmd/traicr
+```
+
+Run this command from the repository root and make sure `$HOME/.local/bin` is on your `PATH`.
+
+### Server with Docker
+
+With Docker installed, clone the repository and build the server image:
+
+```sh
+git clone https://github.com/regutierrez/traicr.git
+cd traicr
+docker build -t traicr-server .
+```
+
+Set a strong admin token without putting its value in shell history (Bash):
+
+```bash
+read -rsp 'Traicr admin token: ' TRAICR_ADMIN_TOKEN; echo
+export TRAICR_ADMIN_TOKEN
+```
+
+Start the server with a persistent data volume:
+
+```sh
+docker run -d --name traicr-server \
+  --restart unless-stopped \
+  --read-only \
+  --security-opt no-new-privileges:true \
+  -p 127.0.0.1:8080:8080 \
+  -e TRAICR_ADMIN_TOKEN \
+  -e TRAICR_DATA_DIR=/data \
+  -e TRAICR_LISTEN_ADDRESS=:8080 \
+  -e TMPDIR=/data/tmp \
+  -v traicr-data:/data \
+  traicr-server
+curl http://127.0.0.1:8080/healthz
+```
+
+Open <http://127.0.0.1:8080> in your browser. The port is available only on this machine. For collectors on other machines, bind to a private network address or use an HTTPS reverse proxy. Do not expose plain HTTP to the public internet. The `traicr-data` volume contains unredacted transcripts; keep it when replacing the container.
+
+### Connect and upload
+
+With the same `TRAICR_ADMIN_TOKEN` set in the client shell:
+
+```sh
+traicr login http://127.0.0.1:8080
+traicr collect --output ./traces
+traicr upload ./traces/*.zip
+```
+
+Replace the URL with your server's address when it runs on another machine. Run `upload` only when collection produces ZIP files. Collection and upload are manual; `go install` does not set up a background service or schedule. Use cron or another scheduler for automatic uploads.
 
 ## Development
 
