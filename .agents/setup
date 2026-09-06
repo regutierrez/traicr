@@ -1,0 +1,141 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+GO_VERSION="1.27.1"
+
+log() {
+	printf '[setup] %s\n' "$*"
+}
+
+run_timed() {
+	local label="$1"
+	shift
+	local start
+	start="$(date +%s)"
+	log "start: ${label}"
+	"$@"
+	log "done: ${label} ($(($(date +%s) - start))s)"
+}
+
+ensure_apt_packages() {
+	local missing=()
+
+	if ! command -v docker >/dev/null 2>&1; then
+		missing+=(docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin)
+	elif ! dpkg -s docker-compose-plugin >/dev/null 2>&1; then
+		missing+=(docker-compose-plugin)
+	fi
+
+	if ((${#missing[@]} == 0)); then
+		log "apt packages already present"
+		return
+	fi
+
+	sudo apt-get update
+	sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "${missing[@]}"
+}
+
+go_archive_for_host() {
+	local machine
+	machine="$(uname -m)"
+	case "${machine}" in
+	x86_64)
+		printf '%s %s\n' "linux-amd64" "63d339f0da5ab53635a56f2490a7984dfe12dfcff22ad749f63edaf590168445"
+		;;
+	aarch64)
+		printf '%s %s\n' "linux-arm64" "3450b45a3f9ee8568792736a5c5e70a1f2e9b36c35a8f74858c03e51d7d92bec"
+		;;
+	*)
+		log "unsupported architecture: ${machine}"
+		return 1
+		;;
+	esac
+}
+
+ensure_go() {
+	local expected="go${GO_VERSION}"
+	if [[ -x /usr/local/go/bin/go ]]; then
+		local installed
+		installed="$(/usr/local/go/bin/go env GOVERSION 2>/dev/null || true)"
+		if [[ "${installed}" == "${expected}" ]]; then
+			log "Go ${GO_VERSION} already installed"
+			return
+		fi
+	fi
+
+	local archive_os_arch checksum
+	read -r archive_os_arch checksum < <(go_archive_for_host)
+	local tarball="go${GO_VERSION}.${archive_os_arch}.tar.gz"
+	local url="https://go.dev/dl/${tarball}"
+	local tmp
+	tmp="$(mktemp -d)"
+
+	curl -fsSL "${url}" -o "${tmp}/${tarball}"
+	echo "${checksum}  ${tmp}/${tarball}" | sha256sum -c -
+	sudo rm -rf /usr/local/go
+	sudo tar -C /usr/local -xzf "${tmp}/${tarball}"
+	rm -rf "${tmp}"
+}
+
+ensure_go_path() {
+	local marker="# traicr Go toolchain"
+	export PATH="/usr/local/go/bin:${PATH}"
+
+	if grep -Fqx "${marker}" "${HOME}/.bash_profile" 2>/dev/null; then
+		return
+	fi
+
+	cat >>"${HOME}/.bash_profile" <<'EOF'
+
+# traicr Go toolchain
+if [[ -d /usr/local/go/bin ]]; then
+  case ":$PATH:" in
+    *:/usr/local/go/bin:*) ;;
+    *) export PATH="/usr/local/go/bin:$PATH" ;;
+  esac
+fi
+EOF
+}
+
+ensure_docker_group() {
+	if ! command -v docker >/dev/null 2>&1; then
+		return
+	fi
+
+	if ! id -nG "${USER}" | grep -qw docker; then
+		sudo usermod -aG docker "${USER}"
+	fi
+
+	sudo systemctl enable docker
+}
+
+warm_go_cache() {
+	export PATH="/usr/local/go/bin:${PATH}"
+	go test ./...
+}
+
+write_agent_notes() {
+	local marker="# Traicr orb notes"
+	local notes="${HOME}/.config/amp/AGENTS.md"
+	mkdir -p "$(dirname "${notes}")"
+	if [[ -f "${notes}" ]] && grep -Fqx "${marker}" "${notes}"; then
+		return
+	fi
+	cat >>"${notes}" <<'EOF'
+
+# Traicr orb notes
+- Go 1.27 is installed at /usr/local/go. `go` and `gofmt` should already be on PATH.
+- Run `make all` and `make test-race` for the ordinary checks. End-to-end tests are `go test -count=1 -tags=e2e -timeout=5m ./test/e2e` and need a running Docker daemon.
+- Start the foundation server with `TRAICR_ADMIN_TOKEN` set. Compose refuses to start without it.
+EOF
+}
+
+run_timed "apt packages" ensure_apt_packages
+run_timed "Go ${GO_VERSION}" ensure_go
+ensure_go_path
+run_timed "Docker group" ensure_docker_group
+run_timed "Go test cache" warm_go_cache
+write_agent_notes
+
+log "Go $(go env GOVERSION)"
+log "setup complete"
