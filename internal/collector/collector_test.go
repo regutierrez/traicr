@@ -77,6 +77,30 @@ func TestCollectReportsProgressPerHarnessTraceAndArchive(t *testing.T) {
 	}
 }
 
+func TestCollectDropsRepeatedTraceIdentitiesSoArchivesValidate(t *testing.T) {
+	first, second := t.TempDir(), t.TempDir()
+	for _, dir := range []string{first, second} {
+		if err := os.WriteFile(filepath.Join(dir, "session.jsonl"), []byte("{\"type\":\"session\",\"version\":3,\"id\":\"shared-id\"}\n{\"type\":\"message\",\"text\":\""+filepath.Base(dir)+"\"}\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cfg := config.Collector{MachineID: "machine-one", State: map[string]config.CollectionRevision{}}
+	result, err := collector.Collect(context.Background(), cfg, collector.CollectOptions{
+		Harnesses: []string{"pi"},
+		Sources:   map[string][]string{"pi": {first, second}},
+		OutputDir: t.TempDir(),
+	})
+	if err != nil || len(result.Archives) != 1 {
+		t.Fatalf("collect: %+v, %v", result, err)
+	}
+	if len(result.Warnings) != 1 || result.Warnings[0].Code != "duplicate_trace" {
+		t.Fatalf("warnings: %+v", result.Warnings)
+	}
+	if traces := validateArchive(t, result.Archives[0]).Manifest.Traces; len(traces) != 1 || traces[0].NativeTraceID != "shared-id" {
+		t.Fatalf("archive traces: %+v", traces)
+	}
+}
+
 func TestCollectAllBackfillsPiTitleWithoutChangingRevision(t *testing.T) {
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "session.jsonl")

@@ -123,8 +123,13 @@ func (a commandAdapter) list(ctx context.Context) ([]commandTrace, []domain.Warn
 	return traces, nil
 }
 
+// Amp orders offset pages inconsistently, so later pages can repeat earlier
+// threads and skip others. Repeats are dropped here; skipped threads are picked
+// up by a later collection once the listing settles.
 func (a commandAdapter) listAmp(ctx context.Context) ([]commandTrace, []domain.Warning) {
 	var traces []commandTrace
+	seen := map[string]bool{}
+	repeated := 0
 	for offset := 0; ; offset += listLimit {
 		args := []string{"threads", "list", "--json", "--include-archived", "--limit", strconv.Itoa(listLimit), "--offset", strconv.Itoa(offset)}
 		data, err := runOutput(ctx, a.executable, args, maxListBytes)
@@ -135,8 +140,18 @@ func (a commandAdapter) listAmp(ctx context.Context) ([]commandTrace, []domain.W
 		if err != nil {
 			return traces, []domain.Warning{warning("unknown_schema", "amp threads list returned an unsupported schema: "+err.Error())}
 		}
-		traces = append(traces, page...)
+		for _, trace := range page {
+			if seen[trace.ID] {
+				repeated++
+				continue
+			}
+			seen[trace.ID] = true
+			traces = append(traces, trace)
+		}
 		if len(page) < listLimit {
+			if repeated > 0 {
+				return traces, []domain.Warning{warning("unstable_listing", fmt.Sprintf("amp threads list pages overlapped; %d repeated entries were dropped and some threads may be missing until the next collection", repeated))}
+			}
 			return traces, nil
 		}
 	}

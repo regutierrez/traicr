@@ -10,7 +10,7 @@ import (
 	"testing"
 )
 
-func TestAmpListPaginatesWithinCLILimit(t *testing.T) {
+func TestAmpListPaginatesWithinCLILimitAndDropsRepeatedThreads(t *testing.T) {
 	if os.Getenv("TRAICR_TEST_AMP_LIST") == "1" {
 		args := os.Args
 		limit, _ := strconv.Atoi(args[len(args)-3])
@@ -23,6 +23,10 @@ func TestAmpListPaginatesWithinCLILimit(t *testing.T) {
 		for i := offset; i < offset+limit && i < 501; i++ {
 			entries = append(entries, map[string]string{"id": fmt.Sprintf("T-%d", i), "updated": "2026-09-06T00:00:00Z"})
 		}
+		if offset > 0 {
+			// Amp reorders pages between requests, so a later page can repeat earlier threads.
+			entries = append(entries, map[string]string{"id": "T-7", "updated": "2026-09-06T00:00:00Z"}, map[string]string{"id": "T-9", "updated": "2026-09-06T00:00:00Z"})
+		}
 		json.NewEncoder(os.Stdout).Encode(entries)
 		os.Exit(0)
 	}
@@ -32,13 +36,13 @@ func TestAmpListPaginatesWithinCLILimit(t *testing.T) {
 	}
 	dir := t.TempDir()
 	command := filepath.Join(dir, "amp")
-	if err := os.WriteFile(command, []byte("#!/bin/sh\nexec \"$TRAICR_TEST_BINARY\" -test.run=^TestAmpListPaginatesWithinCLILimit$ -- \"$@\"\n"), 0o700); err != nil {
+	if err := os.WriteFile(command, []byte("#!/bin/sh\nexec \"$TRAICR_TEST_BINARY\" -test.run=^TestAmpListPaginatesWithinCLILimitAndDropsRepeatedThreads$ -- \"$@\"\n"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("TRAICR_TEST_AMP_LIST", "1")
 	t.Setenv("TRAICR_TEST_BINARY", binary)
 	traces, warnings := (commandAdapter{name: "amp", executable: command}).listAmp(context.Background())
-	if len(warnings) != 0 || len(traces) != 501 {
+	if len(warnings) != 1 || warnings[0].Code != "unstable_listing" || len(traces) != 501 {
 		t.Fatalf("Amp pagination: %d traces, warnings: %+v", len(traces), warnings)
 	}
 	for i, trace := range traces {

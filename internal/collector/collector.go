@@ -84,6 +84,7 @@ func Collect(ctx context.Context, cfg config.Collector, options CollectOptions) 
 		progress = func(string, string, int, int) {}
 	}
 	found := map[string]bool{}
+	collected := map[string]bool{}
 	for _, adapter := range adapters.All() {
 		if !selected[adapter.Name()] {
 			continue
@@ -106,6 +107,12 @@ func Collect(ctx context.Context, cfg config.Collector, options CollectOptions) 
 				continue
 			}
 			key := StateKey(descriptor.Harness, descriptor.NativeTraceID)
+			// Archives with two descriptors for one trace fail validation, so keep the first.
+			if collected[key] {
+				warnings = append(warnings, domain.Warning{Code: "duplicate_trace", Message: adapter.Name() + " " + descriptor.NativeTraceID + " was collected twice; the repeat was dropped"})
+				continue
+			}
+			collected[key] = true
 			acknowledged := cfg.State[key]
 			if !options.All && acknowledged.MachineID == cfg.MachineID && acknowledged.Digest == descriptor.RevisionDigest {
 				continue
