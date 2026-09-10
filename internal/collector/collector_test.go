@@ -56,6 +56,37 @@ func TestCollectCreatesValidArchiveAndDoesNotAdvanceState(t *testing.T) {
 	}
 }
 
+func TestCollectAllBackfillsPiTitleWithoutChangingRevision(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "session.jsonl")
+	content := "{\"type\":\"session\",\"version\":3,\"id\":\"pi-named\"}\n{\"type\":\"session_info\",\"id\":\"name-entry\",\"parentId\":null,\"name\":\"Fix login\"}\n"
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg := config.Collector{MachineID: "machine-one", State: map[string]config.CollectionRevision{}}
+	options := collector.CollectOptions{Harnesses: []string{"pi"}, Sources: map[string][]string{"pi": {path}}, OutputDir: t.TempDir()}
+	first, err := collector.Collect(ctx, cfg, options)
+	if err != nil || len(first.Archives) != 1 {
+		t.Fatalf("initial collection: %+v, %v", first, err)
+	}
+	descriptor := validateArchive(t, first.Archives[0]).Manifest.Traces[0]
+	cfg.State[collector.StateKey("pi", "pi-named")] = config.CollectionRevision{Digest: descriptor.RevisionDigest, MachineID: cfg.MachineID}
+	options.OutputDir = t.TempDir()
+	skipped, err := collector.Collect(ctx, cfg, options)
+	if err != nil || len(skipped.Archives) != 0 {
+		t.Fatalf("acknowledged collection: %+v, %v", skipped, err)
+	}
+	options.All = true
+	backfill, err := collector.Collect(ctx, cfg, options)
+	if err != nil || len(backfill.Archives) != 1 {
+		t.Fatalf("backfill collection: %+v, %v", backfill, err)
+	}
+	actual := validateArchive(t, backfill.Archives[0]).Manifest.Traces[0]
+	if actual.Title != "Fix login" || actual.NativeTraceID != descriptor.NativeTraceID || actual.RevisionDigest != descriptor.RevisionDigest {
+		t.Fatalf("backfill changed identity or lost title: %+v", actual)
+	}
+}
+
 func TestUploadAdvancesOnlyAcknowledgedOutcomes(t *testing.T) {
 	cfg := config.Collector{MachineID: "machine-one", State: map[string]config.CollectionRevision{}}
 	collected, err := collector.Collect(context.Background(), cfg, collector.CollectOptions{

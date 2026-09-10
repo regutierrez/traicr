@@ -63,7 +63,7 @@ func (a jsonlAdapter) Collect(ctx context.Context, configured []string) (Result,
 		}
 		info, _ := os.Stat(path)
 		metadata, metadataWarnings := jsonlMetadata(a.name, output, path)
-		descriptor := domain.Descriptor{Harness: a.name, Adapter: a.format, NativeTraceID: metadata.ID, ParentNativeTraceID: metadata.ParentID, WorkingDirectory: metadata.CWD, Warnings: metadataWarnings}
+		descriptor := domain.Descriptor{Harness: a.name, Adapter: a.format, NativeTraceID: metadata.ID, ParentNativeTraceID: metadata.ParentID, Title: metadata.Title, WorkingDirectory: metadata.CWD, Warnings: metadataWarnings}
 		if info != nil {
 			descriptor.NativeUpdatedAt = info.ModTime().UTC().Format(time.RFC3339Nano)
 		}
@@ -283,6 +283,35 @@ type traceMetadata struct {
 	ID       string
 	ParentID string
 	CWD      string
+	Title    string
+}
+
+// Pi session names use the last session_info in file order, including explicit clears.
+func readPiSessionTitle(snapshot string) (string, error) {
+	file, err := os.Open(snapshot)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+	reader := bufio.NewReader(file)
+	var title string
+	for {
+		// Messages can contain large images. Do not stop before a later name entry.
+		line, err := reader.ReadBytes('\n')
+		if errors.Is(err, io.EOF) {
+			return title, nil
+		}
+		if err != nil {
+			return "", err
+		}
+		var entry struct {
+			Type string `json:"type"`
+			Name string `json:"name"`
+		}
+		if json.Unmarshal(line, &entry) == nil && entry.Type == "session_info" {
+			title = strings.TrimSpace(entry.Name)
+		}
+	}
 }
 
 func jsonlMetadata(harness, snapshot, source string) (traceMetadata, []domain.Warning) {
@@ -298,7 +327,11 @@ func jsonlMetadata(harness, snapshot, source string) (traceMetadata, []domain.Wa
 		if !decodeFirstRecord(snapshot, &header) || header.Type != "session" || header.ID == "" {
 			return traceMetadata{ID: fallback}, []domain.Warning{warning("unknown_schema", "Pi JSONL has no valid session header; filename identity was used")}
 		}
-		metadata := traceMetadata{ID: header.ID, CWD: header.CWD}
+		title, err := readPiSessionTitle(snapshot)
+		metadata := traceMetadata{ID: header.ID, CWD: header.CWD, Title: title}
+		if err != nil {
+			return metadata, []domain.Warning{warning("metadata_read_failed", "read Pi session name: "+err.Error())}
+		}
 		if header.ParentSession != "" {
 			parentPath := header.ParentSession
 			if !filepath.IsAbs(parentPath) {

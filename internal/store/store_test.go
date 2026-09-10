@@ -18,6 +18,90 @@ import (
 	"github.com/regutierrez/traicr/internal/store"
 )
 
+func TestImportBackfillsMissingTitleWithoutNewRevision(t *testing.T) {
+	ctx := context.Background()
+	for _, test := range []struct {
+		name, originalTitle, incomingTitle, newerTitle, wantTitle string
+		updated, newerRevision                                    bool
+	}{
+		{name: "missing title", incomingTitle: "Repair authentication", wantTitle: "Repair authentication", updated: true},
+		{name: "preserve existing", originalTitle: "Existing", incomingTitle: "Replacement", wantTitle: "Existing"},
+		{name: "unnamed retry"},
+		{name: "stale retry", incomingTitle: "Old name", newerTitle: "New name", wantTitle: "New name", newerRevision: true},
+		{name: "stale name after clear", incomingTitle: "Old name", newerRevision: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			s := openStore(t)
+			input := traceInput("machine-a", "same-revision", "2026-08-22T12:00:00Z", test.originalTitle, []domain.Event{{Key: "message-1", Kind: "message", Role: "user", Text: "Hello"}})
+			report, err := s.Import(ctx, input.manifest, input.files, normalizer(input.events, "normalized", 1), nil)
+			if err != nil || report.Imported != 1 {
+				t.Fatalf("initial import: %+v, %v", report, err)
+			}
+			revisions := 1
+			if test.newerRevision {
+				newer := traceInput("machine-a", "newer-revision", "2026-08-23T12:00:00Z", test.newerTitle, input.events)
+				if _, err := s.Import(ctx, newer.manifest, newer.files, normalizer(newer.events, "normalized", 1), nil); err != nil {
+					t.Fatal(err)
+				}
+				revisions++
+			}
+			input.manifest.Traces[0].Title = test.incomingTitle
+			for attempt := 0; attempt < 2; attempt++ {
+				report, err = s.Import(ctx, input.manifest, input.files, func(context.Context, domain.Descriptor, fs.FS) (domain.Normalization, error) {
+					t.Fatal("duplicate revision must not be normalized again")
+					return domain.Normalization{}, nil
+				}, nil)
+				if err != nil || report.Failed != 0 || (test.updated && attempt == 0 && report.Updated != 1) || ((!test.updated || attempt > 0) && report.Unchanged != 1) {
+					t.Fatalf("retry: %+v, %v", report, err)
+				}
+			}
+			trace, err := s.Trace(ctx, report.Traces[0].TraceID)
+			if err != nil || trace.Title != test.wantTitle || len(trace.Revisions) != revisions {
+				t.Fatalf("trace: %+v, %v", trace, err)
+			}
+			cards, err := s.TranscriptCards(ctx, store.SearchQuery{})
+			if err != nil || len(cards.Cards) != 1 || cards.Cards[0].Title != test.wantTitle {
+				t.Fatalf("transcript cards: %+v, %v", cards, err)
+			}
+			if test.updated {
+				for _, mode := range []string{"fulltext", "exact", "regex"} {
+					page, err := s.Search(ctx, store.SearchQuery{Query: "authentication", Mode: mode})
+					if err != nil || len(page.Results) != 1 || page.Results[0].TraceTitle != test.wantTitle {
+						t.Fatalf("%s title search: %+v, %v", mode, page, err)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestImportBackfillsTitleForPartiallyParsedRevision(t *testing.T) {
+	ctx := context.Background()
+	s := openStore(t)
+	input := traceInput("machine-a", "partial-revision", "2026-08-22T12:00:00Z", "", []domain.Event{{Key: "message-1", Kind: "message", Role: "user", Text: "Hello"}})
+	report, err := s.Import(ctx, input.manifest, input.files, normalizer(input.events, "partially_parsed", 1), nil)
+	if err != nil || report.Partial != 1 {
+		t.Fatalf("initial partial import: %+v, %v", report, err)
+	}
+	input.manifest.Traces[0].Title = "Repair authentication"
+	for attempt := 0; attempt < 2; attempt++ {
+		report, err = s.Import(ctx, input.manifest, input.files, normalizer(input.events, "partially_parsed", 1), nil)
+		if err != nil || report.Partial != 1 {
+			t.Fatalf("partial retry: %+v, %v", report, err)
+		}
+		trace, err := s.Trace(ctx, report.Traces[0].TraceID)
+		if err != nil || trace.Title != "Repair authentication" || len(trace.Revisions) != 1 {
+			t.Fatalf("partial trace title: %+v, %v", trace, err)
+		}
+		for _, mode := range []string{"fulltext", "exact", "regex"} {
+			page, err := s.Search(ctx, store.SearchQuery{Query: "authentication", Mode: mode})
+			if err != nil || len(page.Results) != 1 || page.Results[0].TraceTitle != "Repair authentication" {
+				t.Fatalf("%s partial title search: %+v, %v", mode, page, err)
+			}
+		}
+	}
+}
+
 func TestImportMergesRevisionsMachinesAndConflicts(t *testing.T) {
 	ctx := context.Background()
 	s := openStore(t)

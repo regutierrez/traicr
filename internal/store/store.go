@@ -149,8 +149,16 @@ func (s *Store) importTrace(ctx context.Context, manifest domain.Manifest, descr
 			outcome.Status, outcome.Error = "failed", err.Error()
 			return outcome
 		}
+		updated, titleErr := s.backfillMissingTitle(ctx, existingTraceID, existingID, descriptor)
+		if titleErr != nil {
+			outcome.Status, outcome.Error = "failed", titleErr.Error()
+			return outcome
+		}
 		if normalizationSuccessful(existingStatus) {
 			outcome.Status = "unchanged"
+			if updated {
+				outcome.Status = "updated"
+			}
 			return outcome
 		}
 		normalization, normalizeErr := normalizeResult(ctx, descriptor, traceFS, normalize)
@@ -207,6 +215,63 @@ func (s *Store) importTrace(ctx context.Context, manifest domain.Manifest, descr
 		outcome.Error = normalizeErr.Error()
 	}
 	return outcome
+}
+
+// Backfill a missing title from improved collector metadata without changing revision identity.
+func (s *Store) backfillMissingTitle(ctx context.Context, traceID, revisionID int64, descriptor domain.Descriptor) (bool, error) {
+	if descriptor.Title == "" {
+		return false, nil
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return false, err
+	}
+	defer tx.Rollback()
+	// Never restore a stale name over a newer revision, or overwrite an existing title.
+	result, err := tx.ExecContext(ctx, `UPDATE traces SET title=? WHERE id=? AND title='' AND updated_at<=?`, descriptor.Title, traceID, canonicalTime(descriptor.NativeUpdatedAt))
+	if err != nil {
+		return false, err
+	}
+	changed, err := result.RowsAffected()
+	if err != nil || changed == 0 {
+		return false, err
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE observation_revisions SET searchable_text=searchable_text || char(10) || ? WHERE revision_id=?`, descriptor.Title, revisionID); err != nil {
+		return false, err
+	}
+	rows, err := tx.QueryContext(ctx, `SELECT x.observation_id,o.event_id,x.searchable_text FROM observation_revisions x JOIN event_observations o ON o.id=x.observation_id WHERE x.revision_id=?`, revisionID)
+	if err != nil {
+		return false, err
+	}
+	type titleSearchText struct {
+		observationID, eventID int64
+		text                   string
+	}
+	var texts []titleSearchText
+	for rows.Next() {
+		var text titleSearchText
+		if err := rows.Scan(&text.observationID, &text.eventID, &text.text); err != nil {
+			rows.Close()
+			return false, err
+		}
+		texts = append(texts, text)
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return false, err
+	}
+	if _, err := tx.ExecContext(ctx, "DELETE FROM search_chunks WHERE revision_id=?", revisionID); err != nil {
+		return false, err
+	}
+	for _, text := range texts {
+		for _, chunk := range searchtext.Chunks(text.text) {
+			if _, err := tx.ExecContext(ctx, "INSERT INTO search_chunks(observation_id,revision_id,event_id,content) VALUES(?,?,?,?)", text.observationID, revisionID, text.eventID, chunk); err != nil {
+				return false, err
+			}
+		}
+	}
+	return true, tx.Commit()
 }
 
 func normalizeResult(ctx context.Context, descriptor domain.Descriptor, source fs.FS, normalize func(context.Context, domain.Descriptor, fs.FS) (domain.Normalization, error)) (domain.Normalization, error) {

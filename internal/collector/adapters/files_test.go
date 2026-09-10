@@ -49,6 +49,40 @@ func TestJSONLMetadataUsesHarnessIdentityAndExplicitParents(t *testing.T) {
 	}
 }
 
+func TestPiCollectUsesLatestSessionName(t *testing.T) {
+	for _, test := range []struct {
+		name, records, title string
+	}{
+		{"unnamed", "", ""},
+		{"named", "{\"type\":\"session_info\",\"name\":\"Fix login\"}\n", "Fix login"},
+		{"renamed", "{\"type\":\"session_info\",\"name\":\"Old\"}\n{\"type\":\"message\",\"name\":\"Ignore\"}\n{\"type\":\"session_info\",\"name\":\" New title \"}\n", "New title"},
+		{"cleared", "{\"type\":\"session_info\",\"name\":\"Old\"}\n{\"type\":\"session_info\",\"name\":\"\"}\n", ""},
+		{"missing name clears", "{\"type\":\"session_info\",\"name\":\"Old\"}\n{\"type\":\"session_info\"}\n", ""},
+		{"partial tail", "{\"type\":\"session_info\",\"name\":\"Keep\"}\n{\"type\":\"session_info\",\"name\":\"Partial\"}", "Keep"},
+		{"invalid record", "not json\n{\"type\":\"session_info\",\"name\":\"Keep\"}\n", "Keep"},
+		{"large message", "{\"type\":\"message\",\"text\":\"" + strings.Repeat("x", 17<<20) + "\"}\n{\"type\":\"session_info\",\"name\":\"After image\"}\n", "After image"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "session.jsonl")
+			content := "{\"type\":\"session\",\"version\":3,\"id\":\"stable-id\"}\n" + test.records
+			writeTestFile(t, path, content)
+			adapter := jsonlAdapter{name: "pi", format: "pi-jsonl", defaultRoots: func() []string { return nil }}
+			result, err := adapter.Collect(context.Background(), []string{path})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer result.Cleanup()
+			if len(result.Inputs) != 1 || result.Inputs[0].Descriptor.Title != test.title || result.Inputs[0].Descriptor.NativeTraceID != "stable-id" {
+				t.Fatalf("collected descriptors: %+v; want title %q", result.Inputs, test.title)
+			}
+			original, err := os.ReadFile(path)
+			if err != nil || string(original) != content {
+				t.Fatalf("source changed: %v", err)
+			}
+		})
+	}
+}
+
 func TestJSONLMetadataFallsBackToFilenameNotMessageID(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "stable-session.jsonl")
 	writeTestFile(t, path, "{\"uuid\":\"message-id\",\"id\":\"other-message-id\"}\n")
