@@ -48,6 +48,36 @@ func TestAmpListPaginatesWithinCLILimit(t *testing.T) {
 	}
 }
 
+func TestAmpCollectUsesExportTimestampWithoutLiveChangeWarning(t *testing.T) {
+	if os.Getenv("TRAICR_TEST_AMP_COLLECT") == "1" {
+		args := os.Args
+		if args[len(args)-2] == "export" {
+			fmt.Print(`{"v":1,"id":"T-1","title":"Thread","updatedAt":"2026-09-10T23:07:25.917Z","messages":[],"env":{"initial":{"workingDirectory":"/"}}}`)
+		} else {
+			fmt.Print(`[{"id":"T-1","title":"Thread","updated":"2026-09-10T15:47:53.910Z","tree":"","messageCount":1}]`)
+		}
+		os.Exit(0)
+	}
+	binary, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	command := filepath.Join(t.TempDir(), "amp")
+	if err := os.WriteFile(command, []byte("#!/bin/sh\nexec \"$TRAICR_TEST_BINARY\" -test.run=^TestAmpCollectUsesExportTimestampWithoutLiveChangeWarning$ -- \"$@\"\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("TRAICR_TEST_AMP_COLLECT", "1")
+	t.Setenv("TRAICR_TEST_BINARY", binary)
+	result, err := (commandAdapter{name: "amp", format: "amp-thread-export", executable: command}).Collect(context.Background(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer result.Cleanup()
+	if len(result.Warnings) != 0 || len(result.Inputs) != 1 || result.Inputs[0].Descriptor.NativeUpdatedAt != "2026-09-10T23:07:25.917Z" {
+		t.Fatalf("Amp collect: %+v, warnings: %+v", result.Inputs, result.Warnings)
+	}
+}
+
 func TestCommandListSchemasMatchAmpAndOpenCode(t *testing.T) {
 	amp, err := parseAmpList([]byte(`[{"id":"T-1","title":"Thread","updated":"2026-09-06T00:00:00Z","tree":"","messageCount":3}]`))
 	if err != nil || len(amp) != 1 || amp[0].ID != "T-1" {

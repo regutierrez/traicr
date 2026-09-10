@@ -77,7 +77,9 @@ func (a commandAdapter) Collect(ctx context.Context, _ []string) (Result, error)
 				trace.Title = exported.Title
 			}
 			if exported.UpdatedAt != "" {
-				if trace.UpdatedAt != "" && trace.UpdatedAt != exported.UpdatedAt {
+				// Amp's list index lags the thread's own updatedAt by hours, so a mismatch
+				// there reflects server indexing, not an edit during collection.
+				if a.name != "amp" && trace.UpdatedAt != "" && trace.UpdatedAt != exported.UpdatedAt {
 					result.Warnings = append(result.Warnings, warning("live_source_changed", fmt.Sprintf("%s %s changed between listing and export", a.name, trace.ID)))
 				}
 				trace.UpdatedAt = exported.UpdatedAt
