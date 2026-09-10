@@ -22,7 +22,13 @@ type CollectOptions struct {
 	All        bool
 	SplitBytes int64
 	Version    string
+	Progress   CollectProgress
 }
+
+// CollectProgress reports collection phases: "collecting" while a harness adapter
+// gathers traces (total unknown), "describing" as each gathered trace is hashed,
+// and "archiving" once before the ZIP files are written.
+type CollectProgress func(phase, harness string, completed, total int)
 
 type Collection struct {
 	Archives []string
@@ -73,12 +79,17 @@ func Collect(ctx context.Context, cfg config.Collector, options CollectOptions) 
 			cleanup()
 		}
 	}()
+	progress := options.Progress
+	if progress == nil {
+		progress = func(string, string, int, int) {}
+	}
 	found := map[string]bool{}
 	for _, adapter := range adapters.All() {
 		if !selected[adapter.Name()] {
 			continue
 		}
 		found[adapter.Name()] = true
+		progress("collecting", adapter.Name(), 0, 0)
 		result, err := adapter.Collect(ctx, configured[adapter.Name()])
 		if err != nil {
 			return Collection{}, fmt.Errorf("collect %s: %w", adapter.Name(), err)
@@ -87,7 +98,8 @@ func Collect(ctx context.Context, cfg config.Collector, options CollectOptions) 
 			cleanups = append(cleanups, result.Cleanup)
 		}
 		warnings = append(warnings, result.Warnings...)
-		for _, input := range result.Inputs {
+		for i, input := range result.Inputs {
+			progress("describing", adapter.Name(), i+1, len(result.Inputs))
 			descriptor, err := archive.Describe(input)
 			if err != nil {
 				warnings = append(warnings, domain.Warning{Code: "snapshot_failed", Message: adapter.Name() + " " + input.Descriptor.NativeTraceID + ": " + err.Error()})
@@ -126,6 +138,7 @@ func Collect(ctx context.Context, cfg config.Collector, options CollectOptions) 
 		CreatedAt:        time.Now().UTC().Format(time.RFC3339Nano),
 		SourceMachine:    domain.Machine{ID: cfg.MachineID, Hostname: hostname, OS: runtime.GOOS, Arch: runtime.GOARCH},
 	}
+	progress("archiving", "", 0, len(inputs))
 	paths, err := archive.Write(ctx, options.OutputDir, manifest, inputs, options.SplitBytes)
 	if err != nil {
 		return Collection{}, err

@@ -3,6 +3,7 @@ package collector_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -53,6 +54,26 @@ func TestCollectCreatesValidArchiveAndDoesNotAdvanceState(t *testing.T) {
 	}
 	if len(second.Archives) != 1 || len(validateArchive(t, second.Archives[0]).Manifest.Traces) != 4 {
 		t.Fatal("acknowledged revision was not excluded")
+	}
+}
+
+func TestCollectReportsProgressPerHarnessTraceAndArchive(t *testing.T) {
+	var events []string
+	cfg := config.Collector{MachineID: "machine-one", State: map[string]config.CollectionRevision{}}
+	result, err := collector.Collect(context.Background(), cfg, collector.CollectOptions{
+		Harnesses: []string{"pi"},
+		Sources:   map[string][]string{"pi": {filepath.Join("..", "..", "testdata", "collector", "pi")}},
+		OutputDir: t.TempDir(),
+		Progress: func(phase, harness string, completed, total int) {
+			events = append(events, fmt.Sprintf("%s %s %d/%d", phase, harness, completed, total))
+		},
+	})
+	if err != nil || len(result.Archives) != 1 {
+		t.Fatalf("collect: %+v, %v", result, err)
+	}
+	want := []string{"collecting pi 0/0", "describing pi 1/5", "describing pi 2/5", "describing pi 3/5", "describing pi 4/5", "describing pi 5/5", "archiving  0/5"}
+	if strings.Join(events, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("progress events:\n%s\nwant:\n%s", strings.Join(events, "\n"), strings.Join(want, "\n"))
 	}
 }
 

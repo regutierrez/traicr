@@ -112,7 +112,9 @@ func runCollect(ctx context.Context, args []string, stdout, stderr io.Writer) er
 		OutputDir: output,
 		All:       all,
 		Version:   version.CurrentBuildInfo().Version,
+		Progress:  collectProgressPrinter(stderr),
 	})
+	fmt.Fprintln(stderr)
 	if err != nil {
 		return err
 	}
@@ -127,6 +129,27 @@ func runCollect(ctx context.Context, args []string, stdout, stderr io.Writer) er
 		fmt.Fprintln(stdout, archivePath)
 	}
 	return nil
+}
+
+// Rewrite one stderr line per progress event so long collections do not look stuck.
+func collectProgressPrinter(stderr io.Writer) collector.CollectProgress {
+	width := 0
+	return func(phase, harness string, completed, total int) {
+		var line string
+		switch phase {
+		case "collecting":
+			line = fmt.Sprintf("collecting %s...", harness)
+		case "describing":
+			line = fmt.Sprintf("%s: %d/%d traces", harness, completed, total)
+		case "archiving":
+			line = fmt.Sprintf("writing %d traces to archive...", total)
+		default:
+			return
+		}
+		// Pad to the previous width so a shorter line fully overwrites a longer one.
+		fmt.Fprintf(stderr, "\r%-*s", width, line)
+		width = len(line)
+	}
 }
 
 func runLogin(args []string, stdin io.Reader, stderr io.Writer) error {
