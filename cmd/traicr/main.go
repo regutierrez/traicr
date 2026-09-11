@@ -11,8 +11,10 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/regutierrez/traicr/internal/collector"
 	"github.com/regutierrez/traicr/internal/config"
@@ -106,15 +108,16 @@ func runCollect(ctx context.Context, args []string, stdout, stderr io.Writer) er
 	if len(harnesses) == 0 {
 		harnesses = append(harnesses, collector.Harnesses()...)
 	}
+	printer := &collectStatus{out: stderr}
 	result, err := collector.Collect(ctx, cfg, collector.CollectOptions{
 		Harnesses: harnesses,
 		Sources:   sources,
 		OutputDir: output,
 		All:       all,
 		Version:   version.CurrentBuildInfo().Version,
-		Progress:  collectProgressPrinter(stderr),
+		Progress:  printer.report,
 	})
-	fmt.Fprintln(stderr)
+	printer.finish()
 	if err != nil {
 		return err
 	}
@@ -131,24 +134,67 @@ func runCollect(ctx context.Context, args []string, stdout, stderr io.Writer) er
 	return nil
 }
 
-// Rewrite one stderr line per progress event so long collections do not look stuck.
-func collectProgressPrinter(stderr io.Writer) collector.CollectProgress {
-	width := 0
-	return func(phase, harness string, completed, total int) {
-		var line string
-		switch phase {
-		case "collecting":
-			line = fmt.Sprintf("collecting %s...", harness)
-		case "describing":
-			line = fmt.Sprintf("%s: %d/%d traces", harness, completed, total)
-		case "archiving":
-			line = fmt.Sprintf("writing %d traces to archive...", total)
-		default:
-			return
+// collectStatus rewrites one stderr line while a phase runs and leaves a
+// permanent line per finished harness so a long collection never looks stuck.
+type collectStatus struct {
+	out     io.Writer
+	width   int
+	started time.Time
+	now     func() time.Time
+}
+
+func (s *collectStatus) report(p collector.Progress) {
+	if s.now == nil {
+		s.now = time.Now
+	}
+	switch p.Phase {
+	case "collecting":
+		if p.Completed == 0 && p.Total == 0 {
+			s.started = s.now()
+			s.rewrite(p.Harness + ": collecting...")
+		} else {
+			s.rewrite(p.Harness + ": collecting " + count(p.Completed, p.Total))
 		}
-		// Pad to the previous width so a shorter line fully overwrites a longer one.
-		fmt.Fprintf(stderr, "\r%-*s", width, line)
-		width = len(line)
+	case "describing":
+		s.rewrite(p.Harness + ": describing " + count(p.Completed, p.Total))
+	case "collected":
+		elapsed := s.now().Sub(s.started).Round(time.Second)
+		if p.Total == 0 {
+			s.persist(fmt.Sprintf("%s: no traces found (%s)", p.Harness, elapsed))
+		} else {
+			s.persist(fmt.Sprintf("%s: %d traces found, %d new or changed (%s)", p.Harness, p.Total, p.Completed, elapsed))
+		}
+	case "archiving":
+		s.rewrite(fmt.Sprintf("writing %d traces to archive...", p.Total))
+	case "archived":
+		s.persist(fmt.Sprintf("wrote %d traces to %d archive(s)", p.Completed, p.Total))
+	}
+}
+
+func count(completed, total int) string {
+	if total == 0 {
+		return strconv.Itoa(completed)
+	}
+	return fmt.Sprintf("%d/%d", completed, total)
+}
+
+// Pad to the previous width so a shorter line fully overwrites a longer one.
+func (s *collectStatus) rewrite(line string) {
+	fmt.Fprintf(s.out, "\r%-*s", s.width, line)
+	s.width = len(line)
+}
+
+func (s *collectStatus) persist(line string) {
+	s.rewrite(line)
+	fmt.Fprintln(s.out)
+	s.width = 0
+}
+
+// End an interrupted in-progress line so later output starts on its own line.
+func (s *collectStatus) finish() {
+	if s.width > 0 {
+		fmt.Fprintln(s.out)
+		s.width = 0
 	}
 }
 

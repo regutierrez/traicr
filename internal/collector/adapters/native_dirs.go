@@ -33,7 +33,7 @@ func (grokAdapter) Discover(_ context.Context, configured []string) Source {
 	return Source{Harness: "grok-build", Location: strings.Join(roots, string(os.PathListSeparator)), Traces: len(dirs), Warnings: warnings}
 }
 
-func (grokAdapter) Collect(ctx context.Context, configured []string) (Result, error) {
+func (grokAdapter) Collect(ctx context.Context, configured []string, progress Progress) (Result, error) {
 	roots := chooseRoots(configured, grokRoots())
 	dirs, warnings := findGrokSessions(roots)
 	base, err := os.MkdirTemp("", "traicr-grok-*")
@@ -46,6 +46,7 @@ func (grokAdapter) Collect(ctx context.Context, configured []string) (Result, er
 			result.Cleanup()
 			return Result{}, err
 		}
+		progress.report(index+1, len(dirs))
 		destination := filepath.Join(base, fmt.Sprintf("%06d", index+1), "source")
 		if err := os.MkdirAll(destination, 0o700); err != nil {
 			result.Cleanup()

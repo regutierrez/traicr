@@ -20,10 +20,20 @@ type Result struct {
 	Cleanup  func()
 }
 
+// Progress reports how many traces an adapter has gathered so far and the
+// total when it is known; total is 0 while the adapter is still discovering.
+type Progress func(completed, total int)
+
+func (p Progress) report(completed, total int) {
+	if p != nil {
+		p(completed, total)
+	}
+}
+
 type Adapter interface {
 	Name() string
 	Discover(context.Context, []string) Source
-	Collect(context.Context, []string) (Result, error)
+	Collect(context.Context, []string, Progress) (Result, error)
 }
 
 func All() []Adapter {

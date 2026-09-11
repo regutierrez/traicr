@@ -72,7 +72,7 @@ func TestAmpCollectUsesExportTimestampWithoutLiveChangeWarning(t *testing.T) {
 	}
 	t.Setenv("TRAICR_TEST_AMP_COLLECT", "1")
 	t.Setenv("TRAICR_TEST_BINARY", binary)
-	result, err := (commandAdapter{name: "amp", format: "amp-thread-export", executable: command}).Collect(context.Background(), nil)
+	result, err := (commandAdapter{name: "amp", format: "amp-thread-export", executable: command}).Collect(context.Background(), nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

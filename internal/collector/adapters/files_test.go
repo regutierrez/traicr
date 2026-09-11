@@ -67,7 +67,7 @@ func TestPiCollectUsesLatestSessionName(t *testing.T) {
 			content := "{\"type\":\"session\",\"version\":3,\"id\":\"stable-id\"}\n" + test.records
 			writeTestFile(t, path, content)
 			adapter := jsonlAdapter{name: "pi", format: "pi-jsonl", defaultRoots: func() []string { return nil }}
-			result, err := adapter.Collect(context.Background(), []string{path})
+			result, err := adapter.Collect(context.Background(), []string{path}, nil)
 			if err != nil {
 				t.Fatal(err)
 			}

@@ -46,7 +46,7 @@ func (a commandAdapter) Discover(ctx context.Context, _ []string) Source {
 	return Source{Harness: a.name, Location: a.executable + " CLI", Traces: len(traces), Warnings: warnings}
 }
 
-func (a commandAdapter) Collect(ctx context.Context, _ []string) (Result, error) {
+func (a commandAdapter) Collect(ctx context.Context, _ []string, progress Progress) (Result, error) {
 	traces, warnings := a.list(ctx)
 	base, err := os.MkdirTemp("", "traicr-"+a.name+"-*")
 	if err != nil {
@@ -54,6 +54,7 @@ func (a commandAdapter) Collect(ctx context.Context, _ []string) (Result, error)
 	}
 	result := Result{Warnings: warnings, Cleanup: func() { os.RemoveAll(base) }}
 	for index, trace := range traces {
+		progress.report(index+1, len(traces))
 		dir := filepath.Join(base, fmt.Sprintf("%06d", index+1))
 		if err := os.MkdirAll(filepath.Join(dir, "source"), 0o700); err != nil {
 			result.Cleanup()

@@ -64,14 +64,15 @@ func TestCollectReportsProgressPerHarnessTraceAndArchive(t *testing.T) {
 		Harnesses: []string{"pi"},
 		Sources:   map[string][]string{"pi": {filepath.Join("..", "..", "testdata", "collector", "pi")}},
 		OutputDir: t.TempDir(),
-		Progress: func(phase, harness string, completed, total int) {
-			events = append(events, fmt.Sprintf("%s %s %d/%d", phase, harness, completed, total))
+		Progress: func(p collector.Progress) {
+			events = append(events, fmt.Sprintf("%s %s %d/%d", p.Phase, p.Harness, p.Completed, p.Total))
 		},
 	})
 	if err != nil || len(result.Archives) != 1 {
 		t.Fatalf("collect: %+v, %v", result, err)
 	}
-	want := []string{"collecting pi 0/0", "describing pi 1/5", "describing pi 2/5", "describing pi 3/5", "describing pi 4/5", "describing pi 5/5", "archiving  0/5"}
+	want := []string{"collecting pi 0/0", "collecting pi 1/5", "collecting pi 2/5", "collecting pi 3/5", "collecting pi 4/5", "collecting pi 5/5",
+		"describing pi 1/5", "describing pi 2/5", "describing pi 3/5", "describing pi 4/5", "describing pi 5/5", "collected pi 5/5", "archiving  0/5", "archived  5/1"}
 	if strings.Join(events, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("progress events:\n%s\nwant:\n%s", strings.Join(events, "\n"), strings.Join(want, "\n"))
 	}

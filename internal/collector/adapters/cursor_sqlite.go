@@ -43,7 +43,7 @@ func (cursorEditorAdapter) Discover(_ context.Context, configured []string) Sour
 	return Source{Harness: "cursor", Location: strings.Join(roots, string(os.PathListSeparator)), Traces: len(files), Warnings: warnings}
 }
 
-func (cursorEditorAdapter) Collect(ctx context.Context, configured []string) (Result, error) {
+func (cursorEditorAdapter) Collect(ctx context.Context, configured []string, progress Progress) (Result, error) {
 	roots := chooseRoots(configured, cursorDatabaseRoots())
 	files, warnings := findFiles(roots, ".vscdb", ".sqlite", ".db")
 	base, err := os.MkdirTemp("", "traicr-cursor-*")
@@ -62,6 +62,7 @@ func (cursorEditorAdapter) Collect(ctx context.Context, configured []string) (Re
 		info, _ := os.Stat(path)
 		for _, trace := range groupCursorRows(rows) {
 			inputIndex++
+			progress.report(inputIndex, 0)
 			dir := filepath.Join(base, fmt.Sprintf("%06d", inputIndex))
 			if err := os.MkdirAll(filepath.Join(dir, "source"), 0o700); err != nil {
 				result.Cleanup()

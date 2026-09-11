@@ -25,10 +25,20 @@ type CollectOptions struct {
 	Progress   CollectProgress
 }
 
-// CollectProgress reports collection phases: "collecting" while a harness adapter
-// gathers traces (total unknown), "describing" as each gathered trace is hashed,
-// and "archiving" once before the ZIP files are written.
-type CollectProgress func(phase, harness string, completed, total int)
+// Progress describes one step of a collection. Phases per harness are
+// "collecting" (Completed/Total gathered so far; Total is 0 until known),
+// "describing" (Completed/Total gathered traces hashed), then "collected"
+// (Completed new or changed traces kept out of Total gathered). Once all
+// harnesses finish, "archiving" (Total traces) precedes the ZIP write and
+// "archived" (Completed traces in Total archives) follows it.
+type Progress struct {
+	Phase     string
+	Harness   string
+	Completed int
+	Total     int
+}
+
+type CollectProgress func(Progress)
 
 type Collection struct {
 	Archives []string
@@ -81,7 +91,7 @@ func Collect(ctx context.Context, cfg config.Collector, options CollectOptions) 
 	}()
 	progress := options.Progress
 	if progress == nil {
-		progress = func(string, string, int, int) {}
+		progress = func(Progress) {}
 	}
 	found := map[string]bool{}
 	collected := map[string]bool{}
@@ -90,8 +100,11 @@ func Collect(ctx context.Context, cfg config.Collector, options CollectOptions) 
 			continue
 		}
 		found[adapter.Name()] = true
-		progress("collecting", adapter.Name(), 0, 0)
-		result, err := adapter.Collect(ctx, configured[adapter.Name()])
+		harness := adapter.Name()
+		progress(Progress{Phase: "collecting", Harness: harness})
+		result, err := adapter.Collect(ctx, configured[harness], func(completed, total int) {
+			progress(Progress{Phase: "collecting", Harness: harness, Completed: completed, Total: total})
+		})
 		if err != nil {
 			return Collection{}, fmt.Errorf("collect %s: %w", adapter.Name(), err)
 		}
@@ -99,8 +112,9 @@ func Collect(ctx context.Context, cfg config.Collector, options CollectOptions) 
 			cleanups = append(cleanups, result.Cleanup)
 		}
 		warnings = append(warnings, result.Warnings...)
+		kept := 0
 		for i, input := range result.Inputs {
-			progress("describing", adapter.Name(), i+1, len(result.Inputs))
+			progress(Progress{Phase: "describing", Harness: harness, Completed: i + 1, Total: len(result.Inputs)})
 			descriptor, err := archive.Describe(input)
 			if err != nil {
 				warnings = append(warnings, domain.Warning{Code: "snapshot_failed", Message: adapter.Name() + " " + input.Descriptor.NativeTraceID + ": " + err.Error()})
@@ -119,7 +133,9 @@ func Collect(ctx context.Context, cfg config.Collector, options CollectOptions) 
 			}
 			input.Descriptor = descriptor
 			inputs = append(inputs, input)
+			kept++
 		}
+		progress(Progress{Phase: "collected", Harness: harness, Completed: kept, Total: len(result.Inputs)})
 	}
 	for harness := range selected {
 		if !found[harness] {
@@ -145,11 +161,12 @@ func Collect(ctx context.Context, cfg config.Collector, options CollectOptions) 
 		CreatedAt:        time.Now().UTC().Format(time.RFC3339Nano),
 		SourceMachine:    domain.Machine{ID: cfg.MachineID, Hostname: hostname, OS: runtime.GOOS, Arch: runtime.GOARCH},
 	}
-	progress("archiving", "", 0, len(inputs))
+	progress(Progress{Phase: "archiving", Total: len(inputs)})
 	paths, err := archive.Write(ctx, options.OutputDir, manifest, inputs, options.SplitBytes)
 	if err != nil {
 		return Collection{}, err
 	}
+	progress(Progress{Phase: "archived", Completed: len(inputs), Total: len(paths)})
 	return Collection{Archives: paths, Warnings: warnings}, nil
 }
 

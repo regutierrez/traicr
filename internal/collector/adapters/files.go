@@ -37,7 +37,7 @@ func (a jsonlAdapter) Discover(_ context.Context, configured []string) Source {
 	return Source{Harness: a.name, Location: strings.Join(roots, string(os.PathListSeparator)), Traces: len(files), Warnings: warnings}
 }
 
-func (a jsonlAdapter) Collect(ctx context.Context, configured []string) (Result, error) {
+func (a jsonlAdapter) Collect(ctx context.Context, configured []string, progress Progress) (Result, error) {
 	roots := chooseRoots(configured, a.defaultRoots())
 	files, warnings := findFiles(roots, ".jsonl")
 	base, err := os.MkdirTemp("", "traicr-"+a.name+"-*")
@@ -50,6 +50,7 @@ func (a jsonlAdapter) Collect(ctx context.Context, configured []string) (Result,
 			result.Cleanup()
 			return Result{}, err
 		}
+		progress.report(i+1, len(files))
 		dir := filepath.Join(base, fmt.Sprintf("%06d", i+1))
 		if err := os.MkdirAll(filepath.Join(dir, "source"), 0o700); err != nil {
 			result.Cleanup()

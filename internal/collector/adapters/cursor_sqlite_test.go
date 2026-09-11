@@ -43,7 +43,7 @@ func TestCursorCollectsComposerAndReferencedBubblesFromLiveWALReadOnly(t *testin
 			cursor = adapter
 		}
 	}
-	result, err := cursor.Collect(context.Background(), []string{dir})
+	result, err := cursor.Collect(context.Background(), []string{dir}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

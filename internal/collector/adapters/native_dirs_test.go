@@ -41,7 +41,7 @@ func TestGrokDescriptorUsesSnapshotSummary(t *testing.T) {
 			}
 		}
 	}()
-	result, err := (grokAdapter{}).Collect(context.Background(), []string{root})
+	result, err := (grokAdapter{}).Collect(context.Background(), []string{root}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
