@@ -467,6 +467,10 @@ func (s *Store) commitRevision(ctx context.Context, manifest domain.Manifest, de
 
 func (s *Store) insertEvents(ctx context.Context, tx *sql.Tx, traceID, revisionID int64, labels string, events []domain.Event) ([]domain.Warning, error) {
 	var conflicts []domain.Warning
+	// Identical records can repeat within one revision (Cursor Agent retries carry no
+	// ids, so they hash to the same key). They map to one observation whose source
+	// references accumulate under consecutive ordinals instead of failing the import.
+	ordinals := map[int64]int{}
 	for _, event := range events {
 		if event.Key == "" {
 			return nil, errors.New("normalized event key is required")
@@ -505,10 +509,17 @@ func (s *Store) insertEvents(ctx context.Context, tx *sql.Tx, traceID, revisionI
 		if _, err = tx.ExecContext(ctx, "INSERT OR IGNORE INTO observation_revisions(observation_id,revision_id,searchable_text) VALUES(?,?,?)", observationID, revisionID, searchable); err != nil {
 			return nil, err
 		}
-		for ordinal, source := range sourceRefs {
-			if _, err = tx.ExecContext(ctx, "INSERT INTO observation_sources(observation_id,revision_id,ordinal,path,line) VALUES(?,?,?,?,?)", observationID, revisionID, ordinal, source.Path, source.Line); err != nil {
+		next, repeated := ordinals[observationID]
+		for _, source := range sourceRefs {
+			if _, err = tx.ExecContext(ctx, "INSERT INTO observation_sources(observation_id,revision_id,ordinal,path,line) VALUES(?,?,?,?,?)", observationID, revisionID, next, source.Path, source.Line); err != nil {
 				return nil, err
 			}
+			next++
+		}
+		ordinals[observationID] = next
+		if repeated {
+			conflicts = append(conflicts, domain.Warning{Code: "duplicate_event", Message: "identical repeated event " + event.Key + " was retained once with its source references merged"})
+			continue
 		}
 		for _, chunk := range searchtext.Chunks(searchable) {
 			if _, err = tx.ExecContext(ctx, "INSERT INTO search_chunks(observation_id,revision_id,event_id,content) VALUES(?,?,?,?)", observationID, revisionID, eventID, chunk); err != nil {

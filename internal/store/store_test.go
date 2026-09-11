@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"strings"
@@ -17,6 +18,50 @@ import (
 	"github.com/regutierrez/traicr/internal/domain"
 	"github.com/regutierrez/traicr/internal/store"
 )
+
+func TestImportMergesIdenticalRepeatedEventsInsteadOfFailing(t *testing.T) {
+	ctx := context.Background()
+	s := openStore(t)
+	retry := domain.Event{Key: "message:sha256:retry", Kind: "message", Role: "user", Text: "run smoke test", Sources: []domain.SourceRef{{Path: "source/records.jsonl", Line: 3}}}
+	again := retry
+	again.Sources = []domain.SourceRef{{Path: "source/records.jsonl", Line: 9}}
+	other := domain.Event{Key: "message:sha256:other", Kind: "message", Role: "assistant", Text: "done", Sources: []domain.SourceRef{{Path: "source/records.jsonl", Line: 4}}}
+	input := traceInput("machine-a", "retries", "2026-08-22T12:00:00Z", "", []domain.Event{retry, other, again})
+	report, err := s.Import(ctx, input.manifest, input.files, normalizer(input.events, "normalized", 1), nil)
+	if err != nil || report.Imported != 1 || report.Failed != 0 {
+		t.Fatalf("import: %+v, %v", report, err)
+	}
+	outcome := report.Traces[0]
+	if len(outcome.Warnings) != 1 || outcome.Warnings[0].Code != "duplicate_event" {
+		t.Fatalf("warnings: %+v", outcome.Warnings)
+	}
+	page, err := s.Events(ctx, outcome.TraceID, "", 10)
+	if err != nil || len(page.Events) != 2 {
+		t.Fatalf("events: %+v, %v", page, err)
+	}
+	for _, event := range page.Events {
+		sources, err := s.Sources(ctx, event.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var lines []int
+		for _, source := range sources {
+			lines = append(lines, source.Line)
+		}
+		want := "[4]"
+		if event.Key == retry.Key {
+			want = "[3 9]"
+		}
+		if fmt.Sprint(lines) != want || event.ObservationCount != 1 {
+			t.Fatalf("event %s sources %v (observations %d), want lines %s", event.Key, lines, event.ObservationCount, want)
+		}
+	}
+	// Re-importing the same revision must stay idempotent.
+	report, err = s.Import(ctx, input.manifest, input.files, normalizer(input.events, "normalized", 1), nil)
+	if err != nil || report.Unchanged != 1 {
+		t.Fatalf("retry import: %+v, %v", report, err)
+	}
+}
 
 func TestImportBackfillsMissingTitleWithoutNewRevision(t *testing.T) {
 	ctx := context.Background()
