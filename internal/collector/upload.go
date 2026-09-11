@@ -18,7 +18,26 @@ import (
 	"github.com/regutierrez/traicr/internal/domain"
 )
 
-type UploadProgress func(file string, sent, total int64)
+// UploadStatus describes one step of uploading an archive. Phase "sending"
+// reports Sent of Size bytes; the server's streamed phases ("validating",
+// "normalizing", "indexing") report Completed of Total traces; "complete"
+// marks the archive's import report as received.
+type UploadStatus struct {
+	File      string
+	Phase     string
+	Sent      int64
+	Size      int64
+	Completed int
+	Total     int
+}
+
+type UploadProgress func(UploadStatus)
+
+func (p UploadProgress) report(status UploadStatus) {
+	if p != nil {
+		p(status)
+	}
+}
 
 func Upload(ctx context.Context, client *http.Client, cfg *config.Collector, configPath string, files []string, progress UploadProgress) ([]domain.ImportReport, error) {
 	if cfg.ServerURL == "" || cfg.Token == "" {
@@ -102,42 +121,44 @@ func uploadOne(ctx context.Context, client *http.Client, endpoint, token, filePa
 		message, _ := io.ReadAll(io.LimitReader(response.Body, 4096))
 		return domain.ImportReport{}, domain.Manifest{}, fmt.Errorf("upload %s: server returned %s: %s", filePath, response.Status, strings.TrimSpace(string(message)))
 	}
-	report, err := readCompleteReport(response.Body)
+	report, err := readCompleteReport(response.Body, filePath, progress)
 	if err != nil {
 		return domain.ImportReport{}, domain.Manifest{}, fmt.Errorf("upload %s: %w", filePath, err)
 	}
+	progress.report(UploadStatus{File: filePath, Phase: "complete", Completed: len(report.Traces), Total: len(report.Traces)})
 	return report, validated.Manifest, nil
 }
 
-func readCompleteReport(reader io.Reader) (domain.ImportReport, error) {
+func readCompleteReport(reader io.Reader, file string, progress UploadProgress) (domain.ImportReport, error) {
 	scanner := bufio.NewScanner(reader)
 	scanner.Buffer(make([]byte, 64<<10), 4<<20)
 	var report *domain.ImportReport
 	for scanner.Scan() {
-		var progress domain.Progress
-		if err := json.Unmarshal(scanner.Bytes(), &progress); err != nil {
+		var event domain.Progress
+		if err := json.Unmarshal(scanner.Bytes(), &event); err != nil {
 			return domain.ImportReport{}, fmt.Errorf("malformed import progress: %w", err)
 		}
-		switch progress.Phase {
+		switch event.Phase {
 		case "validating", "normalizing", "indexing":
 			if report != nil {
 				return domain.ImportReport{}, errors.New("progress received after complete report")
 			}
+			progress.report(UploadStatus{File: file, Phase: event.Phase, Completed: event.Completed, Total: event.Total})
 		case "complete":
-			if report != nil || progress.Report == nil {
+			if report != nil || event.Report == nil {
 				return domain.ImportReport{}, errors.New("complete progress must contain exactly one report")
 			}
-			report = progress.Report
+			report = event.Report
 		case "failed":
 			if report != nil {
 				return domain.ImportReport{}, errors.New("progress received after complete report")
 			}
-			if progress.Error == "" {
+			if event.Error == "" {
 				return domain.ImportReport{}, errors.New("import failed without an error")
 			}
-			return domain.ImportReport{}, fmt.Errorf("import failed: %s", progress.Error)
+			return domain.ImportReport{}, fmt.Errorf("import failed: %s", event.Error)
 		default:
-			return domain.ImportReport{}, fmt.Errorf("unknown import progress phase %q", progress.Phase)
+			return domain.ImportReport{}, fmt.Errorf("unknown import progress phase %q", event.Phase)
 		}
 	}
 	if err := scanner.Err(); err != nil {
@@ -205,8 +226,8 @@ type progressReader struct {
 func (reader *progressReader) Read(data []byte) (int, error) {
 	read, err := reader.reader.Read(data)
 	reader.sent += int64(read)
-	if reader.report != nil && read > 0 {
-		reader.report(reader.file, reader.sent, reader.total)
+	if read > 0 {
+		reader.report.report(UploadStatus{File: reader.file, Phase: "sending", Sent: reader.sent, Size: reader.total})
 	}
 	return read, err
 }

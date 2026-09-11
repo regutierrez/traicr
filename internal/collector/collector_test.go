@@ -161,14 +161,30 @@ func TestUploadAdvancesOnlyAcknowledgedOutcomes(t *testing.T) {
 		io.Copy(io.Discard, request.Body)
 		report := domain.ImportReport{Machine: manifest.SourceMachine, Imported: 1, Updated: 1, Unchanged: 1, Partial: 1, Failed: 1, Traces: outcomes}
 		json.NewEncoder(response).Encode(domain.Progress{Phase: "validating"})
+		json.NewEncoder(response).Encode(domain.Progress{Phase: "normalizing", Completed: 2, Total: 5})
 		json.NewEncoder(response).Encode(domain.Progress{Phase: "complete", Report: &report})
 	}))
 	defer server.Close()
 	cfg.ServerURL = server.URL
 	cfg.Token = "secret"
 	configPath := filepath.Join(t.TempDir(), "collector.json")
-	if _, err := collector.Upload(context.Background(), server.Client(), &cfg, configPath, collected.Archives, nil); err != nil {
+	var phases []string
+	var lastSent, size int64
+	progress := func(status collector.UploadStatus) {
+		if status.File != collected.Archives[0] {
+			t.Errorf("progress for unexpected file %q", status.File)
+		}
+		if status.Phase == "sending" {
+			lastSent, size = status.Sent, status.Size
+			return
+		}
+		phases = append(phases, fmt.Sprintf("%s %d/%d", status.Phase, status.Completed, status.Total))
+	}
+	if _, err := collector.Upload(context.Background(), server.Client(), &cfg, configPath, collected.Archives, progress); err != nil {
 		t.Fatal(err)
+	}
+	if size == 0 || lastSent != size || strings.Join(phases, ",") != "validating 0/0,normalizing 2/5,complete 5/5" {
+		t.Fatalf("upload progress: sent %d/%d, phases %v", lastSent, size, phases)
 	}
 	if len(cfg.State) != 3 {
 		t.Fatalf("got %d acknowledged revisions, want 3", len(cfg.State))

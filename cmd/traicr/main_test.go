@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -35,7 +36,7 @@ func TestLoginReadsTokenFromInputWithoutPrintingIt(t *testing.T) {
 func TestCollectStatusLeavesOneLinePerHarness(t *testing.T) {
 	var stderr bytes.Buffer
 	clock := time.Date(2026, 9, 11, 0, 0, 0, 0, time.UTC)
-	status := &collectStatus{out: &stderr, now: func() time.Time { return clock }}
+	status := &collectStatus{statusLine: statusLine{out: &stderr}, now: func() time.Time { return clock }}
 	status.report(collector.Progress{Phase: "collecting", Harness: "amp"})
 	status.report(collector.Progress{Phase: "collecting", Harness: "amp", Completed: 1, Total: 485})
 	clock = clock.Add(133 * time.Second)
@@ -60,5 +61,34 @@ func TestCollectStatusLeavesOneLinePerHarness(t *testing.T) {
 	}
 	if strings.Contains(stderr.String(), "\n\n") {
 		t.Fatalf("finish added a blank line after a persisted line: %q", stderr.String())
+	}
+}
+
+func TestUploadStatusShowsServerImportProgress(t *testing.T) {
+	var stderr bytes.Buffer
+	status := &statusLine{out: &stderr}
+	report := func(s collector.UploadStatus) {
+		name := filepath.Base(s.File)
+		switch s.Phase {
+		case "sending":
+			status.rewrite(fmt.Sprintf("%s: uploading %d/%d bytes (%.1f%%)", name, s.Sent, s.Size, float64(s.Sent)*100/float64(s.Size)))
+		case "normalizing", "indexing":
+			status.rewrite(fmt.Sprintf("%s: server importing %s traces", name, count(s.Completed, s.Total)))
+		case "complete":
+			status.finish()
+		}
+	}
+	report(collector.UploadStatus{File: "/tmp/a.zip", Phase: "sending", Sent: 50, Size: 100})
+	report(collector.UploadStatus{File: "/tmp/a.zip", Phase: "sending", Sent: 100, Size: 100})
+	report(collector.UploadStatus{File: "/tmp/a.zip", Phase: "normalizing", Completed: 812, Total: 2326})
+	report(collector.UploadStatus{File: "/tmp/a.zip", Phase: "complete", Completed: 2326, Total: 2326})
+	out := stderr.String()
+	for _, frame := range []string{"\ra.zip: uploading 50/100 bytes (50.0%)", "\ra.zip: uploading 100/100 bytes (100.0%)", "\ra.zip: server importing 812/2326 traces"} {
+		if !strings.Contains(out, frame) {
+			t.Fatalf("missing frame %q in %q", frame, out)
+		}
+	}
+	if strings.Count(out, "\n") != 1 || !strings.HasSuffix(out, "\n") {
+		t.Fatalf("expected one line ending after completion: %q", out)
 	}
 }

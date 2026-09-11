@@ -108,7 +108,7 @@ func runCollect(ctx context.Context, args []string, stdout, stderr io.Writer) er
 	if len(harnesses) == 0 {
 		harnesses = append(harnesses, collector.Harnesses()...)
 	}
-	printer := &collectStatus{out: stderr}
+	printer := &collectStatus{statusLine: statusLine{out: stderr}}
 	result, err := collector.Collect(ctx, cfg, collector.CollectOptions{
 		Harnesses: harnesses,
 		Sources:   sources,
@@ -134,11 +134,36 @@ func runCollect(ctx context.Context, args []string, stdout, stderr io.Writer) er
 	return nil
 }
 
-// collectStatus rewrites one stderr line while a phase runs and leaves a
-// permanent line per finished harness so a long collection never looks stuck.
+// statusLine rewrites a single stderr line in place until persist or finish
+// ends it, so long-running phases never look stuck.
+type statusLine struct {
+	out   io.Writer
+	width int
+}
+
+// Pad to the previous width so a shorter line fully overwrites a longer one.
+func (s *statusLine) rewrite(line string) {
+	fmt.Fprintf(s.out, "\r%-*s", s.width, line)
+	s.width = len(line)
+}
+
+func (s *statusLine) persist(line string) {
+	s.rewrite(line)
+	fmt.Fprintln(s.out)
+	s.width = 0
+}
+
+// End an in-progress line so later output starts on its own line.
+func (s *statusLine) finish() {
+	if s.width > 0 {
+		fmt.Fprintln(s.out)
+		s.width = 0
+	}
+}
+
+// collectStatus leaves a permanent line per finished harness.
 type collectStatus struct {
-	out     io.Writer
-	width   int
+	statusLine
 	started time.Time
 	now     func() time.Time
 }
@@ -176,26 +201,6 @@ func count(completed, total int) string {
 		return strconv.Itoa(completed)
 	}
 	return fmt.Sprintf("%d/%d", completed, total)
-}
-
-// Pad to the previous width so a shorter line fully overwrites a longer one.
-func (s *collectStatus) rewrite(line string) {
-	fmt.Fprintf(s.out, "\r%-*s", s.width, line)
-	s.width = len(line)
-}
-
-func (s *collectStatus) persist(line string) {
-	s.rewrite(line)
-	fmt.Fprintln(s.out)
-	s.width = 0
-}
-
-// End an interrupted in-progress line so later output starts on its own line.
-func (s *collectStatus) finish() {
-	if s.width > 0 {
-		fmt.Fprintln(s.out)
-		s.width = 0
-	}
 }
 
 func runLogin(args []string, stdin io.Reader, stderr io.Writer) error {
@@ -241,12 +246,21 @@ func runUpload(ctx context.Context, args []string, stdout, stderr io.Writer) err
 	if err != nil {
 		return err
 	}
-	progress := func(file string, sent, total int64) {
-		percent := float64(sent) * 100 / float64(total)
-		fmt.Fprintf(stderr, "\ruploading %s: %d/%d bytes (%.1f%%)", filepath.Base(file), sent, total, percent)
-	}
-	reports, err := collector.Upload(ctx, nil, &cfg, configPath, args, progress)
-	fmt.Fprintln(stderr)
+	status := &statusLine{out: stderr}
+	reports, err := collector.Upload(ctx, nil, &cfg, configPath, args, func(s collector.UploadStatus) {
+		name := filepath.Base(s.File)
+		switch s.Phase {
+		case "sending":
+			status.rewrite(fmt.Sprintf("%s: uploading %d/%d bytes (%.1f%%)", name, s.Sent, s.Size, float64(s.Sent)*100/float64(s.Size)))
+		case "validating":
+			status.rewrite(name + ": server validating archive...")
+		case "normalizing", "indexing":
+			status.rewrite(fmt.Sprintf("%s: server importing %s traces", name, count(s.Completed, s.Total)))
+		case "complete":
+			status.finish()
+		}
+	})
+	status.finish()
 	if err != nil {
 		return err
 	}
