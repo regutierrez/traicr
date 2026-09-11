@@ -80,8 +80,42 @@ jobs:
             dist/compose.yaml \
             dist/traicr-*
 
+  # Tag pushes ignore `paths:` filters, so decide here whether anything in the
+  # server image changed since the previous release. Only collector code, its
+  # fixtures, docs, scripts, tests, and the CI-only workflows are client-side.
+  server-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      build: ${{ steps.detect.outputs.build }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Detect server changes since the previous release
+        id: detect
+        run: |
+          set -euo pipefail
+          previous="$(git tag --list 'v*' --sort=-v:refname | grep -vx "$GITHUB_REF_NAME" | head -n 1 || true)"
+          if [ -z "$previous" ]; then
+            echo "no previous release tag; building the server image"
+            echo "build=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          server_changes="$(git diff --name-only "$previous" "$GITHUB_SHA" \
+            | grep -Ev '^(cmd/traicr/|internal/collector/|testdata/collector/|docs/|scripts/|test/|\.github/workflows/(ci|mutation)\.yml$|compose\.yaml$|\.gitignore$|([^/]+/)*[^/]+\.md$)' || true)"
+          if [ -z "$server_changes" ]; then
+            echo "only client-side files changed since $previous; skipping the server image"
+            echo "build=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "server files changed since $previous:"
+            echo "$server_changes"
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          fi
+
   server-image:
     runs-on: ubuntu-latest
+    needs: server-changes
+    if: needs.server-changes.outputs.build == 'true'
     permissions:
       contents: read
       packages: write
