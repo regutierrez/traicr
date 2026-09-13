@@ -120,6 +120,61 @@ func TestImportBackfillsMissingTitleWithoutNewRevision(t *testing.T) {
 	}
 }
 
+func TestImportBackfillsMissingWorkingDirectoryWithoutNewRevision(t *testing.T) {
+	ctx := context.Background()
+	for _, test := range []struct {
+		name, originalCWD, incomingCWD, newerCWD, wantCWD string
+		updated, newerRevision                            bool
+	}{
+		{name: "missing working directory", incomingCWD: "/home/pael/project", wantCWD: "/home/pael/project", updated: true},
+		{name: "preserve existing", originalCWD: "/existing/project", incomingCWD: "/replacement/project", wantCWD: "/existing/project"},
+		{name: "empty retry"},
+		{name: "stale retry", incomingCWD: "/old/project", newerCWD: "/new/project", wantCWD: "/new/project", newerRevision: true},
+		{name: "stale directory after clear", incomingCWD: "/old/project", newerRevision: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			s := openStore(t)
+			input := traceInput("machine-a", "same-revision", "2026-08-22T12:00:00Z", "", []domain.Event{{Key: "message-1", Kind: "message", Role: "user", Text: "Hello"}})
+			input.manifest.Traces[0].WorkingDirectory = test.originalCWD
+			report, err := s.Import(ctx, input.manifest, input.files, normalizer(input.events, "normalized", 1), nil)
+			if err != nil || report.Imported != 1 {
+				t.Fatalf("initial import: %+v, %v", report, err)
+			}
+			revisions := 1
+			if test.newerRevision {
+				newer := traceInput("machine-a", "newer-revision", "2026-08-23T12:00:00Z", "", input.events)
+				newer.manifest.Traces[0].WorkingDirectory = test.newerCWD
+				if _, err := s.Import(ctx, newer.manifest, newer.files, normalizer(newer.events, "normalized", 1), nil); err != nil {
+					t.Fatal(err)
+				}
+				revisions++
+			}
+			input.manifest.Traces[0].WorkingDirectory = test.incomingCWD
+			for attempt := 0; attempt < 2; attempt++ {
+				report, err = s.Import(ctx, input.manifest, input.files, func(context.Context, domain.Descriptor, fs.FS) (domain.Normalization, error) {
+					t.Fatal("duplicate revision must not be normalized again")
+					return domain.Normalization{}, nil
+				}, nil)
+				if err != nil || report.Failed != 0 || (test.updated && attempt == 0 && report.Updated != 1) || ((!test.updated || attempt > 0) && report.Unchanged != 1) {
+					t.Fatalf("retry: %+v, %v", report, err)
+				}
+			}
+			trace, err := s.Trace(ctx, report.Traces[0].TraceID)
+			if err != nil || trace.WorkingDirectory != test.wantCWD || len(trace.Revisions) != revisions {
+				t.Fatalf("trace: %+v, %v", trace, err)
+			}
+			if test.updated {
+				for _, mode := range []string{"fulltext", "exact", "regex"} {
+					page, err := s.Search(ctx, store.SearchQuery{Query: "home", Mode: mode})
+					if err != nil || len(page.Results) != 1 {
+						t.Fatalf("%s working directory search: %+v, %v", mode, page, err)
+					}
+				}
+			}
+		})
+	}
+}
+
 func TestImportBackfillsTitleForPartiallyParsedRevision(t *testing.T) {
 	ctx := context.Background()
 	s := openStore(t)

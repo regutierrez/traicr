@@ -355,26 +355,45 @@ func jsonlMetadata(harness, snapshot, source string) (traceMetadata, []domain.Wa
 			return traceMetadata{ID: fallback}, nil
 		}
 		defer file.Close()
-		scanner := bufio.NewScanner(file)
-		scanner.Buffer(make([]byte, 64<<10), 16<<20)
+		reader := bufio.NewReader(file)
 		metadata := traceMetadata{ID: fallback}
 		subagent := filepath.Base(filepath.Dir(source)) == "subagents" && strings.HasPrefix(filepath.Base(source), "agent-")
-		for scanner.Scan() {
+		foundIdentity := false
+		for {
+			line, readErr := reader.ReadBytes('\n')
+			if readErr != nil && !errors.Is(readErr, io.EOF) {
+				return metadata, []domain.Warning{warning("metadata_read_failed", "read Claude metadata: "+readErr.Error())}
+			}
+			if errors.Is(readErr, io.EOF) {
+				break
+			}
 			var record struct {
 				SessionID string `json:"sessionId"`
 				AgentID   string `json:"agentId"`
 				CWD       string `json:"cwd"`
+				Type      string `json:"type"`
+				AITitle   string `json:"aiTitle"`
 			}
-			if json.Unmarshal(scanner.Bytes(), &record) == nil && record.SessionID != "" && (!subagent || record.AgentID != "") {
+			if json.Unmarshal(line, &record) != nil {
+				continue
+			}
+			if !foundIdentity && record.SessionID != "" && (!subagent || record.AgentID != "") {
+				foundIdentity = true
 				if subagent {
-					metadata.ID = record.AgentID
-					metadata.ParentID = record.SessionID
+					metadata.ID, metadata.ParentID = record.AgentID, record.SessionID
 				} else {
 					metadata.ID = record.SessionID
 				}
-				metadata.CWD = record.CWD
-				return metadata, nil
 			}
+			if metadata.CWD == "" && filepath.IsAbs(strings.TrimSpace(record.CWD)) {
+				metadata.CWD = strings.TrimSpace(record.CWD)
+			}
+			if record.Type == "ai-title" && strings.TrimSpace(record.AITitle) != "" {
+				metadata.Title = strings.TrimSpace(record.AITitle)
+			}
+		}
+		if foundIdentity {
+			return metadata, nil
 		}
 		return metadata, []domain.Warning{warning("unknown_schema", "Claude JSONL has no top-level sessionId; filename identity was used")}
 	case "cursor-agent":

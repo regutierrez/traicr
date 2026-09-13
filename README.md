@@ -91,7 +91,7 @@ traicr upload ./traces/*.zip
 
 Replace the URL with your server's address when it runs on another machine. Run `upload` only when collection produces ZIP files. Collection and upload are manual; `go install` does not set up a background service or schedule. Use cron or another scheduler for automatic uploads.
 
-### Pi session names
+### Saved session metadata
 
 The collector uses the latest saved Pi session name (from `/name` or extensions such as `pi-rename`) as the transcript title. UUIDs remain the session IDs. Traicr does not generate names or change Pi session files.
 
@@ -103,6 +103,15 @@ traicr upload ./pi-title-backfill/*.zip
 ```
 
 Use a new output directory and run `upload` only if ZIP files were created. The server fills missing titles without creating duplicate revisions. It preserves existing titles and does not restore names from stale revisions. Sessions without a saved name still use their ID as the display fallback.
+
+Claude Code collection uses the last non-empty `ai-title` record as the title and the first absolute `cwd` in the session records as the working directory. Recollecting acknowledged Claude sessions backfills either missing field without replacing existing or newer metadata:
+
+```sh
+traicr collect --harness claude-code --all --output ./claude-metadata-backfill
+traicr upload ./claude-metadata-backfill/*.zip
+```
+
+Collection reads but does not modify the native Claude JSONL files.
 
 ## Development
 

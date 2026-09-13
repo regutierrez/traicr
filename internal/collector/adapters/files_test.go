@@ -13,7 +13,7 @@ import (
 func TestJSONLMetadataUsesHarnessIdentityAndExplicitParents(t *testing.T) {
 	dir := t.TempDir()
 	claude := filepath.Join(dir, "claude-fallback.jsonl")
-	writeTestFile(t, claude, "{\"uuid\":\"message-id\",\"id\":\"also-message\"}\n{\"sessionId\":\"claude-session\",\"cwd\":\"/repo\",\"uuid\":\"message-two\"}\n")
+	writeTestFile(t, claude, "{\"type\":\"mode\",\"sessionId\":\"claude-session\"}\n{\"type\":\"user\",\"sessionId\":\"claude-session\",\"cwd\":\"/repo\",\"uuid\":\"message-two\"}\n")
 	metadata, warnings := jsonlMetadata("claude-code", claude, claude)
 	if metadata.ID != "claude-session" || metadata.CWD != "/repo" || len(warnings) != 0 {
 		t.Fatalf("unexpected Claude metadata: %+v, warnings: %+v", metadata, warnings)
@@ -46,6 +46,50 @@ func TestJSONLMetadataUsesHarnessIdentityAndExplicitParents(t *testing.T) {
 	metadata, warnings = jsonlMetadata("codex", codex, codex)
 	if metadata.ID != "codex-thread" || metadata.ParentID != "codex-parent" || metadata.CWD != "/repo" || len(warnings) != 0 {
 		t.Fatalf("unexpected Codex metadata: %+v, warnings: %+v", metadata, warnings)
+	}
+}
+
+func TestClaudeCodeCollectUsesLatestTitleAndLaterWorkingDirectory(t *testing.T) {
+	for _, test := range []struct {
+		name, records, title string
+	}{
+		{"unnamed", "", ""},
+		{"named", `{"type":"ai-title","aiTitle":" Fix login ","sessionId":"claude-session"}` + "\n", "Fix login"},
+		{"renamed", `{"type":"ai-title","aiTitle":"Old","sessionId":"claude-session"}` + "\n" +
+			`{"type":"assistant","aiTitle":"Ignore","sessionId":"claude-session"}` + "\n" +
+			`{"type":"ai-title","aiTitle":" New title ","sessionId":"claude-session"}` + "\n", "New title"},
+		{"empty title ignored", `{"type":"ai-title","aiTitle":"Keep","sessionId":"claude-session"}` + "\n" +
+			`{"type":"ai-title","aiTitle":"   ","sessionId":"claude-session"}` + "\n", "Keep"},
+		{"missing title ignored", `{"type":"ai-title","aiTitle":"Keep","sessionId":"claude-session"}` + "\n" +
+			`{"type":"ai-title","sessionId":"claude-session"}` + "\n", "Keep"},
+		{"title after large record", `{"type":"attachment","data":"` + strings.Repeat("x", 17<<20) + `","sessionId":"claude-session"}` + "\n" +
+			`{"type":"ai-title","aiTitle":"After attachment","sessionId":"claude-session"}` + "\n", "After attachment"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "session.jsonl")
+			content := `{"type":"mode","mode":"normal","sessionId":"claude-session"}` + "\n" +
+				test.records +
+				`{"type":"user","uuid":"u1","sessionId":"claude-session","cwd":"relative/path","message":{"role":"user","content":"ignore relative cwd"}}` + "\n" +
+				`{"type":"assistant","uuid":"a1","sessionId":"claude-session","cwd":"/home/pael/project","message":{"role":"assistant","content":[{"type":"text","text":"done"}]}}` + "\n"
+			writeTestFile(t, path, content)
+			adapter := jsonlAdapter{name: "claude-code", format: "claude-code-jsonl", defaultRoots: func() []string { return nil }}
+			result, err := adapter.Collect(context.Background(), []string{path}, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer result.Cleanup()
+			if len(result.Inputs) != 1 {
+				t.Fatalf("collected inputs: %+v", result.Inputs)
+			}
+			descriptor := result.Inputs[0].Descriptor
+			if descriptor.NativeTraceID != "claude-session" || descriptor.Title != test.title || descriptor.WorkingDirectory != "/home/pael/project" {
+				t.Fatalf("collected descriptor: %+v; want title %q and later absolute working directory", descriptor, test.title)
+			}
+			original, err := os.ReadFile(path)
+			if err != nil || string(original) != content {
+				t.Fatalf("source changed: %v", err)
+			}
+		})
 	}
 }
 

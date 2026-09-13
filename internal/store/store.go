@@ -149,9 +149,9 @@ func (s *Store) importTrace(ctx context.Context, manifest domain.Manifest, descr
 			outcome.Status, outcome.Error = "failed", err.Error()
 			return outcome
 		}
-		updated, titleErr := s.backfillMissingTitle(ctx, existingTraceID, existingID, descriptor)
-		if titleErr != nil {
-			outcome.Status, outcome.Error = "failed", titleErr.Error()
+		updated, metadataErr := s.backfillMissingTraceMetadata(ctx, existingTraceID, existingID, descriptor)
+		if metadataErr != nil {
+			outcome.Status, outcome.Error = "failed", metadataErr.Error()
 			return outcome
 		}
 		if normalizationSuccessful(existingStatus) {
@@ -217,9 +217,9 @@ func (s *Store) importTrace(ctx context.Context, manifest domain.Manifest, descr
 	return outcome
 }
 
-// Backfill a missing title from improved collector metadata without changing revision identity.
-func (s *Store) backfillMissingTitle(ctx context.Context, traceID, revisionID int64, descriptor domain.Descriptor) (bool, error) {
-	if descriptor.Title == "" {
+// backfillMissingTraceMetadata fills collector metadata added after a revision was first imported.
+func (s *Store) backfillMissingTraceMetadata(ctx context.Context, traceID, revisionID int64, descriptor domain.Descriptor) (bool, error) {
+	if descriptor.Title == "" && descriptor.WorkingDirectory == "" {
 		return false, nil
 	}
 	tx, err := s.db.BeginTx(ctx, nil)
@@ -227,29 +227,51 @@ func (s *Store) backfillMissingTitle(ctx context.Context, traceID, revisionID in
 		return false, err
 	}
 	defer tx.Rollback()
-	// Never restore a stale name over a newer revision, or overwrite an existing title.
-	result, err := tx.ExecContext(ctx, `UPDATE traces SET title=? WHERE id=? AND title='' AND updated_at<=?`, descriptor.Title, traceID, canonicalTime(descriptor.NativeUpdatedAt))
-	if err != nil {
-		return false, err
+	// Never restore stale metadata over a newer revision or overwrite an existing value.
+	var searchableMetadata []string
+	if descriptor.Title != "" {
+		result, err := tx.ExecContext(ctx, `UPDATE traces SET title=? WHERE id=? AND title='' AND updated_at<=?`, descriptor.Title, traceID, canonicalTime(descriptor.NativeUpdatedAt))
+		if err != nil {
+			return false, err
+		}
+		changed, err := result.RowsAffected()
+		if err != nil {
+			return false, err
+		}
+		if changed != 0 {
+			searchableMetadata = append(searchableMetadata, descriptor.Title)
+		}
 	}
-	changed, err := result.RowsAffected()
-	if err != nil || changed == 0 {
-		return false, err
+	if descriptor.WorkingDirectory != "" {
+		result, err := tx.ExecContext(ctx, `UPDATE traces SET working_directory=? WHERE id=? AND working_directory='' AND updated_at<=?`, descriptor.WorkingDirectory, traceID, canonicalTime(descriptor.NativeUpdatedAt))
+		if err != nil {
+			return false, err
+		}
+		changed, err := result.RowsAffected()
+		if err != nil {
+			return false, err
+		}
+		if changed != 0 {
+			searchableMetadata = append(searchableMetadata, descriptor.WorkingDirectory)
+		}
 	}
-	if _, err := tx.ExecContext(ctx, `UPDATE observation_revisions SET searchable_text=searchable_text || char(10) || ? WHERE revision_id=?`, descriptor.Title, revisionID); err != nil {
+	if len(searchableMetadata) == 0 {
+		return false, nil
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE observation_revisions SET searchable_text=searchable_text || char(10) || ? WHERE revision_id=?`, strings.Join(searchableMetadata, "\n"), revisionID); err != nil {
 		return false, err
 	}
 	rows, err := tx.QueryContext(ctx, `SELECT x.observation_id,o.event_id,x.searchable_text FROM observation_revisions x JOIN event_observations o ON o.id=x.observation_id WHERE x.revision_id=?`, revisionID)
 	if err != nil {
 		return false, err
 	}
-	type titleSearchText struct {
+	type metadataSearchText struct {
 		observationID, eventID int64
 		text                   string
 	}
-	var texts []titleSearchText
+	var texts []metadataSearchText
 	for rows.Next() {
-		var text titleSearchText
+		var text metadataSearchText
 		if err := rows.Scan(&text.observationID, &text.eventID, &text.text); err != nil {
 			rows.Close()
 			return false, err
