@@ -1,0 +1,225 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="1000" viewBox="0 0 1440 1000" role="img" aria-labelledby="title desc">
+  <title id="title">Traicr — Concept A: inline delegated-work chips with a docked child-transcript pane</title>
+  <desc id="desc">Parent transcript in the center with quiet delegated-work rows placed beside their invocations. The selected row is open in a right-side pane showing the child transcript with its own header and close control. All transcript text is synthetic.</desc>
+  <style>
+    text { font-family: -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif; fill: #202b26; }
+    .mono { font-family: "SF Mono", "Cascadia Code", Menlo, Consolas, monospace; }
+    .muted { fill: #606d65; }
+    .green { fill: #25583e; }
+    .white { fill: #ffffff; }
+    .it { font-style: italic; }
+    .w5 { font-weight: 500; }
+    .w6 { font-weight: 600; }
+    .w7 { font-weight: 700; }
+    .card { fill: #ffffff; stroke: #dce2d9; }
+    .soft { fill: #eaf0e7; }
+    .hairline { stroke: #dce2d9; }
+  </style>
+
+  <!-- ============ canvas ============ -->
+  <rect width="1440" height="1000" fill="#f7f8f4"/>
+
+  <!-- ============ left sidebar: session tree ============ -->
+  <rect x="0" y="0" width="300" height="1000" fill="#ffffff"/>
+  <line x1="300.5" y1="0" x2="300.5" y2="1000" class="hairline"/>
+
+  <rect x="16" y="18" width="268" height="34" rx="6" fill="#f7f8f4" stroke="#dce2d9"/>
+  <text x="30" y="40" font-size="13" class="muted">Search…</text>
+
+  <!-- filter pills -->
+  <rect x="16" y="66" width="58" height="22" rx="5" fill="#25583e"/>
+  <text x="45" y="81" font-size="10" text-anchor="middle" class="white w6">Default</text>
+  <rect x="80" y="66" width="62" height="22" rx="5" fill="#ffffff" stroke="#dce2d9"/>
+  <text x="111" y="81" font-size="10" text-anchor="middle" class="muted">No-tools</text>
+  <rect x="148" y="66" width="42" height="22" rx="5" fill="#ffffff" stroke="#dce2d9"/>
+  <text x="169" y="81" font-size="10" text-anchor="middle" class="muted">User</text>
+  <rect x="196" y="66" width="58" height="22" rx="5" fill="#ffffff" stroke="#dce2d9"/>
+  <text x="225" y="81" font-size="10" text-anchor="middle" class="muted">Labeled</text>
+  <rect x="260" y="66" width="24" height="22" rx="5" fill="#ffffff" stroke="#dce2d9"/>
+  <text x="272" y="81" font-size="10" text-anchor="middle" class="muted">All</text>
+  <line x1="0" y1="104.5" x2="300" y2="104.5" class="hairline"/>
+
+  <!-- tree (mono, 21px rhythm). Active subagent row highlighted. -->
+  <rect x="8" y="219" width="284" height="21" rx="4" class="soft"/>
+  <g class="mono" font-size="11">
+    <text x="16" y="132" class="muted">session · pi · 12 Mar 14:22</text>
+    <text x="16" y="153">├ user  add CSV export to billing</text>
+    <text x="16" y="174">├ assistant  plan the export flow</text>
+    <text x="16" y="195" class="muted">│ ├ read  report/render.go</text>
+    <text x="16" y="216" class="muted">│ ├ edit  report/export.go</text>
+    <text x="16" y="234" class="green w6">│ ├ ◆ agent  unit tests for CSV</text>
+    <text x="16" y="258" class="muted">│ └ bash  go build ./...</text>
+    <text x="16" y="279">├ assistant  wire export button</text>
+    <text x="16" y="300" class="muted">│ ├ edit  web/billing/page.tsx</text>
+    <text x="16" y="321" class="green">│ ├ ◆ agent  API docs for export</text>
+    <text x="16" y="342" class="muted">│ └ bash  npm run typecheck</text>
+    <text x="16" y="363">├ user  also escape newlines</text>
+    <text x="16" y="384">├ assistant  patch escaping rules</text>
+    <text x="16" y="405" class="muted">│ ├ edit  report/csv.go</text>
+    <text x="16" y="426" class="green">│ └ ◆ agent  flaky pipeline probe</text>
+    <text x="16" y="447">└ assistant  summary and handoff</text>
+  </g>
+  <!-- unread dot on the API docs tree row -->
+  <circle cx="288" cy="317" r="3" fill="#25583e"/>
+
+  <line x1="0" y1="958.5" x2="300" y2="958.5" class="hairline"/>
+  <text x="16" y="981" font-size="10" class="mono muted">42 entries · 3 delegated agents</text>
+
+  <!-- ============ parent transcript column ============ -->
+  <!-- nav -->
+  <rect x="325" y="24" width="26" height="26" rx="5" fill="#25583e"/>
+  <text x="338" y="43" font-size="17" text-anchor="middle" class="white" font-family="Georgia, serif" font-weight="700">t</text>
+  <text x="359" y="43" font-size="16" class="w7" letter-spacing="-0.5">traicr</text>
+  <text x="432" y="42" font-size="12.5" class="green">← Transcripts</text>
+  <text x="916" y="42" font-size="12.5" text-anchor="end" class="green">Session details &amp; source records</text>
+  <line x1="325" y1="64.5" x2="916" y2="64.5" class="hairline"/>
+
+  <!-- session header card -->
+  <rect x="325" y="84" width="591" height="116" rx="12" class="card"/>
+  <rect x="349" y="103" width="26" height="18" rx="4" class="soft"/>
+  <text x="362" y="116" font-size="9.5" text-anchor="middle" class="mono green w7">PI</text>
+  <text x="385" y="116" font-size="10" class="mono muted">e9c4a1b2 · 12 Mar 2025 · 14:22</text>
+  <text x="349" y="149" font-size="21" font-weight="650" letter-spacing="-0.4">Add CSV export to billing reports</text>
+  <text x="349" y="177" font-size="10.5" class="mono muted">cwd ~/code/lumen · claude-sonnet-4-5 · 42 events</text>
+
+  <!-- user message -->
+  <rect x="325" y="220" width="591" height="78" rx="10" class="soft"/>
+  <text x="345" y="242" font-size="9.5" class="mono muted">14:22 · user</text>
+  <text x="345" y="264" font-size="14">Add a CSV export button to the billing report page.</text>
+  <text x="345" y="285" font-size="14">Escape quoted fields properly and cover it with tests.</text>
+
+  <!-- assistant message -->
+  <rect x="325" y="318" width="591" height="102" rx="10" class="card"/>
+  <text x="345" y="340" font-size="9.5" class="mono muted">14:23 · assistant</text>
+  <text x="345" y="362" font-size="14">I'll wire the endpoint and button here, and delegate the</text>
+  <text x="345" y="383" font-size="14">escaping test matrix and the docs update to subagents so</text>
+  <text x="345" y="404" font-size="14">they land in parallel.</text>
+
+  <!-- tool execution -->
+  <rect x="325" y="440" width="591" height="96" rx="8" class="card"/>
+  <text x="345" y="462" font-size="11.5" class="mono green w7">edit  internal/report/export.go</text>
+  <text x="896" y="462" font-size="10" text-anchor="end" class="mono muted">+64 −3</text>
+  <g class="mono" font-size="10.5">
+    <text x="345" y="484" class="green">+ func writeCSV(w io.Writer, rows []Row) error {</text>
+    <text x="345" y="502" class="green">+     cw := csv.NewWriter(w)</text>
+    <text x="345" y="520" class="muted">  … 61 more lines</text>
+  </g>
+
+  <!-- delegated-work chip 1 · SELECTED (its pane is open) -->
+  <rect x="325" y="554" width="591" height="42" rx="8" fill="#eaf0e7" stroke="#25583e"/>
+  <text x="345" y="580" font-size="14" class="green w7">↳</text>
+  <text x="364" y="579" font-size="13" class="w6">Unit tests for CSV escaping</text>
+  <text x="874" y="579" font-size="10" text-anchor="end" class="mono muted">pi · finished · 3m 12s</text>
+  <text x="888" y="580" font-size="14" class="green">›</text>
+  <!-- connector from the open chip to the pane -->
+  <line x1="917" y1="575" x2="941" y2="575" stroke="#25583e" stroke-width="1.5" opacity="0.55"/>
+
+  <!-- assistant message -->
+  <rect x="325" y="616" width="591" height="80" rx="10" class="card"/>
+  <text x="345" y="638" font-size="9.5" class="mono muted">14:24 · assistant</text>
+  <text x="345" y="660" font-size="14">Escaping tests are running in a subagent. Wiring the</text>
+  <text x="345" y="681" font-size="14">button while that lands.</text>
+
+  <!-- delegated-work chip 2 · closed, unread -->
+  <rect x="325" y="714" width="591" height="42" rx="8" class="card"/>
+  <text x="345" y="740" font-size="14" class="green w7">↳</text>
+  <text x="364" y="739" font-size="13" class="w5">API docs for the export endpoint</text>
+  <circle cx="700" cy="735" r="3.5" fill="#25583e"/>
+  <text x="874" y="739" font-size="10" text-anchor="end" class="mono muted">claude · finished · 1m 40s</text>
+  <text x="888" y="740" font-size="14" class="green">›</text>
+
+  <!-- delegated-work chip 3 · closed, running -->
+  <rect x="325" y="772" width="591" height="42" rx="8" class="card"/>
+  <text x="345" y="798" font-size="14" class="green w7">↳</text>
+  <text x="364" y="797" font-size="13" class="w5">Investigate flaky pipeline timeout</text>
+  <circle cx="700" cy="793" r="3.5" fill="none" stroke="#25583e" stroke-width="1.5"/>
+  <text x="874" y="797" font-size="10" text-anchor="end" class="mono muted">pi · running · 12m</text>
+  <text x="888" y="798" font-size="14" class="green">›</text>
+
+  <!-- assistant message -->
+  <rect x="325" y="832" width="591" height="80" rx="10" class="card"/>
+  <text x="345" y="854" font-size="9.5" class="mono muted">14:31 · assistant</text>
+  <text x="345" y="876" font-size="14">Export lands behind the reports flag. Docs and tests are</text>
+  <text x="345" y="897" font-size="14">linked above as delegated work.</text>
+
+  <!-- scroll fade at the bottom of the parent column -->
+  <defs>
+    <linearGradient id="fade" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f7f8f4" stop-opacity="0"/>
+      <stop offset="1" stop-color="#f7f8f4" stop-opacity="1"/>
+    </linearGradient>
+    <linearGradient id="paneShadow" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#16211b" stop-opacity="0"/>
+      <stop offset="1" stop-color="#16211b" stop-opacity="0.07"/>
+    </linearGradient>
+  </defs>
+  <rect x="301" y="920" width="640" height="80" fill="url(#fade)"/>
+
+  <!-- ============ right pane: child transcript ============ -->
+  <rect x="933" y="0" width="8" height="1000" fill="url(#paneShadow)"/>
+  <rect x="941" y="0" width="499" height="1000" fill="#ffffff"/>
+  <line x1="941.5" y1="0" x2="941.5" y2="1000" class="hairline"/>
+
+  <text x="969" y="46" font-size="10" letter-spacing="1.5" class="mono green w6">DELEGATED WORK</text>
+  <!-- close control -->
+  <rect x="1372" y="26" width="32" height="32" rx="6" fill="#ffffff" stroke="#dce2d9"/>
+  <text x="1388" y="47" font-size="13" text-anchor="middle" class="muted">✕</text>
+  <text x="1388" y="72" font-size="8" text-anchor="middle" class="mono muted">esc</text>
+
+  <text x="969" y="84" font-size="17" font-weight="650" letter-spacing="-0.3">Unit tests for CSV escaping</text>
+  <text x="969" y="106" font-size="10.5" class="mono muted">pi · claude-sonnet-4-5 · ~/code/lumen</text>
+  <text x="969" y="128" font-size="11.5" class="green">Open standalone view ↗</text>
+  <text x="1412" y="128" font-size="10" text-anchor="end" class="mono muted">✓ finished · 3m 12s · 14 events</text>
+  <line x1="969" y1="144.5" x2="1412" y2="144.5" class="hairline"/>
+
+  <!-- child: delegation prompt -->
+  <rect x="969" y="162" width="443" height="96" rx="8" class="soft"/>
+  <text x="985" y="184" font-size="9" class="mono muted">14:23 · delegation prompt from parent</text>
+  <text x="985" y="206" font-size="12.5">Write table-driven tests for the CSV escaping in</text>
+  <text x="985" y="225" font-size="12.5">internal/report. Cover quotes, commas, newlines,</text>
+  <text x="985" y="244" font-size="12.5">and UTF-8. Don't touch export.go.</text>
+
+  <!-- child: thinking -->
+  <text x="985" y="284" font-size="12" class="muted it">Reading the current escaping rules before writing</text>
+  <text x="985" y="302" font-size="12" class="muted it">cases…</text>
+
+  <!-- child: tool execution -->
+  <rect x="969" y="320" width="443" height="118" rx="8" class="card"/>
+  <text x="985" y="342" font-size="11" class="mono green w7">bash  go test ./internal/report -run Escape</text>
+  <g class="mono" font-size="10">
+    <text x="985" y="364" class="muted">=== RUN   TestEscapeQuotes</text>
+    <text x="985" y="382">--- PASS: TestEscapeQuotes (0.02s)</text>
+    <text x="985" y="400" class="muted">=== RUN   TestEscapeNewlines</text>
+    <text x="985" y="418">--- PASS: TestEscapeNewlines (0.01s)</text>
+  </g>
+
+  <!-- child: assistant -->
+  <rect x="969" y="458" width="443" height="98" rx="8" class="card"/>
+  <text x="985" y="480" font-size="9" class="mono muted">14:26 · assistant</text>
+  <text x="985" y="502" font-size="12.5">Added 12 cases in csv_escape_test.go. All pass</text>
+  <text x="985" y="521" font-size="12.5">after one fix: quoteField now escapes bare</text>
+  <text x="985" y="540" font-size="12.5">carriage returns.</text>
+
+  <!-- child: tool execution 2 -->
+  <rect x="969" y="574" width="443" height="64" rx="8" class="card"/>
+  <text x="985" y="596" font-size="11" class="mono green w7">edit  internal/report/csv_escape_test.go</text>
+  <text x="1396" y="596" font-size="10" text-anchor="end" class="mono muted">+118 −0</text>
+  <text x="985" y="618" font-size="10" class="mono green">+ {name: "crlf inside quotes", in: "a\r\nb", …}</text>
+
+  <!-- child: final assistant -->
+  <rect x="969" y="656" width="443" height="78" rx="8" class="card"/>
+  <text x="985" y="678" font-size="9" class="mono muted">14:26 · assistant</text>
+  <text x="985" y="700" font-size="12.5">Done. The matrix covers 12 escaping cases and</text>
+  <text x="985" y="719" font-size="12.5">go test ./internal/report passes in 1.8s.</text>
+
+  <!-- child: nested delegated work (same affordance, one level down) -->
+  <rect x="969" y="752" width="443" height="36" rx="8" class="card"/>
+  <text x="985" y="775" font-size="12.5" class="green w7">↳</text>
+  <text x="1002" y="775" font-size="12" class="w5">Table formatting review</text>
+  <text x="1380" y="775" font-size="9.5" text-anchor="end" class="mono muted">pi · finished</text>
+  <text x="1392" y="776" font-size="13" class="green">›</text>
+
+  <!-- pane footer -->
+  <line x1="969" y1="946.5" x2="1412" y2="946.5" class="hairline"/>
+  <text x="969" y="972" font-size="10" class="mono muted">✕ or esc returns to the invoking entry in the parent</text>
+</svg>
