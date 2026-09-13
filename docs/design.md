@@ -402,7 +402,7 @@ Configuration is the listen address, data directory, admin token, cookie mode fo
 
 The design target is approximately 50 GB of collected Source Records and millions of Events. The server should have at least 100 GB free, with 150 GB preferred for Source Records, normalized data, FTS indexes, temporary imports, and database maintenance.
 
-Collection, upload, ZIP validation, hashing, normalization, search indexing, API pagination, and deletion all operate incrementally. Search indexing writes FTS rows inside `insertEvents` during import. No normal path reads a complete archive, trace corpus, or search result set into memory.
+Collection, upload, ZIP validation, hashing, normalization, search indexing, API pagination, and deletion all operate incrementally. No normal path reads a complete archive, trace corpus, or search result set into memory.
 
 Backups are deliberately outside the first version.
 
