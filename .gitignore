@@ -2,3 +2,13 @@
 *.test
 coverage.out
 .amp/portals/
+/mutation-*.json
+/mutation-*.tar.gz
+/final-mutation-source.tar.gz
+/search-final-source.tar.gz
+/revision-search-correction.tar.gz
+/search-text-coverage.out
+/*-regressions.patch
+/maintenance-routes-boundaries.patch
+/mutation-testing.patch
+/release-scale.patch
