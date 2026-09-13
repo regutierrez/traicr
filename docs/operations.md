@@ -4,15 +4,23 @@ Traicr is a single-user service that trusts the network path to the server. Run 
 
 ## Direct access over Tailscale
 
-Set `TRAICR_BIND_ADDRESS` to the Debian host's Tailscale IP before starting Compose. This controls the host address Docker publishes; it is separate from `TRAICR_LISTEN_ADDRESS`, which controls the address inside the container.
+`compose.yaml` publishes `8080:8080`, so Docker binds host port 8080 on every interface. Inside the container the process listens on `TRAICR_LISTEN_ADDRESS`, which defaults to `:8080`. Traicr does not read a bind-address environment variable.
+
+To publish only on a Tailscale address, change the Compose `ports` mapping to that address:
+
+```yaml
+ports:
+  - "100.64.0.10:8080:8080"
+```
+
+To publish only on this machine, use `127.0.0.1:8080:8080`. A host firewall can also limit who reaches the published port. Do not publish on every interface unless another firewall provides the intended isolation.
 
 ```sh
-export TRAICR_BIND_ADDRESS=100.64.0.10
 export TRAICR_ADMIN_TOKEN='replace-with-a-long-random-token'
 docker compose up -d
 ```
 
-Do not use `0.0.0.0` unless another firewall provides the intended isolation. Confirm the published socket is bound only to the Tailscale address with `docker compose ps` or the host's socket inspection tools.
+Confirm the published socket with `docker compose ps` or the host's socket inspection tools.
 
 Store the token in a root-owned environment file with mode `0600` when managing the service non-interactively. Do not put the token in Compose YAML, shell history, logs, or a source repository.
 
@@ -21,7 +29,7 @@ Store the token in a root-owned environment file with mode `0600` when managing 
 | Variable | Required | Default | Purpose |
 | --- | --- | --- | --- |
 | `TRAICR_ADMIN_TOKEN` | yes | none | API bearer token and key material for signed browser sessions |
-| `TRAICR_LISTEN_ADDRESS` | no | `127.0.0.1:8080` | Plain-HTTP server socket inside the process |
+| `TRAICR_LISTEN_ADDRESS` | no | `:8080` | Plain-HTTP server socket inside the process |
 | `TRAICR_DATA_DIR` | no | `/data` | SQLite, retained Source Records, and temporary import files |
 | `TRAICR_SECURE_COOKIES` | no | `false` | Set to `true` only when browsers reach Traicr through HTTPS |
 | `TRAICR_MAX_UPLOAD_BYTES` | no | `8589934592` (8 GiB) | Maximum compressed upload size |
@@ -52,7 +60,7 @@ Set `TRAICR_SECURE_COOKIES=true` before allowing browser logins through this HTT
 
 ## Uploads and retries
 
-The collector uploads a complete numbered Trace ZIP to `POST /api/v1/imports`. The response is newline-delimited JSON on the same request and reports validation, normalization, indexing, and the final Import Report. If the connection, collector, or server stops before a complete response, retry the whole ZIP. There is no resumable upload; imports are designed to deduplicate an exact retry.
+The collector uploads a complete numbered Trace ZIP to `POST /api/v1/imports`. The response is newline-delimited JSON on the same request. Phases are `validating`, per-trace `normalizing`, then `complete` or `failed`. Search indexing happens during `normalizing`, not as a separate phase. If the connection, collector, or server stops before a complete response, retry the whole ZIP. There is no resumable upload; imports are designed to deduplicate an exact retry.
 
 One trace is never split between archives. The collector's split size is a soft target, so one large trace can produce an archive larger than that target. Configure all three upload limits for the largest trusted trace while retaining finite bounds against malformed archives.
 
