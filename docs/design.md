@@ -73,7 +73,7 @@ The collector is a standalone binary. It has no daemon, scheduler, embedded serv
 
 On first use it automatically creates:
 
-- A stable random source-machine ID
+- A stable random 16-byte hex source-machine ID
 - A machine record whose displayed name is always the current hostname
 - A local configuration file
 - Local Collection State
@@ -116,7 +116,7 @@ Collectors prefer supported, read-only harness commands because native storage f
 | Claude Code | Project session JSONL | Preserve parent links, tool-call IDs, branches, child-agent records, unknown entries, and incomplete tails |
 | Codex | `codex app-server` thread, turn, and item APIs | Raw rollout parsing is a compatibility fallback, not the primary contract |
 | Pi | Documented JSONL export or session format | Preserve the parent graph, model changes, compactions, images, and extension records |
-| Grok Build | `grok export` | If needed, snapshot the complete native session directory rather than selected files |
+| Grok Build | Native session directory (`grok-native-session`) | Snapshot the complete session under `GROK_HOME/sessions` or `~/.grok/sessions`. Do not run `grok export`. Markdown export is lossy. |
 | OpenCode | `opencode session list --format json` and `opencode export` | CLI and desktop share session storage; do not scrape desktop UI state |
 
 An unavailable harness command, unreadable source, live-write race, unknown record, or partially collected session becomes a warning in the Trace ZIP. The collector does not silently drop it.
@@ -129,11 +129,11 @@ The collector preserves the native working directory and detects the repository 
 
 ### Archive splitting
 
-Collection writes numbered ZIP64 archives with a soft target of 2 GB:
+Collection writes numbered ZIP64 archives with a soft target of 2 GB. `archive.Write` names each file `traicr-{UTC timestamp}-{random}-{n}.zip`:
 
 ```text
-traicr-macbook-20260822-001.zip
-traicr-macbook-20260822-002.zip
+traicr-20260822T120000Z-1837291045-001.zip
+traicr-20260822T120000Z-9172043312-002.zip
 ```
 
 One trace is never split between archives. A single trace may exceed the target. Archives contain complete revisions, so every ZIP can be imported independently and retried safely.
@@ -167,7 +167,7 @@ The versioned manifest records the collector and source-machine context plus one
   "collector_version": "0.1.0",
   "created_at": "2026-08-22T12:00:00Z",
   "source_machine": {
-    "id": "01K...",
+    "id": "0123456789abcdef0123456789abcdef",
     "hostname": "macbook",
     "os": "darwin",
     "arch": "arm64"
@@ -223,9 +223,10 @@ The CLI calculates upload-byte progress while sending the request. After the upl
 ```jsonl
 {"phase":"validating"}
 {"phase":"normalizing","completed":12,"total":100}
-{"phase":"indexing","completed":85,"total":100}
 {"phase":"complete","report":{"imported":80,"updated":15,"unchanged":5,"failed":0}}
 ```
+
+A validation or import error emits `failed` instead of `complete`. The server does not emit an `indexing` phase. Search indexing writes FTS rows during `normalizing`.
 
 There is no polling, SSE, resumable-upload protocol, or second status connection. If the connection or server fails, the collector retries the complete ZIP. Revision and Event deduplication makes retries safe.
 
@@ -271,14 +272,14 @@ Core tables:
 | Table | Purpose |
 | --- | --- |
 | `source_machines` | Stable machine IDs, observed hostnames, OS, architecture, and timestamps |
-| `imports` | Archive metadata, status, counts, warnings, and final report |
+| `imports` | Archive metadata and the retained Import Report in `report_json` |
 | `repositories` | Normalized Git identity and observed local paths |
-| `traces` | Logical trace identity, harness, native ID, parent trace, and summary metadata |
+| `traces` | Logical trace identity, harness, native ID, `parent_native_trace_id`, and summary metadata |
 | `trace_revisions` | Revision digest, source machine, native times, collection time, and parse status |
-| `source_objects` | Content digest, size, media type, and filesystem location |
+| `source_objects` | Content digest, size, and filesystem location |
 | `revision_objects` | Relative source paths and object references for a revision |
-| `events` | Logical normalized Events and their parent, branch, model, tool, role, and time fields |
-| `event_observations` | Distinct normalized forms observed across revisions |
+| `events` | Logical Events (`event_key`, sort fields, preferred observation) |
+| `event_observations` | Distinct normalized forms (parent, branch, kind, role, model, tool, time, text) |
 | `search_chunks` | Bounded human-readable text chunks associated with Events |
 | `normalizer_runs` | Harness Normalizer version, outcome, and warnings per revision |
 
@@ -294,7 +295,7 @@ A Harness Normalizer supplies a stable Event key from the native Event ID and Ev
 
 Events observed across revisions merge into one logical trace. Identical observations collapse. Conflicting observations remain associated with the same logical Event and produce a warning rather than losing either Source Record. The viewer chooses a deterministic preferred observation using native update time, then native Event time, then content digest; search results deduplicate by logical Event.
 
-Branches retain native parent relationships. A session spawned by another session is a Child Trace linked through its parent trace and originating Event rather than flattened into the parent timeline.
+Branches retain native parent relationships. A session spawned by another session is a Child Trace linked through `parent_native_trace_id` rather than flattened into the parent timeline.
 
 ## Harness normalization
 
@@ -375,7 +376,7 @@ The first version does not upload archives through the browser. Upload remains a
 
 Traicr has one admin token supplied through `TRAICR_ADMIN_TOKEN`. API clients use it as a bearer token. Browser login exchanges it for a signed, HTTP-only, same-site session cookie. There are no users, roles, invitations, password resets, or registration routes.
 
-The server listens on plain HTTP. Initially Docker publishes the port only on the Debian host's Tailscale address. Tailscale encrypts transport between personal machines and the server. Caddy may later terminate TLS and proxy to the same HTTP listener without changing Traicr's storage or API design.
+The server listens on plain HTTP. `compose.yaml` publishes `8080:8080` on every host interface. Restrict reachability with the Docker publish address or a host firewall. Traicr has no bind-address environment variable. Tailscale can encrypt transport between personal machines and the server. Caddy may terminate TLS and proxy to the same HTTP listener without changing Traicr's storage or API design.
 
 All state-changing browser actions require same-origin requests and CSRF protection. Source text is escaped when rendered. Traicr never automatically fetches URLs found in Source Records.
 
@@ -395,13 +396,13 @@ Debian host
 
 The container runs one server process. It does not include PostgreSQL, Redis, Elasticsearch, a queue, nginx, Caddy, or S3-compatible storage.
 
-Configuration is limited to the listen address, data directory, admin token, cookie mode for a future HTTPS proxy, log level, and safety limits for uploads and expanded archives.
+Configuration is the listen address, data directory, admin token, cookie mode for an HTTPS proxy, and upload or expanded-archive size limits. There is no log-level setting.
 
 ## Capacity
 
 The design target is approximately 50 GB of collected Source Records and millions of Events. The server should have at least 100 GB free, with 150 GB preferred for Source Records, normalized data, FTS indexes, temporary imports, and database maintenance.
 
-Collection, upload, ZIP validation, hashing, normalization, indexing, API pagination, and deletion all operate incrementally. No normal path reads a complete archive, trace corpus, or search result set into memory.
+Collection, upload, ZIP validation, hashing, normalization, search indexing, API pagination, and deletion all operate incrementally. Search indexing writes FTS rows inside `insertEvents` during import. No normal path reads a complete archive, trace corpus, or search result set into memory.
 
 Backups are deliberately outside the first version.
 

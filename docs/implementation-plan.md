@@ -6,6 +6,8 @@ Milestones 1 through 9 deliver the first-release MVP. Mutation testing begins on
 
 ## Repository layout
 
+This plan records historical milestones. The layout below matches the current tree, not the paths proposed when the plan was written.
+
 ```text
 cmd/
   traicr/
@@ -16,20 +18,22 @@ internal/
     adapters/
   config/
   domain/
-  importstream/
   normalize/
-    harnesses/
   search/
   server/
   store/
-  web/
+  version/
 migrations/
 web/
   static/
   templates/
 testdata/
-  archives/
+  collector/
   harnesses/
+test/
+  e2e/
+  scale/
+scripts/
 ```
 
 `internal/domain` owns Trace ZIP and normalized Event types. Harness packages depend on those types; the domain does not depend on harness packages.
@@ -198,7 +202,7 @@ Add one adapter at a time. Each adapter includes discovery, collection, Source R
 
 ### Grok Build
 
-- Use native session discovery and `grok export`.
+- Snapshot the complete native session directory (`grok-native-session`). Do not run `grok export`.
 - Preserve the official session ID, summaries, updates, branches, worktree context, tools, attachments, compactions, and subagent relationships.
 - Never conflate Grok Build with another harness using a Grok model.
 

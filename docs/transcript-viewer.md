@@ -60,6 +60,8 @@ node --test web/static/pi-transcript/transcript-data.test.mjs
 node --check web/static/pi-transcript/pi-transcript.js
 ```
 
+The Node commands are manual checks. They are not part of `make all` or CI.
+
 Browser checks should cover session cards, search grouping, both Amp and Pi
 transcripts, multiple event pages, branch navigation, tool expansion, T/O keys,
 deep links, malicious Markdown, and mobile sidebar controls.
