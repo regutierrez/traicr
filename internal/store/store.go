@@ -227,7 +227,6 @@ func (s *Store) backfillMissingTraceMetadata(ctx context.Context, traceID, revis
 		return false, err
 	}
 	defer tx.Rollback()
-	// Never restore stale metadata over a newer revision or overwrite an existing value.
 	var searchableMetadata []string
 	if descriptor.Title != "" {
 		result, err := tx.ExecContext(ctx, `UPDATE traces SET title=? WHERE id=? AND title='' AND updated_at<=?`, descriptor.Title, traceID, canonicalTime(descriptor.NativeUpdatedAt))

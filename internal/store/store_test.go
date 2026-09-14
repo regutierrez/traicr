@@ -56,7 +56,6 @@ func TestImportMergesIdenticalRepeatedEventsInsteadOfFailing(t *testing.T) {
 			t.Fatalf("event %s sources %v (observations %d), want lines %s", event.Key, lines, event.ObservationCount, want)
 		}
 	}
-	// Re-importing the same revision must stay idempotent.
 	report, err = s.Import(ctx, input.manifest, input.files, normalizer(input.events, "normalized", 1), nil)
 	if err != nil || report.Unchanged != 1 {
 		t.Fatalf("retry import: %+v, %v", report, err)

@@ -58,9 +58,6 @@ func normalizeAmp(ctx context.Context, sourceFS fs.FS) (domain.Normalization, er
 			// order separately from stable event identity for transcript rendering.
 			metadata, _ := json.Marshal(map[string]any{"transcript_message": messageKey, "transcript_parent": parentMessageKey, "transcript_order": messageIndex, "transcript_block": index})
 			event := domain.Event{Role: role, Model: model, Timestamp: messageTimestamp, Sources: source("source/export.json", 0), Metadata: metadata}
-			if parent != "" {
-				event.ParentKey = nativeKey("message", parent, nil)
-			}
 			switch kind {
 			case "text", "message", "input_text", "output_text":
 				event.Kind, event.Text = "message", contentText(block)
