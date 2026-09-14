@@ -1,4 +1,5 @@
 /bin/
+/artifacts/
 *.test
 coverage.out
 .amp/portals/
