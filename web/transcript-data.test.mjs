@@ -1,8 +1,8 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {buildTranscriptSession,loadTranscriptSession} from './transcript-data.js';
+import {buildTranscriptSession,loadTranscriptSession} from './static/pi-transcript/transcript-data.js';
 
-const metadata={nativeId:'session',harness:'pi',title:'A whole conversation',createdAt:'2026-09-06T10:00:00Z',traceId:'1'};
+const metadata={nativeId:'session',harness:'pi',title:'A whole conversation',traceId:'1'};
 test('groups message blocks and preserves branches and tool results',()=>{
  const events=[
   {id:1,key:'message:u:0',kind:'message',role:'user',text:'Build this',timestamp:'2026-09-06T10:00:00Z'},

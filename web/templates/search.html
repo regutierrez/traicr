@@ -1,5 +1,7 @@
 {{ define "search" }}
   {{ template "header" . }}
+  <meta name="htmx-config" content='{"allowEval":false,"allowScriptTags":false,"historyCacheSize":0,"includeIndicatorStyles":false}'>
+  <script src="/static/htmx.min.js" defer></script>
   <section class="page-heading">
     <div>
       <p class="eyebrow">THE TRACE ARCHIVE</p>

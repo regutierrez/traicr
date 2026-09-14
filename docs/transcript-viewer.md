@@ -56,7 +56,7 @@ and source text are escaped. Authentication still protects transcript data.
 
 ```sh
 GOTOOLCHAIN=auto go test ./internal/store ./internal/server
-node --test web/static/pi-transcript/transcript-data.test.mjs
+node --test web/transcript-data.test.mjs
 node --check web/static/pi-transcript/pi-transcript.js
 ```
 

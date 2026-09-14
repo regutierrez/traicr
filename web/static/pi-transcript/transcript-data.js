@@ -1,6 +1,3 @@
-// Adapt Traicr's merged, normalized records to Pi's HTML session-entry contract.
-// Native source files remain authoritative and are available through the details page.
-
 function nativeMessageKey(event) {
   if (event.metadata?.transcript_message) return event.metadata.transcript_message;
   const key = event.key || String(event.id);
@@ -15,7 +12,6 @@ function blockIndex(event) {
   return match ? Number(match[1]) : event.id;
 }
 
-// buildTranscriptSession groups content blocks into turns and retains parent branches.
 export function buildTranscriptSession(events, metadata) {
   const groups = new Map();
   for (const event of events) {
@@ -75,7 +71,7 @@ export function buildTranscriptSession(events, metadata) {
       } else {
         messageEntry = null;
         if (event.kind === "model_change") entry = append({id:event.id,type:"model_change",timestamp:event.timestamp,modelId:event.model || text,provider:event.provider || ""});
-        else if (event.kind === "compaction" || event.kind === "branch_summary") entry = append({id:event.id,type:event.kind,timestamp:event.timestamp,summary:text,tokensBefore:0});
+        else if (event.kind === "compaction" || event.kind === "branch_summary") entry = append({id:event.id,type:event.kind,timestamp:event.timestamp,summary:text});
         else if (event.kind === "thinking_level_change") entry = append({id:event.id,type:event.kind,timestamp:event.timestamp,thinkingLevel:text});
         else if (event.kind === "session_info" || event.kind === "label") entry = append({id:event.id,type:event.kind,timestamp:event.timestamp});
         else entry = append({id:event.id,type:"custom_message",timestamp:event.timestamp,customType:event.kind,display:true,content:text});
@@ -109,7 +105,6 @@ export function buildTranscriptSession(events, metadata) {
     entries, leafId:entries.at(-1)?.id, eventEntries};
 }
 
-// loadTranscriptSession follows every event page; the viewer never stops at page one.
 export async function loadTranscriptSession(metadata) {
   const events = [];
   let cursor = "";
