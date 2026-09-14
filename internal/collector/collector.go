@@ -16,13 +16,12 @@ import (
 )
 
 type CollectOptions struct {
-	Harnesses  []string
-	Sources    map[string][]string
-	OutputDir  string
-	All        bool
-	SplitBytes int64
-	Version    string
-	Progress   CollectProgress
+	Harnesses []string
+	Sources   map[string][]string
+	OutputDir string
+	All       bool
+	Version   string
+	Progress  CollectProgress
 }
 
 // Progress describes one step of a collection. Phases per harness are
@@ -72,7 +71,7 @@ func Collect(ctx context.Context, cfg config.Collector, options CollectOptions) 
 		selected[harness] = true
 	}
 	if len(selected) == 0 {
-		return Collection{}, errors.New("select at least one harness or use --all")
+		return Collection{}, errors.New("select at least one harness")
 	}
 	configured := make(map[string][]string, len(cfg.Sources)+len(options.Sources))
 	for harness, roots := range cfg.Sources {
@@ -115,7 +114,7 @@ func Collect(ctx context.Context, cfg config.Collector, options CollectOptions) 
 		kept := 0
 		for i, input := range result.Inputs {
 			progress(Progress{Phase: "describing", Harness: harness, Completed: i + 1, Total: len(result.Inputs)})
-			descriptor, err := archive.Describe(input)
+			descriptor, err := archive.Describe(ctx, input)
 			if err != nil {
 				warnings = append(warnings, domain.Warning{Code: "snapshot_failed", Message: adapter.Name() + " " + input.Descriptor.NativeTraceID + ": " + err.Error()})
 				continue
@@ -162,7 +161,7 @@ func Collect(ctx context.Context, cfg config.Collector, options CollectOptions) 
 		SourceMachine:    domain.Machine{ID: cfg.MachineID, Hostname: hostname, OS: runtime.GOOS, Arch: runtime.GOARCH},
 	}
 	progress(Progress{Phase: "archiving", Total: len(inputs)})
-	paths, err := archive.Write(ctx, options.OutputDir, manifest, inputs, options.SplitBytes)
+	paths, err := archive.Write(ctx, options.OutputDir, manifest, inputs, 0)
 	if err != nil {
 		return Collection{}, err
 	}

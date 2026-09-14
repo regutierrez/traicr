@@ -30,11 +30,16 @@ func main() {
 	}
 }
 
+const usage = "usage: traicr <sources|collect|login|upload|version>"
+
 func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	if len(args) == 0 {
-		return errors.New("usage: traicr <sources|collect|login|upload|version>")
+		return errors.New(usage)
 	}
 	switch args[0] {
+	case "-h", "--help":
+		fmt.Fprintln(stderr, usage)
+		return nil
 	case "version":
 		if len(args) != 1 {
 			return errors.New("usage: traicr version")
@@ -42,7 +47,7 @@ func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 		fmt.Fprintf(stdout, "traicr %s\n", version.CurrentBuildInfo())
 		return nil
 	case "sources":
-		return runSources(ctx, args[1:], stdout)
+		return runSources(ctx, args[1:], stdout, stderr)
 	case "collect":
 		return runCollect(ctx, args[1:], stdout, stderr)
 	case "login":
@@ -50,17 +55,25 @@ func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	case "upload":
 		return runUpload(ctx, args[1:], stdout, stderr)
 	default:
-		return errors.New("usage: traicr <sources|collect|login|upload|version>")
+		return errors.New(usage)
 	}
 }
 
-func runSources(ctx context.Context, args []string, stdout io.Writer) error {
+func runSources(ctx context.Context, args []string, stdout, stderr io.Writer) error {
+	const sourcesUsage = "usage: traicr sources [--source harness=path]"
 	flags := flag.NewFlagSet("sources", flag.ContinueOnError)
-	flags.SetOutput(io.Discard)
+	flags.SetOutput(stderr)
+	flags.Usage = func() { fmt.Fprintln(stderr, sourcesUsage) }
 	var sourceFlags values
 	flags.Var(&sourceFlags, "source", "configured source as harness=path")
-	if err := flags.Parse(args); err != nil || flags.NArg() != 0 {
-		return errors.New("usage: traicr sources [--source harness=path]")
+	if err := flags.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return nil
+		}
+		return err
+	}
+	if flags.NArg() != 0 {
+		return errors.New(sourcesUsage)
 	}
 	cfg, _, err := config.LoadCollector()
 	if err != nil {
@@ -84,8 +97,10 @@ func runSources(ctx context.Context, args []string, stdout io.Writer) error {
 }
 
 func runCollect(ctx context.Context, args []string, stdout, stderr io.Writer) error {
+	const collectUsage = "usage: traicr collect --output DIR [--harness NAME] [--source harness=path] [--all]"
 	flags := flag.NewFlagSet("collect", flag.ContinueOnError)
-	flags.SetOutput(io.Discard)
+	flags.SetOutput(stderr)
+	flags.Usage = func() { fmt.Fprintln(stderr, collectUsage) }
 	var harnesses values
 	var sourceFlags values
 	var output string
@@ -94,8 +109,14 @@ func runCollect(ctx context.Context, args []string, stdout, stderr io.Writer) er
 	flags.Var(&sourceFlags, "source", "source override as harness=path")
 	flags.StringVar(&output, "output", "", "archive output directory")
 	flags.BoolVar(&all, "all", false, "include already acknowledged revisions")
-	if err := flags.Parse(args); err != nil || flags.NArg() != 0 || output == "" {
-		return errors.New("usage: traicr collect --output DIR [--harness NAME] [--source harness=path] [--all]")
+	if err := flags.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return nil
+		}
+		return err
+	}
+	if flags.NArg() != 0 || output == "" {
+		return errors.New(collectUsage)
 	}
 	cfg, _, err := config.LoadCollector()
 	if err != nil {
@@ -134,14 +155,11 @@ func runCollect(ctx context.Context, args []string, stdout, stderr io.Writer) er
 	return nil
 }
 
-// statusLine rewrites a single stderr line in place until persist or finish
-// ends it, so long-running phases never look stuck.
 type statusLine struct {
 	out   io.Writer
 	width int
 }
 
-// Pad to the previous width so a shorter line fully overwrites a longer one.
 func (s *statusLine) rewrite(line string) {
 	fmt.Fprintf(s.out, "\r%-*s", s.width, line)
 	s.width = len(line)
@@ -153,7 +171,6 @@ func (s *statusLine) persist(line string) {
 	s.width = 0
 }
 
-// End an in-progress line so later output starts on its own line.
 func (s *statusLine) finish() {
 	if s.width > 0 {
 		fmt.Fprintln(s.out)
@@ -161,7 +178,6 @@ func (s *statusLine) finish() {
 	}
 }
 
-// collectStatus leaves a permanent line per finished harness.
 type collectStatus struct {
 	statusLine
 	started time.Time
@@ -201,6 +217,24 @@ func count(completed, total int) string {
 		return strconv.Itoa(completed)
 	}
 	return fmt.Sprintf("%d/%d", completed, total)
+}
+
+type uploadStatus struct {
+	statusLine
+}
+
+func (s *uploadStatus) report(u collector.UploadStatus) {
+	name := filepath.Base(u.File)
+	switch u.Phase {
+	case "sending":
+		s.rewrite(fmt.Sprintf("%s: uploading %d/%d bytes (%.1f%%)", name, u.Sent, u.Size, float64(u.Sent)*100/float64(u.Size)))
+	case "validating":
+		s.rewrite(name + ": server validating archive...")
+	case "normalizing":
+		s.rewrite(fmt.Sprintf("%s: server importing %s traces", name, count(u.Completed, u.Total)))
+	case "complete":
+		s.finish()
+	}
 }
 
 func runLogin(args []string, stdin io.Reader, stderr io.Writer) error {
@@ -246,20 +280,8 @@ func runUpload(ctx context.Context, args []string, stdout, stderr io.Writer) err
 	if err != nil {
 		return err
 	}
-	status := &statusLine{out: stderr}
-	reports, err := collector.Upload(ctx, nil, &cfg, configPath, args, func(s collector.UploadStatus) {
-		name := filepath.Base(s.File)
-		switch s.Phase {
-		case "sending":
-			status.rewrite(fmt.Sprintf("%s: uploading %d/%d bytes (%.1f%%)", name, s.Sent, s.Size, float64(s.Sent)*100/float64(s.Size)))
-		case "validating":
-			status.rewrite(name + ": server validating archive...")
-		case "normalizing", "indexing":
-			status.rewrite(fmt.Sprintf("%s: server importing %s traces", name, count(s.Completed, s.Total)))
-		case "complete":
-			status.finish()
-		}
-	})
+	status := &uploadStatus{statusLine: statusLine{out: stderr}}
+	reports, err := collector.Upload(ctx, nil, &cfg, configPath, args, status.report)
 	status.finish()
 	if err != nil {
 		return err

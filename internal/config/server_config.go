@@ -1,4 +1,3 @@
-// Package config loads and validates Traicr process configuration.
 package config
 
 import (
@@ -23,7 +22,6 @@ type ServerConfig struct {
 	ArchiveLimits archive.Limits
 }
 
-// LoadServerConfig reads server settings from the environment and requires an admin token.
 func LoadServerConfig() (ServerConfig, error) {
 	config := ServerConfig{
 		ListenAddress: environmentOrDefault("TRAICR_LISTEN_ADDRESS", defaultListenAddress),

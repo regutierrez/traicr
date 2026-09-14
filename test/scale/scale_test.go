@@ -225,7 +225,7 @@ func generateCorpus(t *testing.T, root string, config scaleConfig) ([]archive.In
 	attachment := filepath.Join(inputs[0].Directory, "source", "attachments", "large.bin")
 	writeAttachment(t, attachment, config.attachmentBytes)
 	for i := range inputs {
-		descriptor, err := archive.Describe(inputs[i])
+		descriptor, err := archive.Describe(t.Context(), inputs[i])
 		if err != nil {
 			t.Fatal(err)
 		}
