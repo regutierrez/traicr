@@ -18,6 +18,13 @@ import (
 	"github.com/regutierrez/traicr/internal/domain"
 )
 
+func TestCollectRequiresHarness(t *testing.T) {
+	_, err := collector.Collect(t.Context(), config.Collector{}, collector.CollectOptions{OutputDir: t.TempDir()})
+	if err == nil || err.Error() != "select at least one harness" {
+		t.Fatalf("got %v", err)
+	}
+}
+
 func TestCollectCreatesValidArchiveAndDoesNotAdvanceState(t *testing.T) {
 	output := t.TempDir()
 	cfg := config.Collector{MachineID: "machine-one", State: map[string]config.CollectionRevision{}}
@@ -216,6 +223,7 @@ func TestUploadRejectsFailedOrIncompleteResponseWithoutChangingState(t *testing.
 	}{
 		{name: "incomplete", body: "{\"phase\":\"validating\"}\n", message: "without a complete report"},
 		{name: "failed", body: "{\"phase\":\"failed\",\"error\":\"archive rejected\"}\n", message: "archive rejected"},
+		{name: "indexing", body: "{\"phase\":\"indexing\"}\n", message: "unknown import progress phase"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

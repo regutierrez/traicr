@@ -1,4 +1,3 @@
-// Command traicr-server runs the private Traicr archive.
 package main
 
 import (

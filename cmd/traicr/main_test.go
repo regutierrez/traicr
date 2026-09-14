@@ -3,7 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
-	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -66,29 +66,72 @@ func TestCollectStatusLeavesOneLinePerHarness(t *testing.T) {
 
 func TestUploadStatusShowsServerImportProgress(t *testing.T) {
 	var stderr bytes.Buffer
-	status := &statusLine{out: &stderr}
-	report := func(s collector.UploadStatus) {
-		name := filepath.Base(s.File)
-		switch s.Phase {
-		case "sending":
-			status.rewrite(fmt.Sprintf("%s: uploading %d/%d bytes (%.1f%%)", name, s.Sent, s.Size, float64(s.Sent)*100/float64(s.Size)))
-		case "normalizing", "indexing":
-			status.rewrite(fmt.Sprintf("%s: server importing %s traces", name, count(s.Completed, s.Total)))
-		case "complete":
-			status.finish()
-		}
-	}
-	report(collector.UploadStatus{File: "/tmp/a.zip", Phase: "sending", Sent: 50, Size: 100})
-	report(collector.UploadStatus{File: "/tmp/a.zip", Phase: "sending", Sent: 100, Size: 100})
-	report(collector.UploadStatus{File: "/tmp/a.zip", Phase: "normalizing", Completed: 812, Total: 2326})
-	report(collector.UploadStatus{File: "/tmp/a.zip", Phase: "complete", Completed: 2326, Total: 2326})
+	status := &uploadStatus{statusLine: statusLine{out: &stderr}}
+	status.report(collector.UploadStatus{File: "/tmp/a.zip", Phase: "sending", Sent: 50, Size: 100})
+	status.report(collector.UploadStatus{File: "/tmp/a.zip", Phase: "sending", Sent: 100, Size: 100})
+	status.report(collector.UploadStatus{File: "/tmp/a.zip", Phase: "validating"})
+	status.report(collector.UploadStatus{File: "/tmp/a.zip", Phase: "normalizing", Completed: 812, Total: 2326})
+	status.report(collector.UploadStatus{File: "/tmp/a.zip", Phase: "complete", Completed: 2326, Total: 2326})
 	out := stderr.String()
-	for _, frame := range []string{"\ra.zip: uploading 50/100 bytes (50.0%)", "\ra.zip: uploading 100/100 bytes (100.0%)", "\ra.zip: server importing 812/2326 traces"} {
+	for _, frame := range []string{
+		"\ra.zip: uploading 50/100 bytes (50.0%)",
+		"\ra.zip: uploading 100/100 bytes (100.0%)",
+		"\ra.zip: server validating archive...",
+		"\ra.zip: server importing 812/2326 traces",
+	} {
 		if !strings.Contains(out, frame) {
 			t.Fatalf("missing frame %q in %q", frame, out)
 		}
 	}
+	if strings.Contains(out, "indexing") {
+		t.Fatalf("progress listed dead indexing phase: %q", out)
+	}
 	if strings.Count(out, "\n") != 1 || !strings.HasSuffix(out, "\n") {
 		t.Fatalf("expected one line ending after completion: %q", out)
+	}
+}
+
+func TestRootHelpPrintsUsage(t *testing.T) {
+	for _, args := range [][]string{{"-h"}, {"--help"}} {
+		var stdout, stderr bytes.Buffer
+		if err := run(t.Context(), args, strings.NewReader(""), &stdout, &stderr); err != nil {
+			t.Fatalf("%v: %v", args, err)
+		}
+		if !strings.Contains(stderr.String(), usage) {
+			t.Fatalf("%v stderr %q", args, stderr.String())
+		}
+		if stdout.Len() != 0 {
+			t.Fatalf("%v wrote stdout %q", args, stdout.String())
+		}
+	}
+}
+
+func TestEmptyArgsAndUnknownCommandShareUsage(t *testing.T) {
+	for _, args := range [][]string{nil, {"nope"}} {
+		err := run(t.Context(), args, strings.NewReader(""), io.Discard, io.Discard)
+		if err == nil || err.Error() != usage {
+			t.Fatalf("%v: got %v", args, err)
+		}
+	}
+}
+
+func TestCollectHelpPrintsUsage(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	if err := run(t.Context(), []string{"collect", "-h"}, strings.NewReader(""), &stdout, &stderr); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(stderr.String(), "usage: traicr collect --output DIR") {
+		t.Fatalf("stderr %q", stderr.String())
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("stdout %q", stdout.String())
+	}
+}
+
+func TestCollectUnknownFlagReturnsFlagError(t *testing.T) {
+	var stderr bytes.Buffer
+	err := run(t.Context(), []string{"collect", "-bogus"}, strings.NewReader(""), io.Discard, &stderr)
+	if err == nil || !strings.Contains(err.Error(), "flag provided but not defined: -bogus") {
+		t.Fatalf("got %v", err)
 	}
 }

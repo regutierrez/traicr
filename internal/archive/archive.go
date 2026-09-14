@@ -35,11 +35,7 @@ func RevisionDigest(files []domain.File) string {
 	return "sha256:" + hex.EncodeToString(hash.Sum(nil))
 }
 
-func Describe(input Input) (domain.Descriptor, error) {
-	return describe(context.Background(), input)
-}
-
-func describe(ctx context.Context, input Input) (domain.Descriptor, error) {
+func Describe(ctx context.Context, input Input) (domain.Descriptor, error) {
 	descriptor := input.Descriptor
 	descriptor.Files = nil
 	err := filepath.WalkDir(input.Directory, func(name string, entry fs.DirEntry, walkErr error) error {
@@ -106,7 +102,7 @@ func Write(ctx context.Context, outputDir string, manifest domain.Manifest, inpu
 	}
 	inputs = slices.Clone(inputs)
 	for i := range inputs {
-		descriptor, err := describe(ctx, inputs[i])
+		descriptor, err := Describe(ctx, inputs[i])
 		if err != nil {
 			return nil, err
 		}

@@ -19,9 +19,9 @@ import (
 )
 
 // UploadStatus describes one step of uploading an archive. Phase "sending"
-// reports Sent of Size bytes; the server's streamed phases ("validating",
-// "normalizing", "indexing") report Completed of Total traces; "complete"
-// marks the archive's import report as received.
+// reports Sent of Size bytes; server phases "validating" and "normalizing"
+// report Completed of Total traces; "complete" marks the import report.
+// The server does not emit an "indexing" phase; unknown phases error.
 type UploadStatus struct {
 	File      string
 	Phase     string
@@ -139,7 +139,7 @@ func readCompleteReport(reader io.Reader, file string, progress UploadProgress) 
 			return domain.ImportReport{}, fmt.Errorf("malformed import progress: %w", err)
 		}
 		switch event.Phase {
-		case "validating", "normalizing", "indexing":
+		case "validating", "normalizing":
 			if report != nil {
 				return domain.ImportReport{}, errors.New("progress received after complete report")
 			}
