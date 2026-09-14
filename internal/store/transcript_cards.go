@@ -36,11 +36,10 @@ type transcriptCursor struct {
 	MaxID   int64  `json:"max_id"`
 }
 
-// TranscriptCards searches retained observations but returns one card per transcript.
 func (s *Store) TranscriptCards(ctx context.Context, query SearchQuery) (TranscriptPage, error) {
 	encoded := query.Cursor
 	query.Cursor = ""
-	prepared, err := s.prepareSearch(ctx, query)
+	prepared, err := compileSearch(query)
 	if err != nil {
 		return TranscriptPage{}, err
 	}

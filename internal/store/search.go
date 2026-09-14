@@ -33,7 +33,7 @@ type preparedSearch struct {
 	position   cursor
 }
 
-func (s *Store) prepareSearch(ctx context.Context, query SearchQuery) (preparedSearch, error) {
+func compileSearch(query SearchQuery) (preparedSearch, error) {
 	mode := query.Mode
 	if mode == "" {
 		mode = "fulltext"
@@ -68,6 +68,14 @@ func (s *Store) prepareSearch(ctx context.Context, query SearchQuery) (preparedS
 	} else if candidate != "" {
 		prepared.index = "search_trigrams"
 		prepared.indexQuery = `"` + strings.ReplaceAll(candidate, `"`, `""`) + `"`
+	}
+	return prepared, nil
+}
+
+func (s *Store) prepareSearch(ctx context.Context, query SearchQuery) (preparedSearch, error) {
+	prepared, err := compileSearch(query)
+	if err != nil {
+		return preparedSearch{}, err
 	}
 	prepared.position, err = decodeCursor(ctx, s.db, query.Cursor, "events", "1=1")
 	if err != nil {

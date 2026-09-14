@@ -26,6 +26,33 @@ func TestAmpPairsNativeToolIDsBeforeProviderIDs(t *testing.T) {
 	}
 }
 
+func TestAmpStoresParentInMetadataNotParentKey(t *testing.T) {
+	source := fstest.MapFS{"source/export.json": {Data: []byte(`{"messages":[
+ {"id":"parent","role":"user","content":[{"type":"text","text":"prompt"}]},
+ {"id":"child","parentId":"parent","role":"assistant","content":[{"type":"text","text":"reply"}]}
+ ]}`)}}
+	result, err := Run(context.Background(), domain.Descriptor{Harness: "amp"}, source)
+	if err != nil || len(result.Events) != 2 {
+		t.Fatalf("Amp parent metadata: %+v %v", result, err)
+	}
+	if result.Events[0].ParentKey != "" || result.Events[1].ParentKey != "" {
+		t.Fatalf("dangling Amp ParentKey: %q %q", result.Events[0].ParentKey, result.Events[1].ParentKey)
+	}
+	var child struct {
+		Message string `json:"transcript_message"`
+		Parent  string `json:"transcript_parent"`
+	}
+	if err := json.Unmarshal(result.Events[1].Metadata, &child); err != nil {
+		t.Fatal(err)
+	}
+	if child.Message != "amp-message:child" || child.Parent != "amp-message:parent" {
+		t.Fatalf("Amp transcript parent metadata: %+v", child)
+	}
+	if result.Events[0].Key != "message:parent:0" || result.Events[1].Key != "message:child:0" {
+		t.Fatalf("Amp event keys: %q %q", result.Events[0].Key, result.Events[1].Key)
+	}
+}
+
 func TestAmpPreservesNativeMessageOrderWithoutIDsOrTimestamps(t *testing.T) {
 	source := fstest.MapFS{"source/export.json": {Data: []byte(`{"messages":[
  {"role":"user","meta":{"sentAt":1787140168649},"content":[{"type":"text","text":"First prompt"}]},
