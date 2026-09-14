@@ -278,13 +278,6 @@ summary {
     monospace;
   color: var(--muted);
 }
-.result {
-  border: 1px solid var(--line);
-  border-radius: 7px;
-  background: var(--surface);
-  margin-bottom: 14px;
-  padding: 24px 26px 0;
-}
 .result-meta {
   display: flex;
   align-items: center;
@@ -308,14 +301,6 @@ summary {
   padding: 3px 8px;
   font-weight: 600;
 }
-.result h3 a {
-  color: var(--ink);
-}
-.result h3 span {
-  color: var(--muted);
-  font-size: 16px;
-  padding-left: 5px;
-}
 pre {
   margin: 15px 0;
   white-space: pre-wrap;
@@ -326,12 +311,6 @@ pre {
     Consolas,
     monospace;
   tab-size: 2;
-}
-.snippet {
-  color: #48574d;
-  background: var(--paper);
-  border-left: 2px solid #bccbbd;
-  padding: 12px 16px;
 }
 .result-bottom {
   display: flex;
@@ -722,9 +701,6 @@ tbody tr:last-child td {
   }
   .filters summary span {
     display: none;
-  }
-  .result {
-    padding: 18px 16px 0;
   }
   .result-meta {
     gap: 8px;

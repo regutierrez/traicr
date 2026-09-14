@@ -15,10 +15,7 @@
       // ============================================================
 
       // Parse URL parameters for deep linking: leafId and targetId
-      // Check for injected params (when loaded in iframe via srcdoc) or use window.location
-      const injectedParams = document.querySelector('meta[name="pi-url-params"]');
-      const searchString = injectedParams ? injectedParams.content : window.location.search.substring(1);
-      const urlParams = new URLSearchParams(searchString);
+      const urlParams = new URLSearchParams(window.location.search);
       const urlLeafId = urlParams.get('leafId');
       const urlTargetId = urlParams.get('targetId') || data.eventEntries.get(urlParams.get('event') || urlParams.get('key'));
       // Use URL leafId if provided, otherwise fall back to session default
@@ -390,9 +387,6 @@
               break;
             case 'no-tools':
               passesFilter = !isSettingsEntry && !(entry.type === 'message' && entry.message.role === 'toolResult');
-              break;
-            case 'labeled-only':
-              passesFilter = label !== undefined;
               break;
             case 'all':
               passesFilter = true;
@@ -792,13 +786,6 @@
       // MESSAGE RENDERING
       // ============================================================
 
-      function formatTokens(count) {
-        if (count < 1000) return count.toString();
-        if (count < 10000) return (count / 1000).toFixed(1) + 'k';
-        if (count < 1000000) return Math.round(count / 1000) + 'k';
-        return (count / 1000000).toFixed(1) + 'M';
-      }
-
       function formatTimestamp(ts) {
         if (!ts) return '';
         const date = new Date(ts);
@@ -1087,29 +1074,13 @@
 
       /**
        * Build a shareable URL for a specific message.
-       * URL format: base?gistId&leafId=<leafId>&targetId=<entryId>
        */
       function buildShareUrl(entryId) {
-        // Check for injected base URL (used when loaded in iframe via srcdoc)
-        const baseUrlMeta = document.querySelector('meta[name="pi-share-base-url"]');
-        const baseUrl = baseUrlMeta ? baseUrlMeta.content : window.location.href.split('?')[0];
-
         const url = new URL(window.location.href);
-        // Find the gist ID (first query param without value, e.g., ?abc123)
-        const gistId = Array.from(url.searchParams.keys()).find(k => !url.searchParams.get(k));
-
-        // Build the share URL
         const params = new URLSearchParams();
         params.set('leafId', currentLeafId);
         params.set('targetId', entryId);
-
-        // If we have an injected base URL (iframe context), use it directly
-        if (baseUrlMeta) {
-          return `${baseUrl}&${params.toString()}`;
-        }
-
-        // Otherwise build from current location (direct file access)
-        url.search = gistId ? `?${gistId}&${params.toString()}` : `?${params.toString()}`;
+        url.search = params.toString();
         return url.toString();
       }
 

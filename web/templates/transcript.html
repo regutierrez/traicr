@@ -10,7 +10,7 @@
   <link rel="stylesheet" href="/static/pi-transcript/traicr-transcript.css">
 </head>
 <body>
-  <div id="transcript-meta" data-trace-id="{{ .Trace.ID }}" data-title="{{ .Title }}" data-harness="{{ .Trace.Harness }}" data-native-id="{{ .Trace.NativeTraceID }}" data-created-at="{{ .Trace.CreatedAt }}" data-cwd="{{ .Trace.WorkingDirectory }}"></div>
+  <div id="transcript-meta" data-trace-id="{{ .Trace.ID }}" data-title="{{ .Title }}" data-harness="{{ .Trace.Harness }}" data-native-id="{{ .Trace.NativeTraceID }}" data-cwd="{{ .Trace.WorkingDirectory }}"></div>
   <button id="hamburger" title="Open sidebar"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="12" r="2.5"/><rect x="5" y="6" width="2" height="12"/><path d="M6 12h10c1 0 2 0 2-2V8"/></svg></button>
   <div id="sidebar-overlay"></div>
   <div id="app">
@@ -23,7 +23,6 @@
           <button class="filter-btn active" data-filter="default" title="Hide settings entries">Default</button>
           <button class="filter-btn" data-filter="no-tools" title="Default minus tool results">No-tools</button>
           <button class="filter-btn" data-filter="user-only" title="Only user messages">User</button>
-          <button class="filter-btn" data-filter="labeled-only" title="Only labeled entries">Labeled</button>
           <button class="filter-btn" data-filter="all" title="Show everything">All</button>
           <button class="sidebar-close" id="sidebar-close" title="Close">✕</button>
         </div>
@@ -39,9 +38,6 @@
       <div id="header-container"></div>
       <div id="messages"></div>
     </main>
-    <div id="image-modal" class="image-modal">
-      <img id="modal-image" src="" alt="">
-    </div>
   </div>
 
   <script src="/static/pi-transcript/marked.min.js"></script>
