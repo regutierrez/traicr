@@ -57,10 +57,14 @@ func NewHTTPHandler(configuration config.ServerConfig, database *store.Store, lo
 	mux.Handle("GET /{$}", app.browser(app.searchPage))
 	mux.Handle("GET /traces/{id}", app.browser(app.tracePage))
 	mux.Handle("GET /traces/{id}/events", app.browser(app.eventsAPI))
+	mux.Handle("GET /traces/{id}/transcript", app.browser(app.transcriptAPI))
+	mux.Handle("GET /traces/resolve", app.browser(app.resolveTrace))
 	mux.Handle("POST /traces/{id}/delete", app.browser(app.deletePage))
 	mux.Handle("GET /events/{id}/sources", app.browser(app.sourcesPage))
 	mux.Handle("GET /revisions/{id}/sources", app.browser(app.revisionPage))
 	mux.Handle("GET /revisions/{id}/file", app.browser(app.sourceFile))
+	mux.Handle("GET /revisions/{id}/block", app.browser(app.sourceBlock))
+	mux.Handle("GET /revisions/{id}/attachment", app.browser(app.sourceAttachment))
 	mux.Handle("GET /imports", app.browser(app.importsPage))
 	mux.Handle("GET /imports/{id}", app.browser(app.reportPage))
 	mux.Handle("GET /machines", app.browser(app.machinesPage))
@@ -157,6 +161,8 @@ func (app *application) failure(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
 		writeError(w, http.StatusNotFound, "not_found", "record not found")
+	case errors.Is(err, store.ErrTranscriptChanged):
+		writeError(w, http.StatusConflict, "transcript_changed", err.Error())
 	case errors.Is(err, store.ErrInvalidQuery):
 		writeError(w, http.StatusBadRequest, "invalid_query", err.Error())
 	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
