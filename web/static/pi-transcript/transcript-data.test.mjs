@@ -3,6 +3,81 @@ import assert from 'node:assert/strict';
 import {buildTranscriptSession,loadTranscriptSession} from './transcript-data.js';
 
 const metadata={nativeId:'session',harness:'pi',title:'A whole conversation',createdAt:'2026-09-06T10:00:00Z',traceId:'1'};
+test('Amp asks for reload without declaring completion when history changes between pages',async()=>{
+ const originalFetch=globalThis.fetch;const originalDocument=globalThis.document;
+ const status={textContent:''};let calls=0;
+ globalThis.document={getElementById:()=>status};
+ globalThis.fetch=async()=>++calls===1
+  ? new Response(JSON.stringify({events:[{id:1,key:'message:1:0',kind:'message',text:'Before rebuild'}],next_cursor:'old'}),{headers:{'content-type':'application/json'}})
+  : new Response(JSON.stringify({error:{code:'transcript_changed'}}),{status:409,headers:{'content-type':'application/json'}});
+ try {
+  const data=await loadTranscriptSession({...metadata,harness:'amp'});
+  await assert.rejects(data.loadMore(),/Transcript changed.*Reload/);
+  assert.equal(data.hasMore,true);
+  assert.equal(data.entries[0].message.content[0].text,'Before rebuild');
+  assert.ok(!status.textContent.includes('All records loaded'));
+ } finally {globalThis.fetch=originalFetch;globalThis.document=originalDocument;}
+});
+test('non-Amp attachments keep their existing readable fallback',()=>{
+ const data=buildTranscriptSession([{id:1,key:'attachment:a:0',kind:'attachment',role:'user',attachments:[{path:'image.png'}]}],metadata);
+ assert.deepEqual(data.entries[0].message.content,[{type:'text',text:'Attachment: image.png'}]);
+});
+test('splitting an Amp message around unknown blocks does not duplicate its usage',()=>{
+ const events=['message','unknown','message'].map((kind,index)=>({id:index+1,key:`${kind}:1:${index}`,kind,role:'assistant',text:'content',metadata:{transcript_message:'amp:1',transcript_order:0,transcript_block:index,usage:{inputTokens:13,outputTokens:7}}}));
+ const data=buildTranscriptSession(events,{...metadata,harness:'amp'});
+ assert.equal(data.entries.reduce((total,entry)=>total+(entry.message?.usage?.input || 0),0),13);
+});
+test('Amp preserves completion reasons and gives cancellation and errors precedence',()=>{
+ for (const [state,reason] of [
+  [{type:'cancelled',stopReason:'end_turn'},'aborted'],
+  [{type:'error',stopReason:'end_turn'},'error'],
+  [{type:'complete',stopReason:'max_tokens'},'max_tokens'],
+  [{type:'complete',stopReason:'tool_use'},'toolUse'],
+  [{type:'complete',stopReason:'end_turn'},'stop'],
+  [{type:'complete'},'complete'],
+  [undefined,undefined],
+ ]) {
+  const data=buildTranscriptSession([{id:1,key:'message:1:0',kind:'message',role:'assistant',text:'answer',metadata:{state}}],{...metadata,harness:'amp'});
+  assert.equal(data.entries[0].message.stopReason,reason);
+ }
+});
+test('Amp loads incrementally, keeps the revision and joins messages across pages',async()=>{
+ const originalFetch=globalThis.fetch;const originalDocument=globalThis.document;
+ let calls=0;
+ globalThis.document={getElementById:()=>({textContent:''})};
+ globalThis.fetch=async(url)=>{
+  calls++;
+  assert.ok(url.startsWith('/traces/1/transcript?'));
+  assert.equal(new URL(url,'https://example.com').searchParams.get('revision'),'7');
+  return {ok:true,headers:new Headers({'content-type':'application/json'}),json:async()=>({events:[{id:calls,key:`message:m:${calls}`,kind:'message',role:'assistant',text:`Block ${calls}`,metadata:{transcript_message:'m',transcript_order:0,transcript_block:calls}}],next_cursor:calls===1?'second-page':''})};
+ };
+ try {
+  const data=await loadTranscriptSession({...metadata,harness:'amp',revision:'7'});
+  assert.equal(calls,1);assert.equal(data.hasMore,true);
+  await data.loadMore();
+  assert.equal(data.hasMore,false);assert.equal(calls,2);
+  assert.equal(data.entries.length,1);assert.equal(data.entries[0].message.content.length,2);
+ } finally {globalThis.fetch=originalFetch;globalThis.document=originalDocument;}
+});
+test('retains Amp details once per message, hidden context, attachments and execution states',()=>{
+ const events=[
+  {id:1,key:'session_info:s',kind:'session_info',metadata:{session:{title:'Native title',agentMode:'high'},transcript_order:-1}},
+  {id:2,key:'reasoning:1:0',kind:'reasoning',role:'assistant',text:'Think',model:'model-a',metadata:{transcript_message:'amp:1',transcript_order:1,transcript_block:0,usage:{inputTokens:12,outputTokens:7,cacheReadInputTokens:100},state:{type:'cancelled'},message_meta:{openAIResponsePhase:'commentary'}}},
+  {id:3,key:'message:1:1',kind:'message',role:'assistant',text:'Hidden instructions',metadata:{transcript_message:'amp:1',transcript_order:1,transcript_block:1,hidden:true,usage:{inputTokens:12,outputTokens:7,cacheReadInputTokens:100}}},
+  {id:4,key:'tool_result:2:0',kind:'tool_result',call_id:'TU-a',tool:'shell_command',text:'failed',revision_id:8,aliases:['old-hash','94'],metadata:{transcript_message:'amp:2',transcript_order:2,run:{status:'done',result:{exitCode:2,output:'failed'}},source_pointer:'/messages/2/content/0'},attachments:[{url:'https://example.com/picture.png',path:'picture.png'}]},
+ ];
+ const data=buildTranscriptSession(events,{...metadata,harness:'amp'});
+ const assistant=data.entries.find(e=>e.message?.role==='assistant').message;
+ assert.equal(assistant.stopReason,'aborted');
+ assert.equal(assistant.usage.output,7);
+ assert.equal(assistant.content[1].type,'hidden');
+ const result=data.entries.find(e=>e.message?.role==='toolResult');
+ assert.equal(result.message.isError,true);
+ assert.equal(result.message.content[1].type,'attachment');
+ assert.equal(result.sources[0].revisionId,8);
+ assert.equal(data.header.native.agentMode,'high');
+ assert.equal(data.eventEntries.get('94'),result.id);
+});
 test('groups message blocks and preserves branches and tool results',()=>{
  const events=[
   {id:1,key:'message:u:0',kind:'message',role:'user',text:'Build this',timestamp:'2026-09-06T10:00:00Z'},

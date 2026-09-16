@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
@@ -243,6 +244,63 @@ func TestAmpImagesAndNumericIdentityThroughRepeatedImports(t *testing.T) {
 	}
 	if response := get("/revisions/1/attachment?pointer=/messages/0/content/2"); response.Code != 415 {
 		t.Fatalf("active image content was allowed: %d", response.Code)
+	}
+}
+
+func TestAmpTranscriptRevisionAndSourceInspection(t *testing.T) {
+	handler := testHandler(t, false)
+	archives, err := archive.Write(context.Background(), t.TempDir(), domain.Manifest{SourceMachine: domain.Machine{ID: "test", Hostname: "test"}}, []archive.Input{{Directory: "../../testdata/harnesses/amp-rich", Descriptor: domain.Descriptor{Harness: "amp", Adapter: "amp-thread-export", NativeTraceID: "T-amp-rich-fixture", Title: "Amp details"}}}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(archives[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response := request(handler, "POST", "/api/v1/imports", bytes.NewReader(data), adminToken); response.Code != 200 {
+		t.Fatalf("import: %s", response.Body)
+	}
+	cookie, _ := login(t, handler, false)
+	get := func(path string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest("GET", path, nil)
+		r.AddCookie(cookie)
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, r)
+		return w
+	}
+	for _, path := range []string{"/traces/1/transcript", "/revisions/1/block?pointer=/messages/5/content/0", "/revisions/1/attachment?pointer=/messages/0/content/1", "/traces/resolve?native_id=T-amp-rich-fixture"} {
+		if response := request(handler, "GET", path, nil, ""); response.Code != http.StatusSeeOther {
+			t.Fatalf("unprotected %s: %d", path, response.Code)
+		}
+	}
+	var page store.EventPage
+	response := get("/traces/1/transcript?revision=1")
+	if err := json.Unmarshal(response.Body.Bytes(), &page); err != nil || len(page.Events) < 16 || page.Events[0].Kind != "session_info" {
+		t.Fatalf("transcript: %s %v", response.Body, err)
+	}
+	response = get("/revisions/1/block?pointer=" + url.QueryEscape("/messages/5/content/0"))
+	if response.Code != 200 || !strings.Contains(response.Body.String(), "Preserve the boundary case") || strings.Contains(response.Body.String(), "Inspect the build") {
+		t.Fatalf("precise block: %s", response.Body)
+	}
+	response = get("/traces/1?revision=1")
+	if response.Code != 200 || !strings.Contains(response.Body.String(), `value="1" selected`) || !strings.Contains(response.Body.String(), "Download native Amp export") {
+		t.Fatalf("revision controls: %s", response.Body)
+	}
+	if response := get("/traces/1?revision=999"); response.Code != 404 {
+		t.Fatalf("unrelated viewer revision: %d", response.Code)
+	}
+	response = get("/revisions/1/file?path=source/export.json&download=1")
+	if response.Code != 200 || !strings.Contains(response.Header().Get("Content-Disposition"), "attachment") || !strings.Contains(response.Body.String(), "PRIVATE_SIGNATURE") {
+		t.Fatalf("native download is not lossless: %d", response.Code)
+	}
+	if response := get("/revisions/1/attachment?pointer=/messages/0/content/1"); response.Code != http.StatusNotFound {
+		t.Fatalf("external attachment must not be fetched: %d", response.Code)
+	}
+	if response := get("/traces/resolve?native_id=T-amp-rich-fixture"); response.Code != http.StatusSeeOther || response.Header().Get("Location") != "/traces/1" {
+		t.Fatalf("related trace: %d %s", response.Code, response.Header())
+	}
+	if response := get("/traces/1/transcript?revision=999"); response.Code != 404 {
+		t.Fatalf("unrelated revision: %d", response.Code)
 	}
 }
 

@@ -34,6 +34,20 @@
     <div id="sidebar-resizer" role="separator" aria-orientation="vertical" aria-label="Resize session tree sidebar"></div>
     <main id="content">
       <nav class="transcript-navigation"><a class="transcript-brand" href="/" aria-label="Traicr home"><span>t</span>traicr</a><a href="/">← Transcripts</a><a href="/traces/{{ .Trace.ID }}?view=records">Session details &amp; source records</a></nav>
+      {{ if eq .Trace.Harness "amp" }}
+      <form class="amp-revisions" method="get">
+        <label for="revision">Archive view</label>
+        <select name="revision" id="revision">
+          <option value="">Merged archive</option>
+          {{ range .Trace.Revisions }}<option value="{{ .ID }}" {{ if eq $.Revision (printf "%d" .ID) }}selected{{ end }}>Revision {{ .ID }} · {{ .NativeUpdatedAt }}</option>{{ end }}
+        </select>
+        <button type="submit" class="header-toggle-btn">Inspect</button>
+      </form>
+      <details class="amp-details"><summary>Download native Amp export</summary>
+        <p>Lossless source JSON for an individual revision, not the merged viewer data.</p>
+        {{ range .Trace.Revisions }}<p><a href="/revisions/{{ .ID }}/file?path=source/export.json&amp;download=1">Revision {{ .ID }} · {{ .NativeUpdatedAt }} · Native JSON</a></p>{{ end }}
+      </details>
+      {{ end }}
       <p id="transcript-status" role="status">Loading transcript…</p>
       <noscript>Enable JavaScript to use the interactive transcript viewer. Session details remain available without JavaScript.</noscript>
       <div id="header-container"></div>

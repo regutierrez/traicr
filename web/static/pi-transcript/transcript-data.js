@@ -17,6 +17,7 @@ function blockIndex(event) {
 
 // buildTranscriptSession groups content blocks into turns and retains parent branches.
 export function buildTranscriptSession(events, metadata) {
+  const native = events.find(event => event.metadata?.session)?.metadata.session;
   const groups = new Map();
   for (const event of events) {
     const key = nativeMessageKey(event);
@@ -39,6 +40,7 @@ export function buildTranscriptSession(events, metadata) {
     const first = group[0];
     const groupKey = nativeMessageKey(first);
     let messageEntry = null;
+    let usageAssigned = false;
     const added = [];
     function append(entry) {
       entry.id = String(entry.id);
@@ -49,12 +51,22 @@ export function buildTranscriptSession(events, metadata) {
     }
     for (const event of group) {
       const text = String(event.text || "");
+      const details = event.metadata || {};
       let entry;
       if (["message", "reasoning", "tool_call", "attachment"].includes(event.kind) && (!event.role || ["user", "assistant"].includes(event.role) || event.kind === "tool_call")) {
         const role = event.role === "user" ? "user" : "assistant";
         if (!messageEntry || messageEntry.message.role !== role) {
+          let stopReason = details.state?.stopReason || details.state?.type || (metadata.harness === "amp" ? undefined : "stop");
+          if (details.state?.type === "cancelled") stopReason = "aborted";
+          else if (details.state?.type === "error") stopReason = "error";
+          else if (details.state?.stopReason === "tool_use") stopReason = "toolUse";
+          else if (details.state?.stopReason === "end_turn") stopReason = "stop";
           messageEntry = append({id: event.id, type: "message", timestamp: event.timestamp,
-            message: {role, content: [], model: event.model, provider: event.provider, stopReason: "stop"}});
+            message: {role, content: [], model: event.model, provider: event.provider,
+              stopReason,
+              nativeDetails: details,
+              usage: !usageAssigned && details.usage ? {input:details.usage.inputTokens,output:details.usage.outputTokens,cacheRead:details.usage.cacheReadInputTokens,cacheWrite:details.usage.cacheCreationInputTokens} : undefined}});
+          if (role === 'assistant' && details.usage) usageAssigned = true;
         }
         entry = messageEntry;
         if (event.kind === "reasoning") entry.message.content.push({type: "thinking", thinking: text});
@@ -62,15 +74,18 @@ export function buildTranscriptSession(events, metadata) {
           let args;
           try { args = JSON.parse(text); } catch { args = {raw: text}; }
           if (!args || typeof args !== "object") args = {raw: text};
-          entry.message.content.push({type: "toolCall", id: event.call_id || event.key, name: event.tool || "tool", arguments: args});
+          entry.message.content.push({type: "toolCall", id: event.call_id || event.key, name: event.tool || "tool", arguments: args, details});
         } else if (event.kind === "attachment") {
-          entry.message.content.push({type: "text", text: (event.attachments || []).map(a => `Attachment: ${a.name || a.path || a.url || a.media_type || "See source records"}`).join("\n")});
-        } else entry.message.content.push({type: "text", text});
+          if (metadata.harness === 'amp') entry.message.content.push(...(event.attachments || []).map(a => ({type:"attachment", ...a, revisionId:event.revision_id})));
+          else entry.message.content.push({type:"text",text:(event.attachments || []).map(a => `Attachment: ${a.name || a.path || a.url || a.media_type || "See source records"}`).join('\n')});
+        } else entry.message.content.push({type: details.hidden ? "hidden" : "text", text});
       } else if (event.kind === "tool_result") {
         const existing = added.find(e => e.message?.role === "toolResult" && e.message.toolCallId === event.call_id);
         entry = existing || append({id: event.id, type: "message", timestamp: event.timestamp,
-          message: {role: "toolResult", toolCallId: event.call_id, toolName: event.tool, content: []}});
+          message: {role: "toolResult", toolCallId: event.call_id, toolName: event.tool, content: [],
+            run:details.run, isError:details.run?.status === "error" || (typeof details.run?.result?.exitCode === "number" && details.run.result.exitCode !== 0)}});
         entry.message.content.push({type: "text", text});
+        entry.message.content.push(...(event.attachments || []).map(a => ({type:"attachment", ...a, revisionId:event.revision_id})));
         messageEntry = null;
       } else {
         messageEntry = null;
@@ -80,8 +95,11 @@ export function buildTranscriptSession(events, metadata) {
         else if (event.kind === "session_info" || event.kind === "label") entry = append({id:event.id,type:event.kind,timestamp:event.timestamp});
         else entry = append({id:event.id,type:"custom_message",timestamp:event.timestamp,customType:event.kind,display:true,content:text});
       }
+      entry.sources ||= [];
+      entry.sources.push({eventId:event.id, key:event.key, revisionId:event.revision_id, pointer:details.source_pointer, details});
       eventEntries.set(String(event.id), entry.id);
       eventEntries.set(event.key, entry.id);
+      for (const alias of event.aliases || []) eventEntries.set(alias, entry.id);
     }
     if (added.length) {
       groupEntries.set(groupKey, {first:added[0],last:added.at(-1)});
@@ -96,36 +114,44 @@ export function buildTranscriptSession(events, metadata) {
     group.first.parentId = groupEntries.get(nativeParent)?.last.id || eventEntries.get(parent.key) || parent.previous;
   }
   // A malformed native graph must not hang Pi's parent walkers.
+  const visited = new Set();
   for (const entry of entries) {
+    if (visited.has(entry.id)) continue;
     const seen = new Set([entry.id]);
     let node = entry;
-    while (node.parentId && entryMap.has(node.parentId)) {
+    while (node.parentId && entryMap.has(node.parentId) && !visited.has(node.parentId)) {
       if (seen.has(node.parentId)) { node.parentId = null; break; }
       seen.add(node.parentId);
       node = entryMap.get(node.parentId);
     }
+    for (const id of seen) visited.add(id);
   }
-  return {header: {id:metadata.nativeId, harness:metadata.harness, title:metadata.title, timestamp:entries.find(e => e.timestamp)?.timestamp, cwd:metadata.cwd},
+  return {header: {id:metadata.nativeId, harness:metadata.harness, title:native?.title || metadata.title, timestamp:native?.created || entries.find(e => e.timestamp)?.timestamp, cwd:native?.env?.initial?.workingDirectory || metadata.cwd, native},
     entries, leafId:entries.at(-1)?.id, eventEntries};
 }
 
-// loadTranscriptSession follows every event page; the viewer never stops at page one.
 export async function loadTranscriptSession(metadata) {
   const events = [];
   let cursor = "";
   const cursors = new Set();
-  do {
-    const url = `/traces/${encodeURIComponent(metadata.traceId)}/events?limit=200&cursor=${encodeURIComponent(cursor)}`;
+  const data = {};
+  async function loadMore() {
+    const route = metadata.harness === 'amp' ? 'transcript' : 'events';
+    const url = `/traces/${encodeURIComponent(metadata.traceId)}/${route}?limit=200&revision=${encodeURIComponent(metadata.revision || '')}&cursor=${encodeURIComponent(cursor)}`;
     const response = await fetch(url, {headers:{Accept:"application/json"}});
+    if (response.status === 409) throw new Error("Transcript changed while loading. Reload the page to read the updated history.");
     if (!response.ok || !response.headers.get("content-type")?.includes("application/json")) throw new Error("Transcript load failed. Reload the page and sign in again.");
     const page = await response.json();
-    events.push(...page.events);
-    cursor = page.next_cursor || "";
-    if (cursor && cursors.has(cursor)) throw new Error("Transcript pagination returned a repeated cursor.");
+    const next = page.next_cursor || '';
+    if (next && cursors.has(next)) throw new Error("Transcript pagination returned a repeated cursor.");
+    for (const event of page.events) events.push(event);
+    cursor = next;
     cursors.add(cursor);
-    document.getElementById("transcript-status").textContent = `Loading transcript… ${events.length} records`;
-  } while (cursor);
-  const data = buildTranscriptSession(events, metadata);
-  document.getElementById("transcript-status").textContent = events.length ? "Normalized transcript · Original records and parsing warnings are in Session details." : "No normalized messages. Open Session details to inspect the retained source files.";
+    Object.assign(data, buildTranscriptSession(events, metadata), {hasMore:!!cursor, loadMore});
+    document.getElementById("transcript-status").textContent = events.length ? `${metadata.revision ? 'Selected revision' : 'Merged archive'} · ${events.length} records loaded${cursor ? ' · More records available below' : ' · All records loaded'}. Original records and parsing warnings are in Session details.` : "No normalized messages. Open Session details to inspect the retained source files.";
+    return data;
+  }
+  await loadMore();
+  if (metadata.harness !== 'amp') while (data.hasMore) await loadMore();
   return data;
 }

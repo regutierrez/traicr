@@ -1,5 +1,6 @@
     // Adapted from Pi 0.85.1's MIT-licensed HTML export. See pi-LICENSE.txt.
     import { loadTranscriptSession } from './transcript-data.js';
+    import { renderAmpEntry, renderAmpHeaderDetails } from './amp-render.js';
     (async function() {
       'use strict';
 
@@ -7,8 +8,15 @@
       // DATA LOADING
       // ============================================================
 
-      const data = await loadTranscriptSession(document.getElementById('transcript-meta').dataset);
-      const { header, entries, leafId: defaultLeafId, systemPrompt, tools, renderedTools } = data;
+      const metadata = {...document.getElementById('transcript-meta').dataset};
+      metadata.revision = new URLSearchParams(window.location.search).get('revision') || '';
+      const data = await loadTranscriptSession(metadata);
+      const requested = new URLSearchParams(window.location.search);
+      const requestedIDs = ['leafId','targetId','event','key'].map(key => requested.get(key)).filter(Boolean);
+      while (data.hasMore && requestedIDs.some(id => !data.eventEntries.has(id))) await data.loadMore();
+      let { header, entries } = data;
+      const { leafId: defaultLeafId, systemPrompt, tools, renderedTools } = data;
+      const isAmp = header.harness === 'amp';
 
       // ============================================================
       // URL PARAMETER HANDLING
@@ -19,8 +27,8 @@
       const injectedParams = document.querySelector('meta[name="pi-url-params"]');
       const searchString = injectedParams ? injectedParams.content : window.location.search.substring(1);
       const urlParams = new URLSearchParams(searchString);
-      const urlLeafId = urlParams.get('leafId');
-      const urlTargetId = urlParams.get('targetId') || data.eventEntries.get(urlParams.get('event') || urlParams.get('key'));
+      const urlLeafId = data.eventEntries.get(urlParams.get('leafId')) || urlParams.get('leafId');
+      const urlTargetId = data.eventEntries.get(urlParams.get('targetId')) || urlParams.get('targetId') || data.eventEntries.get(urlParams.get('event') || urlParams.get('key'));
       // Use URL leafId if provided, otherwise fall back to session default
       const leafId = urlLeafId || defaultLeafId;
 
@@ -36,6 +44,8 @@
 
       // Tool call lookup (toolCallId -> {name, arguments})
       const toolCallMap = new Map();
+      const ampToolResults = new Map(entries.filter(entry => entry.message?.role === 'toolResult').map(entry => [entry.message.toolCallId, entry]));
+      const visibleAmpCalls = new Set();
       for (const entry of entries) {
         if (entry.type === 'message' && entry.message.role === 'assistant') {
           const content = entry.message.content;
@@ -95,13 +105,13 @@
         }
 
         // Sort children by timestamp
-        function sortChildren(node) {
-          node.children.sort((a, b) =>
-            new Date(a.entry.timestamp).getTime() - new Date(b.entry.timestamp).getTime()
-          );
-          node.children.forEach(sortChildren);
+        if (!isAmp) {
+          for (const node of nodeMap.values()) {
+            node.children.sort((a, b) =>
+              new Date(a.entry.timestamp).getTime() - new Date(b.entry.timestamp).getTime()
+            );
+          }
         }
-        roots.forEach(sortChildren);
 
         return roots;
       }
@@ -130,14 +140,14 @@
         const path = [];
         let current = byId.get(targetId);
         while (current) {
-          path.unshift(current);
+          path.push(current);
           // Stop if no parent or self-referencing (root)
           if (!current.parentId || current.parentId === current.id) {
             break;
           }
           current = byId.get(current.parentId);
         }
-        return path;
+        return path.reverse();
       }
 
       // Tree node lookup for finding leaves
@@ -153,11 +163,12 @@
         if (!treeNodeMap) {
           treeNodeMap = new Map();
           const tree = buildTree();
-          function mapNodes(node) {
+          const pending = [...tree];
+          while (pending.length) {
+            const node = pending.pop();
             treeNodeMap.set(node.entry.id, node);
-            node.children.forEach(mapNodes);
+            for (const child of node.children) pending.push(child);
           }
-          tree.forEach(mapNodes);
         }
 
         const node = treeNodeMap.get(nodeId);
@@ -182,15 +193,14 @@
 
         // Mark which subtrees contain the active leaf
         const containsActive = new Map();
-        function markActive(node) {
-          let has = activePathIds.has(node.entry.id);
-          for (const child of node.children) {
-            if (markActive(child)) has = true;
-          }
-          containsActive.set(node, has);
-          return has;
+        const pending = [...roots];
+        const traversal = [];
+        while (pending.length) {
+          const node = pending.pop();
+          traversal.push(node);
+          for (const child of node.children) pending.push(child);
         }
-        roots.forEach(markActive);
+        for (const node of traversal.reverse()) containsActive.set(node, activePathIds.has(node.entry.id) || node.children.some(child => containsActive.get(child)));
 
         // Stack: [node, indent, justBranched, showConnector, isLast, gutters, isVirtualRootChild]
         const stack = [];
@@ -1102,6 +1112,7 @@
         const params = new URLSearchParams();
         params.set('leafId', currentLeafId);
         params.set('targetId', entryId);
+        if (metadata.revision) params.set('revision', metadata.revision);
 
         // If we have an injected base URL (iframe context), use it directly
         if (baseUrlMeta) {
@@ -1168,6 +1179,7 @@
       }
 
       function renderEntry(entry) {
+        if (isAmp) return renderAmpEntry(entry, {escape:escapeHtml, markdown:safeMarkedParse, copyLink:renderCopyLinkButton, toolResults:ampToolResults, toolCalls:visibleAmpCalls});
         const ts = formatTimestamp(entry.timestamp);
         const tsHtml = ts ? `<div class="message-timestamp">${ts}</div>` : '';
         const entryDomId = `entry-${escapeHtml(entry.id)}`;
@@ -1360,7 +1372,7 @@
         return { userMessages, assistantMessages, toolResults, customMessages, compactions, branchSummaries, toolCalls, tokens, cost, models: Array.from(models) };
       }
 
-      const globalStats = computeStats(entries);
+      let globalStats = computeStats(entries);
 
       function renderHeader() {
         const msgParts = [];
@@ -1380,7 +1392,7 @@
               <div class="help-actions">
                 <button type="button" class="header-toggle-btn" data-action="toggle-thinking" title="Toggle thinking (T)">Toggle thinking</button>
                 <button type="button" class="header-toggle-btn" data-action="toggle-tools" title="Toggle tools (O)">Toggle tools</button>
-                <button type="button" class="download-json-btn" data-action="download-session" title="Download normalized viewer entries, not native source records">↓ Viewer JSONL</button>
+                <button type="button" class="download-json-btn" data-action="download-session" title="Download loaded normalized viewer entries, not native source records">↓ Viewer JSONL${data.hasMore ? ' (loaded only)' : ''}</button>
               </div>
             </div>
             <div class="header-info">
@@ -1391,6 +1403,8 @@
               <div class="info-item"><span class="info-label">Directory:</span><span class="info-value">${escapeHtml(header?.cwd || 'unknown')}</span></div>
             </div>
           </div>`;
+
+        if (isAmp) html += renderAmpHeaderDetails(header, entries, {escape:escapeHtml});
 
         // Render system prompt (user's base prompt, applies to all providers)
         if (systemPrompt) {
@@ -1464,7 +1478,7 @@
 
       function renderEntryToNode(entry) {
         // Check cache first
-        if (entryCache.has(entry.id)) {
+        if (!isAmp && entryCache.has(entry.id)) {
           return entryCache.get(entry.id).cloneNode(true);
         }
 
@@ -1477,13 +1491,13 @@
         const node = template.content.firstElementChild;
 
         // Cache the node
-        if (node) {
+        if (!isAmp && node) {
           entryCache.set(entry.id, node.cloneNode(true));
         }
         return node;
       }
 
-      function navigateTo(targetId, scrollMode = 'target', scrollToEntryId = null) {
+      function navigateTo(targetId, scrollMode = 'target', scrollToEntryId = null, pageStart = null) {
         currentLeafId = targetId;
         currentTargetId = scrollToEntryId || targetId;
         const path = getPath(targetId);
@@ -1497,11 +1511,52 @@
         const messagesEl = document.getElementById('messages');
         const fragment = document.createDocumentFragment();
 
-        for (const entry of path) {
+        const targetIndex = path.findIndex(entry => entry.id === (scrollToEntryId || targetId));
+        const start = !isAmp ? 0 : pageStart ?? (scrollMode === 'none' ? 0 : Math.max(0, targetIndex - 100));
+        const end = isAmp ? Math.min(path.length, start + 200) : path.length;
+        visibleAmpCalls.clear();
+        for (const entry of path.slice(start,end)) {
+          for (const block of entry.message?.content || []) if (block.type === 'toolCall') visibleAmpCalls.add(block.id);
+        }
+        const pageButton = (label, offset) => {
+          const button = document.createElement('button');
+          button.className = 'header-toggle-btn';
+          button.textContent = label;
+          button.addEventListener('click', () => navigateTo(targetId, 'none', null, offset));
+          return button;
+        };
+        if (start > 0) fragment.appendChild(pageButton('← Earlier loaded messages', Math.max(0,start - 200)));
+        for (const entry of path.slice(start,end)) {
           const node = renderEntryToNode(entry);
           if (node) {
             fragment.appendChild(node);
           }
+        }
+        if (end < path.length) fragment.appendChild(pageButton('Later loaded messages →', end));
+        if (data.hasMore) {
+          const button = document.createElement('button');
+          button.className = 'header-toggle-btn';
+          button.textContent = 'Load next 200 records';
+          button.addEventListener('click', async () => {
+            button.disabled = true;
+            try {
+              await data.loadMore();
+              ({header, entries} = data);
+              byId.clear(); toolCallMap.clear(); ampToolResults.clear();
+              for (const entry of entries) {
+                byId.set(entry.id, entry);
+                if (entry.message?.role === 'toolResult') ampToolResults.set(entry.message.toolCallId, entry);
+                for (const block of entry.message?.content || []) if (block.type === 'toolCall') toolCallMap.set(block.id, block);
+              }
+              treeNodeMap = null; treeRendered = false;
+              globalStats = computeStats(entries);
+              navigateTo(data.leafId, 'none', null, start);
+            } catch (error) {
+              document.getElementById('transcript-status').textContent = error.message;
+              button.disabled = false;
+            }
+          });
+          fragment.appendChild(button);
         }
 
         messagesEl.innerHTML = '';
@@ -1788,6 +1843,7 @@
 
       const toggleToolOutputs = () => {
         toolOutputsExpanded = !toolOutputsExpanded;
+        if (isAmp) document.querySelectorAll('.tool-execution details').forEach(element => { element.open = toolOutputsExpanded; });
         document.querySelectorAll('.tool-output.expandable').forEach(el => {
           el.classList.toggle('expanded', toolOutputsExpanded);
         });

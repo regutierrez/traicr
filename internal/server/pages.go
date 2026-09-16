@@ -106,7 +106,20 @@ func (app *application) tracePage(w http.ResponseWriter, r *http.Request) {
 		if title == "" {
 			title = trace.NativeTraceID
 		}
-		app.render(w, r, "transcript", map[string]any{"Title": title, "Trace": trace})
+		selected := r.URL.Query().Get("revision")
+		if selected != "" {
+			found := false
+			for _, revision := range trace.Revisions {
+				if strconv.FormatInt(revision.ID, 10) == selected {
+					found = true
+				}
+			}
+			if !found || trace.Harness != "amp" {
+				writeError(w, 404, "revision_not_found", "Revision not found for this Amp trace")
+				return
+			}
+		}
+		app.render(w, r, "transcript", map[string]any{"Title": title, "Trace": trace, "Revision": selected})
 		return
 	}
 	limit, ok := pageLimit(w, r)
