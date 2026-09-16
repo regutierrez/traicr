@@ -3,6 +3,7 @@ package domain
 import "encoding/json"
 
 const FormatVersion = 1
+const MaxAmpExportBytes = 512 << 20
 
 type Machine struct {
 	ID       string `json:"id"`
@@ -56,10 +57,14 @@ type SourceRef struct {
 }
 
 type Attachment struct {
-	Name      string `json:"name,omitempty"`
-	MediaType string `json:"media_type,omitempty"`
-	Path      string `json:"path,omitempty"`
-	URL       string `json:"url,omitempty"`
+	Name          string `json:"name,omitempty"`
+	MediaType     string `json:"media_type,omitempty"`
+	Path          string `json:"path,omitempty"`
+	URL           string `json:"url,omitempty"`
+	SourcePointer string `json:"source_pointer,omitempty"`
+	Inline        bool   `json:"inline,omitempty"`
+	ArchivedPath  string `json:"archived_path,omitempty"`
+	Size          int64  `json:"size,omitempty"`
 }
 
 type Event struct {

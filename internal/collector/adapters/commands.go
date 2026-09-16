@@ -106,6 +106,14 @@ func (a commandAdapter) Collect(ctx context.Context, _ []string, progress Progre
 			root, remote := gitRepository(trace.CWD)
 			descriptor.Repository = domain.Repository{Root: root, Remote: remote}
 		}
+		if a.name == "amp" {
+			descriptor.Warnings = collectAmpImages(ctx, a.executable, dir)
+			result.Warnings = append(result.Warnings, descriptor.Warnings...)
+		}
+		if err := ctx.Err(); err != nil {
+			result.Cleanup()
+			return Result{}, err
+		}
 		result.Inputs = append(result.Inputs, archive.Input{Descriptor: descriptor, Directory: dir})
 	}
 	return result, nil

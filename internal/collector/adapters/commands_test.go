@@ -2,13 +2,121 @@ package adapters
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
+	"strings"
 	"testing"
 )
+
+func TestAmpCollectArchivesImagesWithoutChangingExport(t *testing.T) {
+	const imageURL = "https://ampcode.com/user-content/attachments/fixture.png"
+	const export = `{"v":1,"id":"T-images","updatedAt":"2026-09-16T00:00:00Z","messages":[{"role":"user","content":[{"type":"image","source":{"type":"url","url":"` + imageURL + `#amp-media-width=320"}},{"type":"tool_result","run":{"progress":{"displayImages":[{"type":"image","url":"` + imageURL + `#amp-media-width=640"},{"type":"image","url":"https://ampcode.com/user-content/attachments/missing.png"}]}}},{"type":"image","sourcePath":"https://ampcode.com/user-content/attachments/path.png"},{"type":"image","url":"https://example.com/private.png"},{"type":"image","url":"https://ampcode.com/user-content/attachments/../../secret"},{"type":"image","url":"file:///private.png"}]}]}`
+	if os.Getenv("TRAICR_TEST_AMP_IMAGES") == "1" {
+		args := os.Args[slices.Index(os.Args, "--")+1:]
+		switch args[0] + " " + args[1] {
+		case "threads list":
+			fmt.Print(`[{"id":"T-images","updated":"2026-09-16T00:00:00Z"}]`)
+		case "threads export":
+			fmt.Print(export)
+		case "files get":
+			if len(args) != 5 || args[3] != "-o" {
+				os.Exit(2)
+			}
+			log, _ := os.OpenFile(os.Getenv("TRAICR_IMAGE_REQUESTS"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+			fmt.Fprintln(log, args[2])
+			log.Close()
+			os.WriteFile(args[4], []byte("original image bytes"), 0600)
+			if args[2] == "https://ampcode.com/user-content/attachments/missing.png" {
+				os.Exit(1)
+			}
+		default:
+			os.Exit(2)
+		}
+		os.Exit(0)
+	}
+	binary, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	command := filepath.Join(dir, "amp")
+	if err := os.WriteFile(command, []byte("#!/bin/sh\nexec \"$TRAICR_TEST_BINARY\" -test.run=^TestAmpCollectArchivesImagesWithoutChangingExport$ -- \"$@\"\n"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("TRAICR_TEST_AMP_IMAGES", "1")
+	t.Setenv("TRAICR_TEST_BINARY", binary)
+	t.Setenv("TRAICR_IMAGE_REQUESTS", filepath.Join(dir, "requests"))
+	result, err := (commandAdapter{name: "amp", format: "amp-thread-export", executable: command}).Collect(context.Background(), nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer result.Cleanup()
+	if len(result.Inputs) != 1 {
+		t.Fatalf("lost export: %+v", result)
+	}
+	root := result.Inputs[0].Directory
+	data, err := os.ReadFile(filepath.Join(root, "source/export.json"))
+	if err != nil || string(data) != export {
+		t.Fatalf("export changed: %v", err)
+	}
+	for _, url := range []string{imageURL, "https://ampcode.com/user-content/attachments/path.png"} {
+		path := fmt.Sprintf("source/attachments/%x", sha256.Sum256([]byte(url)))
+		data, err := os.ReadFile(filepath.Join(root, path))
+		if err != nil || string(data) != "original image bytes" {
+			t.Fatalf("image not archived: %q %v", data, err)
+		}
+	}
+	files, err := os.ReadDir(filepath.Join(root, "source/attachments"))
+	if err != nil || len(files) != 2 {
+		t.Fatalf("partial download retained: %v %v", files, err)
+	}
+	requests, err := os.ReadFile(filepath.Join(dir, "requests"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	urls := strings.Fields(string(requests))
+	slices.Sort(urls)
+	if !slices.Equal(urls, []string{imageURL, "https://ampcode.com/user-content/attachments/missing.png", "https://ampcode.com/user-content/attachments/path.png"}) {
+		t.Fatalf("duplicates or unsafe requests: %q %v", requests, err)
+	}
+	if len(result.Warnings) != 1 || result.Warnings[0].Code != "attachment_download_failed" || len(result.Inputs[0].Descriptor.Warnings) != 1 {
+		t.Fatalf("missing download warning: %+v", result)
+	}
+}
+
+func TestAmpImageDownloadBudgetAndCancellation(t *testing.T) {
+	dir := t.TempDir()
+	command := filepath.Join(dir, "amp")
+	if err := os.WriteFile(command, []byte("#!/bin/sh\nexec head -c \"$TRAICR_IMAGE_BYTES\" /dev/zero > \"$5\"\n"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	for _, size := range []int{1023, 1024, 1025} {
+		t.Setenv("TRAICR_IMAGE_BYTES", strconv.Itoa(size))
+		path := filepath.Join(dir, strconv.Itoa(size))
+		written, err := downloadAmpImage(context.Background(), command, "https://ampcode.com/user-content/attachments/fixture.png", path, 1024)
+		if size <= 1024 {
+			if err != nil || written != int64(size) {
+				t.Fatalf("image within budget rejected: %d %v", written, err)
+			}
+		} else if _, statErr := os.Stat(path); err == nil || !os.IsNotExist(statErr) {
+			t.Fatalf("oversized download retained: %v %v", err, statErr)
+		}
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	path := filepath.Join(dir, "cancelled")
+	if _, err := downloadAmpImage(ctx, command, "https://ampcode.com/user-content/attachments/fixture.png", path, 1024); err == nil {
+		t.Fatal("cancelled download succeeded")
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("cancelled file retained: %v", err)
+	}
+}
 
 func TestAmpListPaginatesWithinCLILimitAndDropsRepeatedThreads(t *testing.T) {
 	if os.Getenv("TRAICR_TEST_AMP_LIST") == "1" {
