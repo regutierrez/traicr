@@ -1,0 +1,27 @@
+{
+  "v": 84,
+  "id": "T-amp-agents-fixture",
+  "title": "Amp tools, skills & subagents",
+  "created": 1789552800000,
+  "updatedAt": "2026-09-16T10:04:00Z",
+  "agentMode": "high",
+  "activatedSkills": [{"name": "tdd"}],
+  "env": {"initial": {"workingDirectory": "/repo"}},
+  "messages": [
+    {"messageId": 0, "role": "user", "content": [{"type": "text", "text": "Load the TDD skill, ask a subagent to review the range boundary, then fix it and run the tests."}]},
+    {"messageId": 1, "role": "assistant", "meta": {"openAIResponsePhase": "commentary"}, "content": [{"type": "tool_use", "id": "TU-skill", "providerToolUseId": "provider-skill", "name": "skill", "input": {"name": "tdd"}, "complete": true}]},
+    {"messageId": 2, "role": "user", "content": [{"type": "tool_result", "toolUseID": "TU-skill", "run": {"status": "done", "result": {"content": [{"type": "text", "text": "# Test-driven development\n\nWrite a failing boundary test, make the smallest fix, then rerun the test.\n\nCheck both the inclusive endpoint and the value immediately beyond it."}]}}}]},
+    {"messageId": 3, "role": "assistant", "content": [{"type": "tool_use", "id": "TU-task", "providerToolUseId": "provider-task", "name": "Task", "input": {"description": "Review range boundaries", "prompt": "Inspect range.go and range_test.go. Report the boundary mistake and a regression test; do not edit files."}, "complete": true}]},
+    {"messageId": 4, "role": "user", "content": [{"type": "tool_result", "toolUseID": "TU-task", "run": {"status": "done", "result": "**Subagent review:** `Contains(3, 3)` returns false because the upper bound uses `<`.\n\nUse `<=`. Verify that 3 is included and 4 is excluded. No files changed."}}]},
+    {"messageId": 5, "role": "assistant", "content": [{"type": "tool_use", "id": "TU-red", "name": "shell_command", "input": {"command": "go test ./internal/range -run TestInclusiveEnd -count=1", "workdir": "/repo"}, "complete": true}]},
+    {"messageId": 6, "role": "user", "content": [{"type": "tool_result", "toolUseID": "TU-red", "run": {"status": "done", "result": {"output": "--- FAIL: TestInclusiveEnd\n    range_test.go:18: endpoint 3 should be included\nFAIL", "exitCode": 1}}}]},
+    {"messageId": 7, "role": "assistant", "content": [{"type": "tool_use", "id": "TU-patch", "name": "apply_patch", "input": {"patchText": "*** Begin Patch\n*** Update File: internal/range/range.go\n@@\n-return n < end\n+return n <= end\n*** End Patch"}, "complete": true}]},
+    {"messageId": 8, "role": "user", "content": [{"type": "tool_result", "toolUseID": "TU-patch", "run": {"status": "done", "result": {"summary": "Updated range.go", "files": [{"uri": "file:///repo/internal/range/range.go", "type": "update", "additions": 1, "deletions": 1, "diff": "-return n < end\n+return n <= end"}]}}}]},
+    {"messageId": 9, "role": "assistant", "content": [{"type": "tool_use", "id": "TU-green", "name": "shell_command", "input": {"command": "go test ./internal/range -count=1", "workdir": "/repo"}, "complete": true}]},
+    {"messageId": 10, "role": "user", "content": [{"type": "tool_result", "toolUseID": "TU-green", "run": {"status": "done", "result": {"output": "ok  example/project/internal/range  0.004s\nPASS: inclusive endpoint and out-of-range tests", "exitCode": 0}}}]},
+    {"messageId": 11, "role": "assistant", "content": [{"type": "tool_use", "id": "TU-thread", "name": "create_thread", "input": {"title": "Review boundary documentation", "prompt": "Check whether the range documentation describes an inclusive upper bound.", "intent": "parallel-work"}, "complete": true}]},
+    {"messageId": 12, "role": "user", "content": [{"type": "tool_result", "toolUseID": "TU-thread", "run": {"status": "done", "result": {"threadID": "T-amp-child-fixture", "url": "https://ampcode.com/threads/T-amp-child-fixture", "title": "Review boundary documentation"}}}]},
+    {"messageId": 13, "role": "user", "meta": {"fromExecutorThreadID": "T-amp-child-fixture", "fromAutomation": true}, "content": [{"type": "text", "text": "The spawned thread confirmed that the documentation already describes an inclusive upper bound."}]},
+    {"messageId": 14, "role": "assistant", "meta": {"openAIResponsePhase": "final_answer"}, "state": {"type": "complete", "stopReason": "end_turn"}, "content": [{"type": "text", "text": "The boundary is fixed. Both regression cases pass, and the documentation agrees with the behavior."}]}
+  ]
+}

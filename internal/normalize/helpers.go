@@ -17,7 +17,7 @@ import (
 
 const maxSourceBytes = 64 << 20
 
-var errSourceLimit = fmt.Errorf("normalization source exceeds %d MiB limit", maxSourceBytes>>20)
+var errSourceLimit = fmt.Errorf("normalization source exceeds its byte limit")
 
 type limitedFS struct {
 	ctx       context.Context
@@ -35,8 +35,8 @@ type limitedFileInfo struct {
 	size int64
 }
 
-func newLimitedFS(ctx context.Context, source fs.FS) fs.FS {
-	return &limitedFS{ctx: ctx, source: source, remaining: maxSourceBytes}
+func newLimitedFS(ctx context.Context, source fs.FS, limit int64) fs.FS {
+	return &limitedFS{ctx: ctx, source: source, remaining: limit}
 }
 
 func (source *limitedFS) Open(name string) (fs.File, error) {
@@ -46,6 +46,15 @@ func (source *limitedFS) Open(name string) (fs.File, error) {
 	file, err := source.source.Open(name)
 	if err != nil {
 		return nil, err
+	}
+	info, err := file.Stat()
+	if err != nil {
+		file.Close()
+		return nil, err
+	}
+	if info.Size() > source.remaining {
+		file.Close()
+		return nil, fmt.Errorf("%w: remaining budget %d bytes", errSourceLimit, source.remaining)
 	}
 	return &limitedFile{File: file, input: source}, nil
 }

@@ -10,7 +10,7 @@ import (
 func Version(harness string) int {
 	switch harness {
 	case "amp":
-		return 2
+		return 4
 	case "pi", "claude-code", "cursor-agent", "cursor", "opencode", "codex", "grok-build":
 		return 1
 	default:
@@ -23,7 +23,11 @@ func Run(ctx context.Context, descriptor domain.Descriptor, source fs.FS) (domai
 		return domain.Normalization{}, err
 	}
 
-	source = newLimitedFS(ctx, source)
+	limit := int64(maxSourceBytes)
+	if descriptor.Harness == "amp" {
+		limit = domain.MaxAmpExportBytes
+	}
+	source = newLimitedFS(ctx, source, limit)
 	var result domain.Normalization
 	var err error
 	switch descriptor.Harness {
@@ -36,7 +40,7 @@ func Run(ctx context.Context, descriptor domain.Descriptor, source fs.FS) (domai
 	case "cursor":
 		result, err = normalizeCursor(ctx, source)
 	case "amp":
-		result, err = normalizeAmp(ctx, source)
+		result, err = normalizeAmp(ctx, source, descriptor.Files)
 	case "opencode":
 		result, err = normalizeOpenCode(ctx, source)
 	case "codex":

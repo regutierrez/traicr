@@ -323,7 +323,7 @@ func TestMissingNativeIDsUseContentFingerprints(t *testing.T) {
 func TestRunEnforcesTotalSourceLimit(t *testing.T) {
 	t.Run("JSON", func(t *testing.T) {
 		root := t.TempDir()
-		writeSparseSource(t, root, "export.json", maxSourceBytes+1)
+		writeSparseSource(t, root, "export.json", domain.MaxAmpExportBytes+1)
 		_, err := Run(context.Background(), domain.Descriptor{Harness: "amp", Adapter: "amp-thread-export"}, os.DirFS(root))
 		if !errors.Is(err, errSourceLimit) {
 			t.Fatalf("error = %v, want source limit", err)
