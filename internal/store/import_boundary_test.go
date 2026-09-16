@@ -15,6 +15,56 @@ import (
 	"github.com/regutierrez/traicr/internal/store"
 )
 
+func TestRepeatedImportBackfillsMissingRepositoryWithoutReplacingNewerMetadata(t *testing.T) {
+	for _, repository := range []domain.Repository{{Remote: "https://example.invalid/metadata-repo", Root: "/work/metadata-repo"}, {Root: "/work/path-only"}} {
+		t.Run(repository.Root, func(t *testing.T) {
+			ctx := context.Background()
+			database := openStore(t)
+			input := traceInput("machine", "same-bytes", "2026-09-16T10:00:00Z", "", []domain.Event{{Key: "event", Kind: "message", Text: "repository lookup"}})
+			report, err := database.Import(ctx, input.manifest, input.files, normalizer(input.events, "normalized", 1), nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			traceID := report.Traces[0].TraceID
+			input.manifest.Traces[0].Repository = repository
+			report, err = database.Import(ctx, input.manifest, input.files, normalizer(input.events, "normalized", 1), nil)
+			if err != nil || report.Updated != 1 {
+				t.Fatalf("repository backfill: %+v %v", report, err)
+			}
+			trace, err := database.Trace(ctx, traceID)
+			if err != nil || trace.Repository != repository.Remote || len(trace.Revisions) != 1 {
+				t.Fatalf("metadata created a revision or lost repository: %+v %v", trace, err)
+			}
+			page, err := database.Search(ctx, store.SearchQuery{Query: "repository lookup", Repository: repository.Root})
+			if err != nil || len(page.Results) != 1 {
+				t.Fatalf("repository path filter missing: %+v %v", page, err)
+			}
+			page, err = database.Search(ctx, store.SearchQuery{Query: repository.Root, Mode: "exact"})
+			if err != nil || len(page.Results) != 1 {
+				t.Fatalf("repository metadata not indexed: %+v %v", page, err)
+			}
+			input.manifest.Traces[0].Repository = domain.Repository{Remote: "https://example.invalid/wrong", Root: "/wrong"}
+			report, err = database.Import(ctx, input.manifest, input.files, normalizer(input.events, "normalized", 1), nil)
+			if err != nil || report.Unchanged != 1 {
+				t.Fatalf("existing repository replaced: %+v %v", report, err)
+			}
+			input.manifest.Traces[0].RevisionDigest = "newer"
+			input.manifest.Traces[0].NativeUpdatedAt = "2026-09-17T10:00:00Z"
+			input.manifest.Traces[0].Repository = domain.Repository{}
+			if _, err := database.Import(ctx, input.manifest, input.files, normalizer(input.events, "normalized", 1), nil); err != nil {
+				t.Fatal(err)
+			}
+			input.manifest.Traces[0].RevisionDigest = "same-bytes"
+			input.manifest.Traces[0].NativeUpdatedAt = "2026-09-16T10:00:00Z"
+			input.manifest.Traces[0].Repository = repository
+			report, err = database.Import(ctx, input.manifest, input.files, normalizer(input.events, "normalized", 1), nil)
+			if err != nil || report.Unchanged != 1 {
+				t.Fatalf("stale repository restored: %+v %v", report, err)
+			}
+		})
+	}
+}
+
 func TestImportReportsEveryOutcomeAndCompletedProgress(t *testing.T) {
 	ctx := context.Background()
 	s := openStore(t)

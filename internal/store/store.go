@@ -149,7 +149,7 @@ func (s *Store) importTrace(ctx context.Context, manifest domain.Manifest, descr
 			outcome.Status, outcome.Error = "failed", err.Error()
 			return outcome
 		}
-		updated, metadataErr := s.backfillMissingTraceMetadata(ctx, existingTraceID, existingID, descriptor)
+		updated, metadataErr := s.backfillMissingTraceMetadata(ctx, existingTraceID, existingID, manifest.SourceMachine.ID, descriptor)
 		if metadataErr != nil {
 			outcome.Status, outcome.Error = "failed", metadataErr.Error()
 			return outcome
@@ -218,8 +218,8 @@ func (s *Store) importTrace(ctx context.Context, manifest domain.Manifest, descr
 }
 
 // backfillMissingTraceMetadata fills collector metadata added after a revision was first imported.
-func (s *Store) backfillMissingTraceMetadata(ctx context.Context, traceID, revisionID int64, descriptor domain.Descriptor) (bool, error) {
-	if descriptor.Title == "" && descriptor.WorkingDirectory == "" {
+func (s *Store) backfillMissingTraceMetadata(ctx context.Context, traceID, revisionID int64, machineID string, descriptor domain.Descriptor) (bool, error) {
+	if descriptor.Title == "" && descriptor.WorkingDirectory == "" && descriptor.Repository == (domain.Repository{}) {
 		return false, nil
 	}
 	tx, err := s.db.BeginTx(ctx, nil)
@@ -253,6 +253,22 @@ func (s *Store) backfillMissingTraceMetadata(ctx context.Context, traceID, revis
 		}
 		if changed != 0 {
 			searchableMetadata = append(searchableMetadata, descriptor.WorkingDirectory)
+		}
+	}
+	if descriptor.Repository != (domain.Repository{}) {
+		var missing bool
+		if err := tx.QueryRowContext(ctx, `SELECT repository_id IS NULL AND updated_at<=? FROM traces WHERE id=?`, canonicalTime(descriptor.NativeUpdatedAt), traceID).Scan(&missing); err != nil {
+			return false, err
+		}
+		if missing {
+			repositoryID, err := upsertRepository(ctx, tx, machineID, descriptor.Repository)
+			if err != nil {
+				return false, err
+			}
+			if _, err := tx.ExecContext(ctx, "UPDATE traces SET repository_id=? WHERE id=?", repositoryID, traceID); err != nil {
+				return false, err
+			}
+			searchableMetadata = append(searchableMetadata, descriptor.Repository.Remote, descriptor.Repository.Root)
 		}
 	}
 	if len(searchableMetadata) == 0 {
@@ -412,6 +428,29 @@ func (r contextReader) Read(buffer []byte) (int, error) {
 	return r.reader.Read(buffer)
 }
 
+func upsertRepository(ctx context.Context, tx *sql.Tx, machineID string, repository domain.Repository) (any, error) {
+	if repository == (domain.Repository{}) {
+		return nil, nil
+	}
+	identity := repository.Remote
+	if identity == "" {
+		identity = "path:" + machineID + ":" + repository.Root
+	}
+	if _, err := tx.ExecContext(ctx, "INSERT OR IGNORE INTO repositories(identity,remote,root) VALUES(?,?,?)", identity, repository.Remote, repository.Root); err != nil {
+		return nil, err
+	}
+	var id int64
+	if err := tx.QueryRowContext(ctx, "SELECT id FROM repositories WHERE identity=?", identity).Scan(&id); err != nil {
+		return nil, err
+	}
+	if repository.Root != "" {
+		if _, err := tx.ExecContext(ctx, "INSERT OR IGNORE INTO repository_paths(repository_id,path) VALUES(?,?)", id, repository.Root); err != nil {
+			return nil, err
+		}
+	}
+	return id, nil
+}
+
 func (s *Store) commitRevision(ctx context.Context, manifest domain.Manifest, descriptor domain.Descriptor, normalization domain.Normalization, objects []storedObject) (int64, bool, []domain.Warning, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -419,26 +458,9 @@ func (s *Store) commitRevision(ctx context.Context, manifest domain.Manifest, de
 	}
 	defer tx.Rollback()
 	now := time.Now().UTC().Format(time.RFC3339Nano)
-	var repositoryID any
-	if descriptor.Repository.Remote != "" || descriptor.Repository.Root != "" {
-		identity := descriptor.Repository.Remote
-		if identity == "" {
-			identity = "path:" + manifest.SourceMachine.ID + ":" + descriptor.Repository.Root
-		}
-		_, err = tx.ExecContext(ctx, "INSERT OR IGNORE INTO repositories(identity,remote,root) VALUES(?,?,?)", identity, descriptor.Repository.Remote, descriptor.Repository.Root)
-		if err != nil {
-			return 0, false, nil, err
-		}
-		var id int64
-		if err = tx.QueryRowContext(ctx, "SELECT id FROM repositories WHERE identity=?", identity).Scan(&id); err != nil {
-			return 0, false, nil, err
-		}
-		if descriptor.Repository.Root != "" {
-			if _, err = tx.ExecContext(ctx, "INSERT OR IGNORE INTO repository_paths(repository_id,path) VALUES(?,?)", id, descriptor.Repository.Root); err != nil {
-				return 0, false, nil, err
-			}
-		}
-		repositoryID = id
+	repositoryID, err := upsertRepository(ctx, tx, manifest.SourceMachine.ID, descriptor.Repository)
+	if err != nil {
+		return 0, false, nil, err
 	}
 	metadataTime := canonicalTime(descriptor.NativeUpdatedAt)
 	if metadataTime == "" {

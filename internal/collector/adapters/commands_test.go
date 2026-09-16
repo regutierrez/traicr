@@ -56,7 +56,7 @@ func TestAmpCollectUsesExportTimestampWithoutLiveChangeWarning(t *testing.T) {
 	if os.Getenv("TRAICR_TEST_AMP_COLLECT") == "1" {
 		args := os.Args
 		if args[len(args)-2] == "export" {
-			fmt.Print(`{"v":1,"id":"T-1","title":"Thread","updatedAt":"2026-09-10T23:07:25.917Z","messages":[],"env":{"initial":{"workingDirectory":"/"}}}`)
+			fmt.Print(`{"v":1,"id":"T-1","title":"Thread","updatedAt":"2026-09-10T23:07:25.917Z","messages":[],"env":{"initial":{"workingDirectory":"/unavailable/repo","trees":[{"uri":"file:///exported/repo","repository":{"url":"https://github.com/example/project","ref":"main","sha":"fixture-commit","type":"git"}}]}}}`)
 		} else {
 			fmt.Print(`[{"id":"T-1","title":"Thread","updated":"2026-09-10T15:47:53.910Z","tree":"","messageCount":1}]`)
 		}
@@ -79,6 +79,9 @@ func TestAmpCollectUsesExportTimestampWithoutLiveChangeWarning(t *testing.T) {
 	defer result.Cleanup()
 	if len(result.Warnings) != 0 || len(result.Inputs) != 1 || result.Inputs[0].Descriptor.NativeUpdatedAt != "2026-09-10T23:07:25.917Z" {
 		t.Fatalf("Amp collect: %+v, warnings: %+v", result.Inputs, result.Warnings)
+	}
+	if repository := result.Inputs[0].Descriptor.Repository; repository.Root != "/exported/repo" || repository.Remote != "https://github.com/example/project" {
+		t.Fatalf("Amp exported repository: %+v", repository)
 	}
 }
 

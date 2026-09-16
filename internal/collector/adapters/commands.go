@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -32,11 +33,12 @@ type commandAdapter struct {
 }
 
 type commandTrace struct {
-	ID        string
-	Title     string
-	UpdatedAt string
-	ParentID  string
-	CWD       string
+	ID         string
+	Title      string
+	UpdatedAt  string
+	ParentID   string
+	CWD        string
+	Repository domain.Repository
 }
 
 func (a commandAdapter) Name() string { return a.name }
@@ -87,6 +89,7 @@ func (a commandAdapter) Collect(ctx context.Context, _ []string, progress Progre
 			}
 			trace.ParentID = exported.ParentID
 			trace.CWD = exported.CWD
+			trace.Repository = exported.Repository
 		}
 		descriptor := domain.Descriptor{
 			Harness:             a.name,
@@ -97,7 +100,9 @@ func (a commandAdapter) Collect(ctx context.Context, _ []string, progress Progre
 			Title:               trace.Title,
 			WorkingDirectory:    trace.CWD,
 		}
-		if trace.CWD != "" {
+		if trace.Repository != (domain.Repository{}) {
+			descriptor.Repository = trace.Repository
+		} else if trace.CWD != "" {
 			root, remote := gitRepository(trace.CWD)
 			descriptor.Repository = domain.Repository{Root: root, Remote: remote}
 		}
@@ -282,6 +287,12 @@ func inspectCommandExport(harness, path, expectedID string) (commandTrace, error
 			Env       struct {
 				Initial struct {
 					WorkingDirectory string `json:"workingDirectory"`
+					Trees            []struct {
+						URI        string `json:"uri"`
+						Repository struct {
+							URL string `json:"url"`
+						} `json:"repository"`
+					} `json:"trees"`
 				} `json:"initial"`
 			} `json:"env"`
 		}
@@ -295,7 +306,18 @@ func inspectCommandExport(harness, path, expectedID string) (commandTrace, error
 		if export.Version <= 0 || export.ID != expectedID || export.UpdatedAt == "" || export.Messages == nil {
 			return commandTrace{}, errors.New("Amp export is missing v, matching id, updatedAt, or messages")
 		}
-		return commandTrace{ID: export.ID, Title: export.Title, UpdatedAt: export.UpdatedAt, CWD: export.Env.Initial.WorkingDirectory}, nil
+		repository := domain.Repository{}
+		for _, tree := range export.Env.Initial.Trees {
+			if tree.Repository.URL == "" {
+				continue
+			}
+			repository.Remote = tree.Repository.URL
+			if treeURI, err := url.Parse(tree.URI); err == nil && treeURI.Scheme == "file" {
+				repository.Root = treeURI.Path
+			}
+			break
+		}
+		return commandTrace{ID: export.ID, Title: export.Title, UpdatedAt: export.UpdatedAt, CWD: export.Env.Initial.WorkingDirectory, Repository: repository}, nil
 	}
 	var export struct {
 		Info struct {
