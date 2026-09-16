@@ -13,6 +13,7 @@ import (
 
 	"github.com/regutierrez/traicr/internal/domain"
 	"github.com/regutierrez/traicr/internal/store"
+	"github.com/regutierrez/traicr/migrations"
 )
 
 func TestRepeatedImportBackfillsMissingRepositoryWithoutReplacingNewerMetadata(t *testing.T) {
@@ -157,6 +158,31 @@ func TestSearchDateOnlyBeforeExcludesNextMidnight(t *testing.T) {
 	}
 }
 
+func TestOpenMigratesExistingArchive(t *testing.T) {
+	directory := t.TempDir()
+	db, err := sql.Open("sqlite", filepath.Join(directory, "traicr.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(migrations.Initial + `INSERT INTO source_machines VALUES ('old','existing archive','linux','amd64','2026-01-01','2026-01-01');`); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		database, err := store.Open(directory)
+		if err != nil {
+			t.Fatal(err)
+		}
+		machines, err := database.Machines(context.Background())
+		database.Close()
+		if err != nil || len(machines) != 1 || machines[0].Hostname != "existing archive" {
+			t.Fatalf("existing archive lost: %+v %v", machines, err)
+		}
+	}
+}
+
 func TestOpenRejectsInvalidDatabase(t *testing.T) {
 	for _, state := range []string{"corrupt", "newer", "partial"} {
 		t.Run(state, func(t *testing.T) {
@@ -171,7 +197,7 @@ func TestOpenRejectsInvalidDatabase(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				statement := "PRAGMA user_version=2"
+				statement := "PRAGMA user_version=3"
 				if state == "partial" {
 					statement = "CREATE TABLE events(id INTEGER)"
 				}

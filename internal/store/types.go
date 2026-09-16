@@ -83,7 +83,9 @@ type Revision struct {
 
 type Event struct {
 	domain.Event
-	ObservationCount int `json:"observation_count"`
+	ObservationCount int      `json:"observation_count"`
+	RevisionID       int64    `json:"revision_id,omitempty"`
+	Aliases          []string `json:"aliases,omitempty"`
 }
 
 type EventPage struct {

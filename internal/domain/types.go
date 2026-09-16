@@ -84,6 +84,7 @@ type Event struct {
 	Sources     []SourceRef     `json:"sources,omitempty"`
 	Attachments []Attachment    `json:"attachments,omitempty"`
 	Metadata    json.RawMessage `json:"metadata,omitempty"`
+	LegacyKeys  []string        `json:"-"`
 }
 
 type Normalization struct {

@@ -14,6 +14,12 @@ import (
 	"github.com/regutierrez/traicr/internal/domain"
 )
 
+func (s *Store) TraceID(ctx context.Context, harness, nativeID string) (int64, error) {
+	var id int64
+	err := s.db.QueryRowContext(ctx, "SELECT id FROM traces WHERE harness=? AND native_trace_id=?", harness, nativeID).Scan(&id)
+	return id, err
+}
+
 func (s *Store) Trace(ctx context.Context, id int64) (Trace, error) {
 	var trace Trace
 	err := s.db.QueryRowContext(ctx, `SELECT t.id,t.harness,t.native_trace_id,t.title,t.working_directory,COALESCE(r.remote,''),t.parent_native_trace_id,t.created_at,t.updated_at FROM traces t LEFT JOIN repositories r ON r.id=t.repository_id WHERE t.id=?`, id).Scan(&trace.ID, &trace.Harness, &trace.NativeTraceID, &trace.Title, &trace.WorkingDirectory, &trace.Repository, &trace.ParentNativeTraceID, &trace.CreatedAt, &trace.UpdatedAt)
@@ -150,7 +156,15 @@ func (s *Store) decodeEventCursor(ctx context.Context, traceID int64, encoded st
 
 func (s *Store) eventPosition(ctx context.Context, traceID int64, condition string, value any) (eventCursor, error) {
 	var position eventCursor
-	if err := s.db.QueryRowContext(ctx, "SELECT sort_time,sort_key,id FROM events WHERE trace_id=? AND "+condition, traceID, value).Scan(&position.Time, &position.Key, &position.ID); err != nil {
+	err := s.db.QueryRowContext(ctx, "SELECT sort_time,sort_key,id FROM events WHERE trace_id=? AND "+condition, traceID, value).Scan(&position.Time, &position.Key, &position.ID)
+	if errors.Is(err, sql.ErrNoRows) {
+		aliasCondition := "a.legacy_key=?"
+		if condition == "id=?" {
+			aliasCondition = "a.legacy_id=?"
+		}
+		err = s.db.QueryRowContext(ctx, "SELECT e.sort_time,e.sort_key,e.id FROM event_aliases a JOIN events e ON e.trace_id=a.trace_id AND e.event_key=a.event_key WHERE a.trace_id=? AND "+aliasCondition, traceID, value).Scan(&position.Time, &position.Key, &position.ID)
+	}
+	if err != nil {
 		return eventCursor{}, err
 	}
 	if err := s.db.QueryRowContext(ctx, "SELECT COALESCE(MAX(id),0) FROM events WHERE trace_id=?", traceID).Scan(&position.MaxID); err != nil {
@@ -165,10 +179,15 @@ func encodeEventCursor(position eventCursor) string {
 }
 
 func (s *Store) Sources(ctx context.Context, eventID int64) ([]Source, error) {
-	var exists int
-	if err := s.db.QueryRowContext(ctx, "SELECT 1 FROM events WHERE id=?", eventID).Scan(&exists); err != nil {
+	var resolvedID int64
+	err := s.db.QueryRowContext(ctx, "SELECT id FROM events WHERE id=?", eventID).Scan(&resolvedID)
+	if errors.Is(err, sql.ErrNoRows) {
+		err = s.db.QueryRowContext(ctx, `SELECT e.id FROM event_aliases a JOIN events e ON e.trace_id=a.trace_id AND e.event_key=a.event_key WHERE a.legacy_id=?`, eventID).Scan(&resolvedID)
+	}
+	if err != nil {
 		return nil, err
 	}
+	eventID = resolvedID
 	rows, err := s.db.QueryContext(ctx, `SELECT o.id,r.id,r.digest,o.event_json,COALESCE(src.path,''),COALESCE(src.line,0),COALESCE(ro.object_digest,''),COALESCE(obj.size,0) FROM event_observations o JOIN observation_revisions x ON x.observation_id=o.id JOIN trace_revisions r ON r.id=x.revision_id LEFT JOIN observation_sources src ON src.observation_id=o.id AND src.revision_id=r.id LEFT JOIN revision_objects ro ON ro.revision_id=r.id AND ro.relative_path=src.path LEFT JOIN source_objects obj ON obj.digest=ro.object_digest WHERE o.event_id=? ORDER BY o.id,r.id,src.ordinal`, eventID)
 	if err != nil {
 		return nil, err

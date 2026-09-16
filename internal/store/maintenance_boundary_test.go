@@ -134,6 +134,43 @@ func TestRenormalizeSkipsCurrentVersion(t *testing.T) {
 	}
 }
 
+func TestRenormalizePreservesLinksWhenNativeEventKeysChange(t *testing.T) {
+	database, _ := openMaintenanceStore(t)
+	ctx := context.Background()
+	input := traceInput("machine", "legacy", "2026-08-22T10:00:00Z", "Legacy", []domain.Event{{Key: "message:old-hash", Kind: "message", Text: "original"}})
+	report, err := database.Import(ctx, input.manifest, input.files, normalizer(input.events, "normalized", 2), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	traceID := report.Traces[0].TraceID
+	page, err := database.Events(ctx, traceID, "", 10)
+	if err != nil || len(page.Events) != 1 {
+		t.Fatalf("events: %+v %v", page, err)
+	}
+	oldID := page.Events[0].ID
+	updated := domain.Event{Key: "message:17:0", Kind: "message", Text: "updated", LegacyKeys: []string{"message:old-hash"}, Sources: []domain.SourceRef{{Path: "source/records.jsonl"}}}
+	if err := database.Renormalize(ctx, func(string) int { return 3 }, normalizer([]domain.Event{updated}, "normalized", 3)); err != nil {
+		t.Fatal(err)
+	}
+	byID, err := database.EventsFrom(ctx, traceID, oldID, 10)
+	if err != nil || len(byID.Events) != 1 || byID.Events[0].Text != "updated" {
+		t.Fatalf("old numeric link lost: %+v %v", byID, err)
+	}
+	byKey, err := database.EventsFromKey(ctx, traceID, "message:old-hash", 10)
+	if err != nil || len(byKey.Events) != 1 || byKey.Events[0].Key != updated.Key {
+		t.Fatalf("old key link lost: %+v %v", byKey, err)
+	}
+	for _, id := range []int64{oldID, byID.Events[0].ID} {
+		sources, err := database.Sources(ctx, id)
+		if err != nil || len(sources) != 1 || sources[0].Event.Key != updated.Key || sources[0].Path != "source/records.jsonl" || sources[0].ObjectDigest == "" {
+			t.Fatalf("source link %d lost: %+v %v", id, sources, err)
+		}
+	}
+	if _, err := database.Sources(ctx, 99999); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("unknown source ID: %v", err)
+	}
+}
+
 func TestRenormalizeProcessesEveryQueuedRevisionAcrossBatches(t *testing.T) {
 	database, _ := openMaintenanceStore(t)
 	const revisionCount = 101

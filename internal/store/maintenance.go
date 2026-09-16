@@ -227,6 +227,13 @@ func (s *Store) replaceRevisionEvents(ctx context.Context, traceID, revisionID i
 		return nil, err
 	}
 	defer tx.Rollback()
+	for _, event := range normalization.Events {
+		for _, key := range event.LegacyKeys {
+			if _, err = tx.ExecContext(ctx, `INSERT OR REPLACE INTO event_aliases(trace_id,legacy_key,legacy_id,event_key) SELECT trace_id,event_key,id,? FROM events WHERE trace_id=? AND event_key=?`, event.Key, traceID, key); err != nil {
+				return nil, err
+			}
+		}
+	}
 	if _, err = tx.ExecContext(ctx, "DELETE FROM observation_revisions WHERE revision_id=?", revisionID); err != nil {
 		return nil, err
 	}
@@ -237,7 +244,7 @@ func (s *Store) replaceRevisionEvents(ctx context.Context, traceID, revisionID i
 	if err != nil {
 		return nil, err
 	}
-	if _, err = tx.ExecContext(ctx, `UPDATE events SET preferred_observation_id=(SELECT o.id FROM event_observations o JOIN observation_revisions x ON x.observation_id=o.id JOIN trace_revisions r ON r.id=x.revision_id WHERE o.event_id=events.id ORDER BY r.native_updated_at DESC,o.event_time DESC,o.digest DESC LIMIT 1) WHERE trace_id=?`, traceID); err != nil {
+	if _, err = tx.ExecContext(ctx, `UPDATE events SET preferred_observation_id=(SELECT o.id FROM event_observations o JOIN observation_revisions x ON x.observation_id=o.id JOIN trace_revisions r ON r.id=x.revision_id WHERE o.event_id=events.id ORDER BY r.native_updated_at DESC,o.event_time DESC,(SELECT COUNT(*) FROM json_each(o.event_json,'$.attachments') WHERE json_extract(value,'$.archived_path')<>'') DESC,o.digest DESC LIMIT 1) WHERE trace_id=?`, traceID); err != nil {
 		return nil, err
 	}
 	if _, err = tx.ExecContext(ctx, "DELETE FROM events WHERE trace_id=? AND NOT EXISTS(SELECT 1 FROM event_observations WHERE event_id=events.id)", traceID); err != nil {

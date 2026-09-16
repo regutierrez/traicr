@@ -43,10 +43,13 @@ func Open(dataDir string) (*Store, error) {
 		db.Close()
 		return nil, err
 	}
-	if version == 0 {
+	if version < 2 {
 		tx, txErr := db.Begin()
-		if txErr == nil {
+		if txErr == nil && version == 0 {
 			_, txErr = tx.Exec(migrations.Initial)
+		}
+		if txErr == nil {
+			_, txErr = tx.Exec(migrations.EventAliases)
 		}
 		if txErr == nil {
 			txErr = tx.Commit()
@@ -57,7 +60,7 @@ func Open(dataDir string) (*Store, error) {
 			db.Close()
 			return nil, fmt.Errorf("migrate sqlite: %w", txErr)
 		}
-	} else if version != 1 {
+	} else if version != 2 {
 		db.Close()
 		return nil, fmt.Errorf("unsupported database version %d", version)
 	}
@@ -570,7 +573,7 @@ func (s *Store) insertEvents(ctx context.Context, tx *sql.Tx, traceID, revisionI
 				return nil, err
 			}
 		}
-		if _, err = tx.ExecContext(ctx, `UPDATE events SET preferred_observation_id=(SELECT o.id FROM event_observations o JOIN observation_revisions x ON x.observation_id=o.id JOIN trace_revisions r ON r.id=x.revision_id WHERE o.event_id=events.id ORDER BY r.native_updated_at DESC,o.event_time DESC,o.digest DESC LIMIT 1) WHERE id=?`, eventID); err != nil {
+		if _, err = tx.ExecContext(ctx, `UPDATE events SET preferred_observation_id=(SELECT o.id FROM event_observations o JOIN observation_revisions x ON x.observation_id=o.id JOIN trace_revisions r ON r.id=x.revision_id WHERE o.event_id=events.id ORDER BY r.native_updated_at DESC,o.event_time DESC,(SELECT COUNT(*) FROM json_each(o.event_json,'$.attachments') WHERE json_extract(value,'$.archived_path')<>'') DESC,o.digest DESC LIMIT 1) WHERE id=?`, eventID); err != nil {
 			return nil, err
 		}
 	}
