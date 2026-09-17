@@ -1,6 +1,6 @@
     // Adapted from Pi 0.85.1's MIT-licensed HTML export. See pi-LICENSE.txt.
     import { loadTranscriptSession } from './transcript-data.js';
-    import { renderAmpEntry, renderAmpHeaderDetails } from './amp-render.js';
+    import { renderTranscriptEntry, renderTranscriptHeaderDetails, parseSkillBlock } from './transcript-render.js';
     (async function() {
       'use strict';
 
@@ -15,8 +15,7 @@
       const requestedIDs = ['leafId','targetId','event','key'].map(key => requested.get(key)).filter(Boolean);
       while (data.hasMore && requestedIDs.some(id => !data.eventEntries.has(id))) await data.loadMore();
       let { header, entries } = data;
-      const { leafId: defaultLeafId, systemPrompt, tools, renderedTools } = data;
-      const isAmp = header.harness === 'amp';
+      const { leafId: defaultLeafId, systemPrompt, tools } = data;
 
       // ============================================================
       // URL PARAMETER HANDLING
@@ -44,8 +43,8 @@
 
       // Tool call lookup (toolCallId -> {name, arguments})
       const toolCallMap = new Map();
-      const ampToolResults = new Map(entries.filter(entry => entry.message?.role === 'toolResult').map(entry => [entry.message.toolCallId, entry]));
-      const visibleAmpCalls = new Set();
+      const toolResultEntries = new Map();
+      const visibleToolCalls = new Set();
       for (const entry of entries) {
         if (entry.type === 'message' && entry.message.role === 'assistant') {
           const content = entry.message.content;
@@ -101,15 +100,6 @@
             } else {
               roots.push(node);
             }
-          }
-        }
-
-        // Sort children by timestamp
-        if (!isAmp) {
-          for (const node of nodeMap.values()) {
-            node.children.sort((a, b) =>
-              new Date(a.entry.timestamp).getTime() - new Date(b.entry.timestamp).getTime()
-            );
           }
         }
 
@@ -319,22 +309,6 @@
         return '';
       }
 
-      /**
-       * Parse a skill block from message text.
-       * Returns null if the text doesn't contain a skill block.
-       * Matches the format: <skill name="..." location="...">\n...\n</skill>\n\nuser message
-       */
-      function parseSkillBlock(text) {
-        const match = text.match(/^<skill name="([^"]+)" location="([^"]+)">\n([\s\S]*?)\n<\/skill>(?:\n\n([\s\S]+))?$/);
-        if (!match) return null;
-        return {
-          name: match[1],
-          location: match[2],
-          content: match[3],
-          userMessage: match[4]?.trim() || undefined,
-        };
-      }
-
       function getSearchableText(entry, label) {
         const parts = [];
         if (label) parts.push(label);
@@ -382,12 +356,12 @@
           // Always show current leaf
           if (isCurrentLeaf) return true;
 
-          // Hide assistant messages with only tool calls (no text) unless error/aborted
           if (entry.type === 'message' && entry.message.role === 'assistant') {
             const msg = entry.message;
             const hasText = hasTextContent(msg.content);
+            const hasToolCalls = msg.content.some(block => block.type === 'toolCall');
             const isErrorOrAborted = msg.stopReason && msg.stopReason !== 'stop' && msg.stopReason !== 'toolUse';
-            if (!hasText && !isErrorOrAborted) return false;
+            if (!hasText && !hasToolCalls && !isErrorOrAborted && filterMode !== 'all') return false;
           }
 
           // Apply filter mode
@@ -399,7 +373,7 @@
               passesFilter = entry.type === 'message' && entry.message.role === 'user';
               break;
             case 'no-tools':
-              passesFilter = !isSettingsEntry && !(entry.type === 'message' && entry.message.role === 'toolResult');
+              passesFilter = !isSettingsEntry && !(entry.type === 'message' && (entry.message.role === 'toolResult' || (!hasTextContent(entry.message.content) && entry.message.content.some(block => block.type === 'toolCall'))));
               break;
             case 'labeled-only':
               passesFilter = label !== undefined;
@@ -667,6 +641,8 @@
               if (textContent) {
                 return labelHtml + `<span class="tree-role-assistant">assistant:</span> ${escapeHtml(textContent)}`;
               }
+              const calls = msg.content.filter(block => block.type === 'toolCall');
+              if (calls.length) return labelHtml + `<span class="tree-role-tool">${escapeHtml(calls.map(call => formatToolCall(call.name,call.arguments)).join(' · '))}</span>`;
               if (msg.stopReason === 'aborted') {
                 return labelHtml + `<span class="tree-role-assistant">assistant:</span> <span class="tree-muted">(aborted)</span>`;
               }
@@ -798,276 +774,6 @@
         renderTree();
       }
 
-      // ============================================================
-      // MESSAGE RENDERING
-      // ============================================================
-
-      function formatTokens(count) {
-        if (count < 1000) return count.toString();
-        if (count < 10000) return (count / 1000).toFixed(1) + 'k';
-        if (count < 1000000) return Math.round(count / 1000) + 'k';
-        return (count / 1000000).toFixed(1) + 'M';
-      }
-
-      function formatTimestamp(ts) {
-        if (!ts) return '';
-        const date = new Date(ts);
-        return date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-      }
-
-      function replaceTabs(text) {
-        return text.replace(/\t/g, '   ');
-      }
-
-      /** Safely coerce value to string for display. Returns null if invalid type. */
-      function str(value) {
-        if (typeof value === 'string') return value;
-        if (value == null) return '';
-        return null;
-      }
-
-      function getLanguageFromPath(filePath) {
-        const ext = filePath.split('.').pop()?.toLowerCase();
-        const extToLang = {
-          ts: 'typescript', tsx: 'typescript', js: 'javascript', jsx: 'javascript',
-          py: 'python', rb: 'ruby', rs: 'rust', go: 'go', java: 'java',
-          c: 'c', cpp: 'cpp', h: 'c', hpp: 'cpp', cs: 'csharp',
-          php: 'php', sh: 'bash', bash: 'bash', zsh: 'bash',
-          sql: 'sql', html: 'html', css: 'css', scss: 'scss',
-          json: 'json', yaml: 'yaml', yml: 'yaml', xml: 'xml',
-          md: 'markdown', dockerfile: 'dockerfile'
-        };
-        return extToLang[ext];
-      }
-
-      function findToolResult(toolCallId) {
-        for (const entry of entries) {
-          if (entry.type === 'message' && entry.message.role === 'toolResult') {
-            if (entry.message.toolCallId === toolCallId) {
-              return entry.message;
-            }
-          }
-        }
-        return null;
-      }
-
-      function formatExpandableOutput(text, maxLines, lang) {
-        text = replaceTabs(text);
-        const lines = text.split('\n');
-        const displayLines = lines.slice(0, maxLines);
-        const remaining = lines.length - maxLines;
-
-        if (lang) {
-          let highlighted;
-          try {
-            highlighted = hljs.highlight(text, { language: lang }).value;
-          } catch {
-            highlighted = escapeHtml(text);
-          }
-
-          if (remaining > 0) {
-            const previewCode = displayLines.join('\n');
-            let previewHighlighted;
-            try {
-              previewHighlighted = hljs.highlight(previewCode, { language: lang }).value;
-            } catch {
-              previewHighlighted = escapeHtml(previewCode);
-            }
-
-            return `<div class="tool-output expandable" data-expand="expanded">
-              <div class="output-preview"><pre><code class="hljs">${previewHighlighted}</code></pre>
-              <div class="expand-hint">... (${remaining} more lines)</div></div>
-              <div class="output-full"><pre><code class="hljs">${highlighted}</code></pre></div></div>`;
-          }
-
-          return `<div class="tool-output"><pre><code class="hljs">${highlighted}</code></pre></div>`;
-        }
-
-        // Plain text output
-        if (remaining > 0) {
-          let out = '<div class="tool-output expandable" data-expand="expanded">';
-          out += '<div class="output-preview">';
-          for (const line of displayLines) {
-            out += `<div>${escapeHtml(replaceTabs(line))}</div>`;
-          }
-          out += `<div class="expand-hint">... (${remaining} more lines)</div></div>`;
-          out += '<div class="output-full">';
-          for (const line of lines) {
-            out += `<div>${escapeHtml(replaceTabs(line))}</div>`;
-          }
-          out += '</div></div>';
-          return out;
-        }
-
-        let out = '<div class="tool-output">';
-        for (const line of displayLines) {
-          out += `<div>${escapeHtml(replaceTabs(line))}</div>`;
-        }
-        out += '</div>';
-        return out;
-      }
-
-      function renderToolCall(call) {
-        const result = findToolResult(call.id);
-        const isError = result?.isError || false;
-        const statusClass = result ? (isError ? 'error' : 'success') : 'pending';
-
-        const getResultText = () => {
-          if (!result) return '';
-          const textBlocks = result.content.filter(c => c.type === 'text');
-          return textBlocks.map(c => c.text).join('\n');
-        };
-
-        const getResultImages = () => {
-          if (!result) return [];
-          return result.content.filter(c => c.type === 'image');
-        };
-
-        const renderResultImages = () => {
-          const images = getResultImages();
-          if (images.length === 0) return '';
-          return '<div class="tool-images">' +
-            images.map(img => `<img src="data:${escapeHtml(img.mimeType || 'image/png')};base64,${escapeHtml(img.data || '')}" class="tool-image" />`).join('') +
-            '</div>';
-        };
-
-        const toolDomId = `tool-call-${escapeHtml(call.id)}`;
-        let html = `<div class="tool-execution ${statusClass}" id="${toolDomId}">`;
-        const args = call.arguments || {};
-        const name = call.name;
-
-        const invalidArg = '<span class="tool-error">[invalid arg]</span>';
-
-        switch (name) {
-          case 'bash': {
-            const command = str(args.command);
-            const cmdDisplay = command === null ? invalidArg : escapeHtml(command || '...');
-            html += `<div class="tool-command">$ ${cmdDisplay}</div>`;
-            if (result) {
-              const output = getResultText().trim();
-              if (output) html += formatExpandableOutput(output, 5);
-            }
-            break;
-          }
-          case 'read': {
-            const filePath = str(args.file_path ?? args.path);
-            const offset = args.offset;
-            const limit = args.limit;
-
-            let pathHtml = filePath === null ? invalidArg : escapeHtml(shortenPath(filePath || ''));
-            if (filePath !== null && (offset !== undefined || limit !== undefined)) {
-              const startLine = offset ?? 1;
-              const endLine = limit !== undefined ? startLine + limit - 1 : '';
-              pathHtml += `<span class="line-numbers">:${escapeHtml(startLine)}${endLine ? '-' + escapeHtml(endLine) : ''}</span>`;
-            }
-
-            html += `<div class="tool-header"><span class="tool-name">read</span> <span class="tool-path">${pathHtml}</span></div>`;
-            if (result) {
-              html += renderResultImages();
-              const output = getResultText();
-              const lang = filePath ? getLanguageFromPath(filePath) : null;
-              if (output) html += formatExpandableOutput(output, 10, lang);
-            }
-            break;
-          }
-          case 'write': {
-            const filePath = str(args.file_path ?? args.path);
-            const content = str(args.content);
-
-            html += `<div class="tool-header"><span class="tool-name">write</span> <span class="tool-path">${filePath === null ? invalidArg : escapeHtml(shortenPath(filePath || ''))}</span>`;
-            if (content !== null && content) {
-              const lines = content.split('\n');
-              if (lines.length > 10) html += ` <span class="line-count">(${lines.length} lines)</span>`;
-            }
-            html += '</div>';
-
-            if (content === null) {
-              html += `<div class="tool-error">[invalid content arg - expected string]</div>`;
-            } else if (content) {
-              const lang = filePath ? getLanguageFromPath(filePath) : null;
-              html += formatExpandableOutput(content, 10, lang);
-            }
-            if (result) {
-              const output = getResultText().trim();
-              if (output) html += `<div class="tool-output"><div>${escapeHtml(output)}</div></div>`;
-            }
-            break;
-          }
-          case 'edit': {
-            const filePath = str(args.file_path ?? args.path);
-            html += `<div class="tool-header"><span class="tool-name">edit</span> <span class="tool-path">${filePath === null ? invalidArg : escapeHtml(shortenPath(filePath || ''))}</span></div>`;
-
-            if (result?.details?.diff) {
-              const diffLines = result.details.diff.split('\n');
-              html += '<div class="tool-diff">';
-              for (const line of diffLines) {
-                const cls = line.match(/^\+/) ? 'diff-added' : line.match(/^-/) ? 'diff-removed' : 'diff-context';
-                html += `<div class="${cls}">${escapeHtml(replaceTabs(line))}</div>`;
-              }
-              html += '</div>';
-            } else if (result) {
-              const output = getResultText().trim();
-              if (output) html += `<div class="tool-output"><pre>${escapeHtml(output)}</pre></div>`;
-            }
-            break;
-          }
-          case 'ls': {
-            const dirPath = str(args.path);
-            const limit = args.limit;
-
-            let pathHtml = dirPath === null ? invalidArg : escapeHtml(shortenPath(dirPath || '.'));
-            if (limit !== undefined) {
-              pathHtml += ` <span class="line-count">(limit ${escapeHtml(String(limit))})</span>`;
-            }
-
-            html += `<div class="tool-header"><span class="tool-name">ls</span> <span class="tool-path">${pathHtml}</span></div>`;
-            if (result) {
-              const output = getResultText().trim();
-              if (output) html += formatExpandableOutput(output, 20);
-            }
-            break;
-          }
-          default: {
-            // Check for pre-rendered custom tool HTML
-            const rendered = renderedTools?.[call.id];
-            if (rendered?.callHtml || rendered?.resultHtmlCollapsed || rendered?.resultHtmlExpanded) {
-              // Custom tool with pre-rendered HTML from TUI renderer
-              if (rendered.callHtml) {
-                html += `<div class="tool-header ansi-rendered">${rendered.callHtml}</div>`;
-              } else {
-                html += `<div class="tool-header"><span class="tool-name">${escapeHtml(name)}</span></div>`;
-              }
-
-              if (rendered.resultHtmlCollapsed && rendered.resultHtmlExpanded && rendered.resultHtmlCollapsed !== rendered.resultHtmlExpanded) {
-                // Both collapsed and expanded differ - render expandable section
-                html += `<div class="tool-output expandable ansi-rendered" data-expand="expanded">
-                  <div class="output-preview">${rendered.resultHtmlCollapsed}</div>
-                  <div class="output-full">${rendered.resultHtmlExpanded}</div>
-                </div>`;
-              } else if (rendered.resultHtmlExpanded) {
-                // Only expanded exists (or collapsed is identical) - show directly
-                html += `<div class="tool-output ansi-rendered">${rendered.resultHtmlExpanded}</div>`;
-              } else if (result) {
-                // No pre-rendered result HTML - fallback to JSON
-                const output = getResultText();
-                if (output) html += formatExpandableOutput(output, 10);
-              }
-            } else {
-              // Fallback to JSON display (existing behavior)
-              html += `<div class="tool-header"><span class="tool-name">${escapeHtml(name)}</span></div>`;
-              html += `<div class="tool-output"><pre>${escapeHtml(JSON.stringify(args, null, 2))}</pre></div>`;
-              if (result) {
-                const output = getResultText();
-                if (output) html += formatExpandableOutput(output, 10);
-              }
-            }
-          }
-        }
-
-        html += '</div>';
-        return html;
-      }
-
       /**
        * Download the session data as a JSONL file.
        * Reconstructs the original format: header line + entry lines.
@@ -1178,155 +884,6 @@
         </button>`;
       }
 
-      function renderEntry(entry) {
-        if (isAmp) return renderAmpEntry(entry, {escape:escapeHtml, markdown:safeMarkedParse, copyLink:renderCopyLinkButton, toolResults:ampToolResults, toolCalls:visibleAmpCalls});
-        const ts = formatTimestamp(entry.timestamp);
-        const tsHtml = ts ? `<div class="message-timestamp">${ts}</div>` : '';
-        const entryDomId = `entry-${escapeHtml(entry.id)}`;
-        const copyBtnHtml = renderCopyLinkButton(entry.id);
-
-        if (entry.type === 'message') {
-          const msg = entry.message;
-
-          if (msg.role === 'user') {
-            const content = msg.content;
-            const text = typeof content === 'string' ? content :
-              content.filter(c => c.type === 'text').map(c => c.text).join('\n');
-            const skillBlock = parseSkillBlock(text);
-
-            if (skillBlock) {
-              // Collect images from content array
-              const images = Array.isArray(content) ? content.filter(c => c.type === 'image') : [];
-              const hasUserContent = skillBlock.userMessage || images.length > 0;
-              let html = `<div class="skill-user-entry" id="${entryDomId}">${copyBtnHtml}${tsHtml}`;
-
-              // Skill invocation (collapsed by default, click to expand)
-              html += `<div class="skill-invocation" data-expand="expanded">
-                <div class="skill-invocation-label">[skill] ${escapeHtml(skillBlock.name)}</div>
-                <div class="skill-invocation-collapsed">${escapeHtml(skillBlock.name)} (click to expand)</div>
-                <div class="skill-invocation-content markdown-content">${safeMarkedParse(skillBlock.content)}</div>
-              </div>`;
-
-              // User message (separate block if present)
-              if (hasUserContent) {
-                html += '<div class="user-message">';
-                if (images.length > 0) {
-                  html += '<div class="message-images">';
-                  for (const img of images) {
-                    html += `<img src="data:${escapeHtml(img.mimeType || 'image/png')};base64,${escapeHtml(img.data || '')}" class="message-image" />`;
-                  }
-                  html += '</div>';
-                }
-                if (skillBlock.userMessage) {
-                  html += `<div class="markdown-content">${safeMarkedParse(skillBlock.userMessage)}</div>`;
-                }
-                html += '</div>';
-              }
-
-              html += '</div>';
-              return html;
-            }
-
-            // No skill block - normal user message
-            let html = `<div class="user-message" id="${entryDomId}">${copyBtnHtml}${tsHtml}`;
-
-            if (Array.isArray(content)) {
-              const images = content.filter(c => c.type === 'image');
-              if (images.length > 0) {
-                html += '<div class="message-images">';
-                for (const img of images) {
-                  html += `<img src="data:${escapeHtml(img.mimeType || 'image/png')};base64,${escapeHtml(img.data || '')}" class="message-image" />`;
-                }
-                html += '</div>';
-              }
-            }
-
-            if (text.trim()) {
-              html += `<div class="markdown-content">${safeMarkedParse(text)}</div>`;
-            }
-            html += '</div>';
-            return html;
-          }
-
-          if (msg.role === 'assistant') {
-            let html = `<div class="assistant-message" id="${entryDomId}">${copyBtnHtml}${tsHtml}`;
-
-            for (const block of msg.content) {
-              if (block.type === 'text' && block.text.trim()) {
-                html += `<div class="assistant-text markdown-content">${safeMarkedParse(block.text)}</div>`;
-              } else if (block.type === 'thinking' && block.thinking.trim()) {
-                html += `<div class="thinking-block">
-                  <div class="thinking-text">${escapeHtml(block.thinking)}</div>
-                  <div class="thinking-collapsed">Thinking ...</div>
-                </div>`;
-              }
-            }
-
-            for (const block of msg.content) {
-              if (block.type === 'toolCall') {
-                html += renderToolCall(block);
-              }
-            }
-
-            if (msg.stopReason === 'aborted') {
-              html += '<div class="error-text">Aborted</div>';
-            } else if (msg.stopReason === 'error') {
-              html += `<div class="error-text">Error: ${escapeHtml(msg.errorMessage || 'Unknown error')}</div>`;
-            }
-
-            html += '</div>';
-            return html;
-          }
-
-          if (msg.role === 'bashExecution') {
-            const isError = msg.cancelled || (msg.exitCode !== 0 && msg.exitCode !== null);
-            let html = `<div class="tool-execution ${isError ? 'error' : 'success'}" id="${entryDomId}">${tsHtml}`;
-            html += `<div class="tool-command">$ ${escapeHtml(msg.command)}</div>`;
-            if (msg.output) html += formatExpandableOutput(msg.output, 10);
-            if (msg.cancelled) {
-              html += '<div style="color: var(--warning)">(cancelled)</div>';
-            } else if (msg.exitCode !== 0 && msg.exitCode !== null) {
-              html += `<div style="color: var(--error)">(exit ${msg.exitCode})</div>`;
-            }
-            html += '</div>';
-            return html;
-          }
-
-          if (msg.role === 'toolResult') {
-            if (toolCallMap.has(msg.toolCallId)) return '';
-            return `<div class="tool-execution" id="${entryDomId}">${copyBtnHtml}${tsHtml}<div class="tool-header">${escapeHtml(msg.toolName || 'Tool result')}</div>${formatExpandableOutput(extractContent(msg.content), 10)}</div>`;
-          }
-        }
-
-        if (entry.type === 'model_change') {
-          return `<div class="model-change" id="${entryDomId}">${tsHtml}Switched to model: <span class="model-name">${escapeHtml(entry.provider)}/${escapeHtml(entry.modelId)}</span></div>`;
-        }
-
-        if (entry.type === 'compaction') {
-          return `<div class="compaction" id="${entryDomId}" data-expand="expanded">
-            <div class="compaction-label">[compaction]</div>
-            <div class="compaction-collapsed">Compaction summary (click to expand)</div>
-            <div class="compaction-content">${escapeHtml(entry.summary)}</div>
-          </div>`;
-        }
-
-        if (entry.type === 'branch_summary') {
-          return `<div class="branch-summary" id="${entryDomId}">${tsHtml}
-            <div class="branch-summary-header">Branch Summary</div>
-            <div class="markdown-content">${safeMarkedParse(entry.summary)}</div>
-          </div>`;
-        }
-
-        if (entry.type === 'custom_message' && entry.display) {
-          return `<div class="hook-message" id="${entryDomId}">${tsHtml}
-            <div class="hook-type">[${escapeHtml(entry.customType)}]</div>
-            <div class="markdown-content">${safeMarkedParse(typeof entry.content === 'string' ? entry.content : JSON.stringify(entry.content))}</div>
-          </div>`;
-        }
-
-        return '';
-      }
-
       // ============================================================
       // HEADER / STATS
       // ============================================================
@@ -1404,7 +961,7 @@
             </div>
           </div>`;
 
-        if (isAmp) html += renderAmpHeaderDetails(header, entries, {escape:escapeHtml});
+        html += renderTranscriptHeaderDetails(header, entries, {escape:escapeHtml});
 
         // Render system prompt (user's base prompt, applies to all providers)
         if (systemPrompt) {
@@ -1463,38 +1020,25 @@
       // NAVIGATION
       // ============================================================
 
-      // Cache for rendered entry DOM nodes
-      const entryCache = new Map();
-
       function getScrollTargetElementId(entryId) {
         const entry = byId.get(entryId);
         if (entry?.type === 'message' && entry.message.role === 'toolResult' && entry.message.toolCallId) {
-          // getElementById() matches the parsed DOM id attribute, whose HTML entities
-          // were already resolved from the escaped id rendered by renderToolCall().
           return `tool-call-${entry.message.toolCallId}`;
         }
         return `entry-${entryId}`;
       }
 
       function renderEntryToNode(entry) {
-        // Check cache first
-        if (!isAmp && entryCache.has(entry.id)) {
-          return entryCache.get(entry.id).cloneNode(true);
-        }
-
-        // Render to HTML string, then parse to node
-        const html = renderEntry(entry);
+        const html = renderTranscriptEntry(entry, {
+          escape:escapeHtml, markdown:safeMarkedParse, copyLink:renderCopyLinkButton,
+          toolResults:toolResultEntries, toolCalls:visibleToolCalls,
+          highlight:(text,language)=>hljs.getLanguage(language) ? hljs.highlight(text,{language}).value : escapeHtml(text),
+        });
         if (!html) return null;
 
         const template = document.createElement('template');
         template.innerHTML = html;
-        const node = template.content.firstElementChild;
-
-        // Cache the node
-        if (!isAmp && node) {
-          entryCache.set(entry.id, node.cloneNode(true));
-        }
-        return node;
+        return template.content.firstElementChild;
       }
 
       function navigateTo(targetId, scrollMode = 'target', scrollToEntryId = null, pageStart = null) {
@@ -1507,16 +1051,19 @@
         document.getElementById('header-container').innerHTML = renderHeader();
         attachHeaderHandlers();
 
-        // Build messages using cached DOM nodes
         const messagesEl = document.getElementById('messages');
         const fragment = document.createDocumentFragment();
 
         const targetIndex = path.findIndex(entry => entry.id === (scrollToEntryId || targetId));
-        const start = !isAmp ? 0 : pageStart ?? (scrollMode === 'none' ? 0 : Math.max(0, targetIndex - 100));
-        const end = isAmp ? Math.min(path.length, start + 200) : path.length;
-        visibleAmpCalls.clear();
+        const start = pageStart ?? (scrollMode === 'none' ? 0 : Math.max(0, targetIndex - 100));
+        const end = Math.min(path.length, start + 200);
+        toolResultEntries.clear();
+        for (const entry of path) {
+          if (entry.message?.role === 'toolResult') toolResultEntries.set(entry.message.toolCallId,entry);
+        }
+        visibleToolCalls.clear();
         for (const entry of path.slice(start,end)) {
-          for (const block of entry.message?.content || []) if (block.type === 'toolCall') visibleAmpCalls.add(block.id);
+          for (const block of entry.message?.content || []) if (block.type === 'toolCall') visibleToolCalls.add(block.id);
         }
         const pageButton = (label, offset) => {
           const button = document.createElement('button');
@@ -1542,10 +1089,9 @@
             try {
               await data.loadMore();
               ({header, entries} = data);
-              byId.clear(); toolCallMap.clear(); ampToolResults.clear();
+              byId.clear(); toolCallMap.clear();
               for (const entry of entries) {
                 byId.set(entry.id, entry);
-                if (entry.message?.role === 'toolResult') ampToolResults.set(entry.message.toolCallId, entry);
                 for (const block of entry.message?.content || []) if (block.type === 'toolCall') toolCallMap.set(block.id, block);
               }
               treeNodeMap = null; treeRendered = false;
@@ -1561,6 +1107,8 @@
 
         messagesEl.innerHTML = '';
         messagesEl.appendChild(fragment);
+        setThinkingExpanded(thinkingExpanded);
+        setToolOutputsExpanded(toolOutputsExpanded);
 
         // Attach click handlers for copy-link buttons
         messagesEl.querySelectorAll('.copy-link-btn').forEach(btn => {
@@ -1831,8 +1379,8 @@
       let thinkingExpanded = true;
       let toolOutputsExpanded = false;
 
-      const toggleThinking = () => {
-        thinkingExpanded = !thinkingExpanded;
+      const setThinkingExpanded = (expanded) => {
+        thinkingExpanded = expanded;
         document.querySelectorAll('.thinking-text').forEach(el => {
           el.style.display = thinkingExpanded ? '' : 'none';
         });
@@ -1841,19 +1389,13 @@
         });
       };
 
-      const toggleToolOutputs = () => {
-        toolOutputsExpanded = !toolOutputsExpanded;
-        if (isAmp) document.querySelectorAll('.tool-execution details').forEach(element => { element.open = toolOutputsExpanded; });
-        document.querySelectorAll('.tool-output.expandable').forEach(el => {
-          el.classList.toggle('expanded', toolOutputsExpanded);
-        });
-        document.querySelectorAll('.compaction').forEach(el => {
-          el.classList.toggle('expanded', toolOutputsExpanded);
-        });
-        document.querySelectorAll('.skill-invocation').forEach(el => {
-          el.classList.toggle('expanded', toolOutputsExpanded);
-        });
+      const setToolOutputsExpanded = (expanded) => {
+        toolOutputsExpanded = expanded;
+        document.querySelectorAll('.tool-execution details, .amp-summary details, .skill-invocation details').forEach(element => { element.open = toolOutputsExpanded; });
       };
+
+      const toggleThinking = () => setThinkingExpanded(!thinkingExpanded);
+      const toggleToolOutputs = () => setToolOutputsExpanded(!toolOutputsExpanded);
 
       const attachHeaderHandlers = () => {
         document.querySelector('[data-action="toggle-thinking"]')?.addEventListener('click', toggleThinking);

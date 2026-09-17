@@ -76,8 +76,7 @@ export function buildTranscriptSession(events, metadata) {
           if (!args || typeof args !== "object") args = {raw: text};
           entry.message.content.push({type: "toolCall", id: event.call_id || event.key, name: event.tool || "tool", arguments: args, details});
         } else if (event.kind === "attachment") {
-          if (metadata.harness === 'amp') entry.message.content.push(...(event.attachments || []).map(a => ({type:"attachment", ...a, revisionId:event.revision_id})));
-          else entry.message.content.push({type:"text",text:(event.attachments || []).map(a => `Attachment: ${a.name || a.path || a.url || a.media_type || "See source records"}`).join('\n')});
+          entry.message.content.push(...(event.attachments || []).map(a => ({type:"attachment", ...a, revisionId:event.revision_id})));
         } else entry.message.content.push({type: details.hidden ? "hidden" : "text", text});
       } else if (event.kind === "tool_result") {
         const existing = added.find(e => e.message?.role === "toolResult" && e.message.toolCallId === event.call_id);

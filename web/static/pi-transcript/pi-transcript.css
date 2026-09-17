@@ -248,6 +248,9 @@
       flex-shrink: 0;
       font-family: monospace;
       white-space: pre;
+      max-width: 25%;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .tree-marker {
@@ -257,6 +260,9 @@
 
     .tree-content {
       color: var(--text);
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .tree-role-user {

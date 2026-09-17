@@ -18,9 +18,11 @@ test('Amp asks for reload without declaring completion when history changes betw
   assert.ok(!status.textContent.includes('All records loaded'));
  } finally {globalThis.fetch=originalFetch;globalThis.document=originalDocument;}
 });
-test('non-Amp attachments keep their existing readable fallback',()=>{
- const data=buildTranscriptSession([{id:1,key:'attachment:a:0',kind:'attachment',role:'user',attachments:[{path:'image.png'}]}],metadata);
- assert.deepEqual(data.entries[0].message.content,[{type:'text',text:'Attachment: image.png'}]);
+test('all harnesses preserve attachment fields for the shared renderer',()=>{
+ for(const harness of ['amp','pi','claude-code','opencode']) {
+  const data=buildTranscriptSession([{id:1,key:'attachment:a:0',kind:'attachment',role:'user',revision_id:7,attachments:[{path:'image.png',url:'https://example.com/image.png'}]}],{...metadata,harness});
+  assert.deepEqual(data.entries[0].message.content,[{type:'attachment',path:'image.png',url:'https://example.com/image.png',revisionId:7}]);
+ }
 });
 test('splitting an Amp message around unknown blocks does not duplicate its usage',()=>{
  const events=['message','unknown','message'].map((kind,index)=>({id:index+1,key:`${kind}:1:${index}`,kind,role:'assistant',text:'content',metadata:{transcript_message:'amp:1',transcript_order:0,transcript_block:index,usage:{inputTokens:13,outputTokens:7}}}));
