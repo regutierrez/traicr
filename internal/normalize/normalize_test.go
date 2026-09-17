@@ -248,6 +248,36 @@ func TestPiPropagatesBranchModelAndLinksArrayToolResult(t *testing.T) {
 	}
 }
 
+func TestPiCustomSidecarIsNormalized(t *testing.T) {
+	data := strings.Join([]string{
+		`{"type":"session","version":3,"id":"fixture"}`,
+		`{"type":"message","id":"prompt","parentId":null,"message":{"role":"user","content":"hello"}}`,
+		`{"type":"custom","id":"sidecar","parentId":"prompt","customType":"plannotator","data":{"tps-stats":{"tokens":1}}}`,
+	}, "\n") + "\n"
+	result, err := Run(context.Background(), domain.Descriptor{Harness: "pi", Adapter: "pi-jsonl"}, fstest.MapFS{"source/records.jsonl": {Data: []byte(data)}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Status != "normalized" || len(result.Warnings) != 0 {
+		t.Fatalf("status = %q warnings = %#v", result.Status, result.Warnings)
+	}
+	var foundCustom, foundUser bool
+	for _, event := range result.Events {
+		if event.Kind == "custom" {
+			foundCustom = true
+			if event.Text != "plannotator" {
+				t.Fatalf("custom text = %q", event.Text)
+			}
+		}
+		if event.Kind == "message" && event.Role == "user" {
+			foundUser = true
+		}
+	}
+	if !foundCustom || !foundUser {
+		t.Fatalf("missing custom or user event: %#v", result.Events)
+	}
+}
+
 func TestPiWarnsAndKeepsFirstDuplicateNativeID(t *testing.T) {
 	data := "{\"type\":\"session\",\"version\":3,\"id\":\"fixture\"}\n" +
 		"{\"type\":\"message\",\"id\":\"same\",\"parentId\":null,\"message\":{\"role\":\"user\",\"content\":\"first\"}}\n" +

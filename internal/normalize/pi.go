@@ -155,6 +155,8 @@ func decodePiRecord(ctx context.Context, entry *piEntry) ([]domain.Event, []doma
 			}
 		case "thinking_level_change", "custom_message", "session_info", "label":
 			event.Text = contentText(value)
+		case "custom":
+			event.Text = stringValue(value["customType"])
 		default:
 			return nil, []domain.Warning{unknown(entry.record, "unknown Pi entry type "+kind)}, nil
 		}

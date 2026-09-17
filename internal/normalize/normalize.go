@@ -11,7 +11,9 @@ func Version(harness string) int {
 	switch harness {
 	case "amp":
 		return 4
-	case "pi", "claude-code", "cursor-agent", "cursor", "opencode", "codex", "grok-build":
+	case "pi":
+		return 2
+	case "claude-code", "cursor-agent", "cursor", "opencode", "codex", "grok-build":
 		return 1
 	default:
 		return 0
