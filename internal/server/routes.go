@@ -41,10 +41,7 @@ func NewHTTPHandler(configuration config.ServerConfig, database *store.Store, lo
 	if configuration.ArchiveLimits.ArchiveBytes == 0 {
 		configuration.ArchiveLimits = archive.DefaultLimits()
 	}
-	templates, err := template.New("").Funcs(template.FuncMap{
-		"json": func(value any) string { data, _ := json.MarshalIndent(value, "", "  "); return string(data) },
-		"mark": markMatches,
-	}).ParseFS(assets.Files, "templates/*.html")
+	templates, err := template.New("").ParseFS(assets.Files, "templates/*.html")
 	if err != nil {
 		return nil, err
 	}
@@ -52,41 +49,35 @@ func NewHTTPHandler(configuration config.ServerConfig, database *store.Store, lo
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", serveProcessHealth)
 	mux.Handle("GET /static/", http.FileServerFS(assets.Files))
-	// Built SvelteKit assets live under static/ui/_app. Skip the mount when the UI has not been built.
 	if ui, err := fs.Sub(assets.Files, "static/ui"); err == nil {
 		mux.Handle("GET /_app/", http.FileServer(http.FS(ui)))
 	}
 	mux.HandleFunc("GET /login", app.loginPage)
 	mux.HandleFunc("POST /login", app.login)
 	mux.Handle("POST /logout", app.browser(app.logout))
-	mux.Handle("GET /{$}", app.browser(app.spa))
-	mux.Handle("GET /imports", app.browser(app.spa))
-	mux.Handle("GET /imports/{id}", app.browser(app.spa))
-	mux.Handle("GET /machines", app.browser(app.spa))
-	mux.Handle("GET /events/{id}/sources", app.browser(app.spa))
-	mux.Handle("GET /revisions/{id}/sources", app.browser(app.spa))
-	mux.Handle("GET /revisions/{id}/file", app.browser(app.sourceOrSpa))
-	mux.Handle("GET /traces/{id}/records", app.browser(app.spa))
-	mux.Handle("GET /traces/{id}", app.browser(app.tracePage))
-	mux.Handle("GET /traces/{id}/events", app.browser(app.eventsAPI))
+	// The vendored transcript viewer calls these URLs itself.
+	mux.Handle("GET /traces/{id}", app.browser(app.transcriptPage))
+	mux.Handle("GET /traces/{id}/events", app.browser(app.events))
 	mux.Handle("GET /traces/{id}/transcript", app.browser(app.transcriptAPI))
 	mux.Handle("GET /traces/resolve", app.browser(app.resolveTrace))
 	mux.Handle("POST /traces/{id}/delete", app.browser(app.deletePage))
 	mux.Handle("GET /revisions/{id}/block", app.browser(app.sourceBlock))
 	mux.Handle("GET /revisions/{id}/attachment", app.browser(app.sourceAttachment))
+	mux.Handle("GET /revisions/{id}/file", app.browser(app.revisionFile))
 	mux.Handle("POST /api/v1/imports", app.api(app.importZIP))
-	mux.Handle("GET /api/v1/search", app.api(app.searchPage))
-	mux.Handle("GET /api/v1/cards", app.api(app.cardsAPI))
+	mux.Handle("GET /api/v1/search", app.api(app.search))
+	mux.Handle("GET /api/v1/cards", app.api(app.cards))
 	mux.HandleFunc("GET /api/v1/csrf", app.csrfAPI)
-	mux.Handle("GET /api/v1/imports", app.api(app.importsPage))
-	mux.Handle("GET /api/v1/imports/{id}", app.api(app.reportPage))
-	mux.Handle("GET /api/v1/traces/{id}", app.api(app.tracePage))
-	mux.Handle("GET /api/v1/traces/{id}/events", app.api(app.eventsAPI))
-	mux.Handle("GET /api/v1/events/{id}/sources", app.api(app.sourcesPage))
-	mux.Handle("GET /api/v1/revisions/{id}/sources", app.api(app.revisionPage))
+	mux.Handle("GET /api/v1/imports", app.api(app.imports))
+	mux.Handle("GET /api/v1/imports/{id}", app.api(app.importReport))
+	mux.Handle("GET /api/v1/traces/{id}", app.api(app.trace))
+	mux.Handle("GET /api/v1/traces/{id}/events", app.api(app.events))
+	mux.Handle("GET /api/v1/events/{id}/sources", app.api(app.eventSources))
+	mux.Handle("GET /api/v1/revisions/{id}/sources", app.api(app.revisionSources))
 	mux.Handle("GET /api/v1/revisions/{id}/file", app.api(app.sourceFile))
-	mux.Handle("GET /api/v1/machines", app.api(app.machinesPage))
+	mux.Handle("GET /api/v1/machines", app.api(app.machines))
 	mux.Handle("DELETE /api/v1/traces/{id}", app.api(app.deleteAPI))
+	mux.Handle("GET /", app.browser(app.spa))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")
