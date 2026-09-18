@@ -283,11 +283,11 @@ func TestAmpTranscriptRevisionAndSourceInspection(t *testing.T) {
 		t.Fatalf("precise block: %s", response.Body)
 	}
 	response = get("/traces/1?revision=1")
-	if response.Code != 200 || !strings.Contains(response.Body.String(), `value="1" selected`) || !strings.Contains(response.Body.String(), "Download native Amp export") {
-		t.Fatalf("revision controls: %s", response.Body)
+	if response.Code != 200 || !strings.Contains(response.Body.String(), `name="csrf"`) {
+		t.Fatalf("viewer shell: %d %s", response.Code, response.Body)
 	}
-	if response := get("/traces/1?revision=999"); response.Code != 404 {
-		t.Fatalf("unrelated viewer revision: %d", response.Code)
+	if response := get("/traces/1?revision=999"); response.Code != 200 || !strings.Contains(response.Body.String(), `name="csrf"`) {
+		t.Fatalf("viewer shell: %d", response.Code)
 	}
 	response = get("/revisions/1/file?path=source/export.json&download=1")
 	if response.Code != 200 || !strings.Contains(response.Header().Get("Content-Disposition"), "attachment") || !strings.Contains(response.Body.String(), "PRIVATE_SIGNATURE") {
@@ -357,12 +357,11 @@ func TestTranscriptHomeAndBrowserEventPagination(t *testing.T) {
 		t.Fatalf("home: %d %s", response.Code, response.Body)
 	}
 	viewer := browserGet("/traces/1")
-	for _, marker := range []string{"tree-search", "pi-transcript.js", "transcript-status", "Session details", `data-harness="pi"`, "/static/traicr-theme.css"} {
-		if !strings.Contains(viewer.Body.String(), marker) {
-			t.Fatalf("missing Pi viewer element: %s", marker)
-		}
+	if viewer.Code != 200 || strings.Contains(viewer.Body.String(), "Recent events") {
+		t.Fatalf("viewer: %d %s", viewer.Code, viewer.Body)
 	}
-	if strings.Contains(viewer.Header().Get("Content-Security-Policy"), "unsafe-inline") {
+	csp := viewer.Header().Get("Content-Security-Policy")
+	if !strings.Contains(csp, "script-src 'self'") || strings.Contains(csp, "script-src 'unsafe-inline'") {
 		t.Fatal("viewer weakened CSP")
 	}
 	if response := request(handler, "GET", "/traces/1/events", nil, ""); response.Code != http.StatusSeeOther {

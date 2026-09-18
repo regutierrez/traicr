@@ -18,7 +18,12 @@ export default defineConfig({
 			},
 			'/traces': {
 				target: 'http://127.0.0.1:8080',
-				bypass: (req) => (req.url?.includes('/records') ? req.url : undefined)
+				bypass: (req) => {
+					const url = req.url ?? '';
+					if (url.includes('/events') || url.includes('/transcript') || url.includes('/resolve')) return undefined;
+					if (req.method !== 'GET' && req.method !== 'HEAD') return undefined;
+					return url;
+				}
 			}
 		}
 	}
