@@ -237,9 +237,14 @@ func TestImportSearchInspectRetryAndDelete(t *testing.T) {
 		if response.Code != http.StatusOK || strings.Contains(response.Body.String(), "<script>alert") || strings.Contains(response.Body.String(), "<script>title") {
 			t.Fatalf("unsafe or failed page %s: %d %s", path, response.Code, response.Body)
 		}
-		if strings.HasPrefix(path, "/?q=") && !strings.Contains(response.Body.String(), "<mark>") {
-			t.Fatalf("search match is not highlighted: %s", path)
-		}
+	}
+	cards := request(handler, "GET", "/api/v1/cards?q=needle", nil, adminToken)
+	if cards.Code != 200 || !strings.Contains(cards.Body.String(), "needle") || strings.Contains(cards.Body.String(), "<script>") {
+		t.Fatalf("cards: %d %s", cards.Code, cards.Body)
+	}
+	scripted := request(handler, "GET", "/api/v1/cards?q=%3Cscript%3E&mode=exact", nil, adminToken)
+	if scripted.Code != 200 || strings.Contains(scripted.Body.String(), "<script>") {
+		t.Fatalf("cards reflected markup: %d %s", scripted.Code, scripted.Body)
 	}
 	response := request(handler, "GET", fmt.Sprintf("/api/v1/events/%d/sources", result.EventID), nil, adminToken)
 	var sources []store.Source

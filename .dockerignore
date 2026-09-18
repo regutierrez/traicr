@@ -3,3 +3,6 @@
 bin
 docs
 testdata
+web/app/node_modules
+web/app/.svelte-kit
+web/static/ui
