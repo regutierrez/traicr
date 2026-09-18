@@ -1,49 +1,36 @@
 {{ define "login" }}
   {{ template "header" . }}
-  <section class="login-intro">
-    <p class="eyebrow">A MEMORY FOR YOUR WORK</p>
-    <h1>
-      Every trace.
-      <br />
-      All in one place.
-    </h1>
-    <p>
-      Your coding history belongs to you. Preserve the original records and find
-      the details worth coming back to.
-    </p>
-    <div class="login-note">
-      <span class="status">
-        <span></span>
-        One person. Multiple machines.
-      </span>
-      <p>
-        No accounts. No third-party analytics.
-        <br />
-        Just your private archive.
-      </p>
-    </div>
-  </section>
-  <section class="login-card">
-    <p class="eyebrow">WELCOME BACK</p>
-    <h2>Open your archive</h2>
-    <p>Use the admin token configured on your Traicr server.</p>
-    <form method="post" action="/login">
-      <input type="hidden" name="csrf" value="{{ .CSRF }}" />
-      <label for="token">Admin token</label>
-      <input
-        id="token"
-        name="token"
-        type="password"
-        autocomplete="current-password"
-        required
-        autofocus
-      />
-      <button type="submit">
-        Unlock archive
-        <span aria-hidden="true">→</span>
-      </button>
-    </form>
-    <p class="fine">Use only over your private network or HTTPS.</p>
-  </section>
+  <div class="grid items-center gap-12 lg:grid-cols-[1.1fr_minmax(0,24rem)] lg:gap-24">
+    <section>
+      <h1 class="text-[clamp(2.3rem,5vw,3.5rem)] leading-[1.05] font-semibold tracking-tight text-balance">Every session you have had with a coding agent, kept whole.</h1>
+      <p class="text-base-content/65 mt-6 max-w-[46ch] text-lg leading-relaxed">Traicr collects the native records from each machine, keeps them unchanged, and makes the whole archive searchable from one place.</p>
+      <dl class="border-base-300 mt-10 grid max-w-md grid-cols-2 gap-6 border-t pt-6 text-sm">
+        <div>
+          <dt class="text-base-content/60">Sources</dt>
+          <dd class="mt-1">Amp, Claude Code, Codex, Cursor, Grok Build, OpenCode, Pi</dd>
+        </div>
+        <div>
+          <dt class="text-base-content/60">Stored</dt>
+          <dd class="mt-1">Lossless originals, one searchable index, on your own server</dd>
+        </div>
+      </dl>
+    </section>
+    <section class="card bg-base-100 border-base-300 border shadow-xl shadow-black/5">
+      <form method="post" action="/login" class="card-body gap-5 p-7">
+        <input type="hidden" name="csrf" value="{{ .CSRF }}">
+        <div>
+          <h2 class="card-title text-xl tracking-tight">Open your archive</h2>
+          <p class="text-base-content/60 mt-1 text-sm">Use the admin token configured on this Traicr server.</p>
+        </div>
+        <label class="form-control">
+          <span class="label-text mb-1.5 block text-sm font-medium">Admin token</span>
+          <input id="token" name="token" type="password" class="input w-full" autocomplete="current-password" required autofocus>
+          <span class="text-base-content/55 mt-1.5 block text-xs">The token never leaves this server.</span>
+        </label>
+        <button type="submit" class="btn btn-primary btn-lg w-full">Unlock archive</button>
+        <p class="text-base-content/55 text-xs leading-relaxed">Connect only over your private network or HTTPS. Sessions expire after 24 hours.</p>
+      </form>
+    </section>
+  </div>
   {{ template "footer" . }}
 {{ end }}

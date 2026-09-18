@@ -1,54 +1,68 @@
 {{ define "transcript" }}
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html lang="en" data-theme="ledger">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ .Title }} · Traicr</title>
   <link rel="stylesheet" href="/static/pi-transcript/pi-transcript.css">
-  <link rel="stylesheet" href="/static/traicr-theme.css">
-  <link rel="stylesheet" href="/static/pi-transcript/traicr-transcript.css">
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/app.css">
+  <script src="/static/theme.js"></script>
+  <script type="module" src="/static/shortcuts.js"></script>
 </head>
-<body>
+<body class="transcript-page">
+  {{ template "topbar" . }}
   <div id="transcript-meta" data-trace-id="{{ .Trace.ID }}" data-title="{{ .Title }}" data-harness="{{ .Trace.Harness }}" data-native-id="{{ .Trace.NativeTraceID }}" data-created-at="{{ .Trace.CreatedAt }}" data-cwd="{{ .Trace.WorkingDirectory }}"></div>
-  <button id="hamburger" title="Open sidebar"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="12" r="2.5"/><rect x="5" y="6" width="2" height="12"/><path d="M6 12h10c1 0 2 0 2-2V8"/></svg></button>
+  <button id="hamburger" class="btn btn-sm btn-square" title="Open the branch tree (b)" aria-label="Open the branch tree">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/></svg>
+  </button>
   <div id="sidebar-overlay"></div>
   <div id="app">
-    <aside id="sidebar">
+    <aside id="sidebar" aria-label="Branch tree">
       <div class="sidebar-header">
         <div class="sidebar-controls">
-          <input type="text" class="sidebar-search" id="tree-search" placeholder="Search...">
+          <input type="search" class="input input-sm w-full" id="tree-search" placeholder="Search this session" aria-label="Search the branch tree">
         </div>
-        <div class="sidebar-filters">
-          <button class="filter-btn active" data-filter="default" title="Hide settings entries">Default</button>
-          <button class="filter-btn" data-filter="no-tools" title="Default minus tool results">No-tools</button>
-          <button class="filter-btn" data-filter="user-only" title="Only user messages">User</button>
-          <button class="filter-btn" data-filter="labeled-only" title="Only labeled entries">Labeled</button>
-          <button class="filter-btn" data-filter="all" title="Show everything">All</button>
-          <button class="sidebar-close" id="sidebar-close" title="Close">✕</button>
+        <div class="sidebar-filters" role="group" aria-label="Tree filter">
+          <button type="button" class="filter-btn btn btn-xs btn-active" data-filter="default" title="Hide settings entries (1)" aria-pressed="true">Default</button>
+          <button type="button" class="filter-btn btn btn-xs btn-ghost" data-filter="no-tools" title="Default without tool results (2)" aria-pressed="false">No tools</button>
+          <button type="button" class="filter-btn btn btn-xs btn-ghost" data-filter="user-only" title="Only your messages (3)" aria-pressed="false">User</button>
+          <button type="button" class="filter-btn btn btn-xs btn-ghost" data-filter="labeled-only" title="Only labeled entries (4)" aria-pressed="false">Labeled</button>
+          <button type="button" class="filter-btn btn btn-xs btn-ghost" data-filter="all" title="Show everything (5)" aria-pressed="false">All</button>
+          <button type="button" class="sidebar-close btn btn-xs btn-ghost btn-square ml-auto" id="sidebar-close" title="Close" aria-label="Close the branch tree">✕</button>
         </div>
       </div>
-      <div class="tree-container" id="tree-container"></div>
+      <div class="tree-container" id="tree-container" role="tree" aria-label="Session entries"></div>
       <div class="tree-status" id="tree-status"></div>
     </aside>
-    <div id="sidebar-resizer" role="separator" aria-orientation="vertical" aria-label="Resize session tree sidebar"></div>
+    <div id="sidebar-resizer" role="separator" aria-orientation="vertical" aria-label="Resize the branch tree"></div>
     <main id="content">
-      <nav class="transcript-navigation"><a class="transcript-brand" href="/" aria-label="Traicr home"><span>t</span>traicr</a><a href="/">← Transcripts</a><a href="/traces/{{ .Trace.ID }}?view=records">Session details &amp; source records</a></nav>
+      <nav class="mb-4 flex flex-wrap items-center gap-2 text-sm" aria-label="Session">
+        <a class="btn btn-ghost btn-sm text-base-content/60" href="/">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
+          Sessions
+        </a>
+        <a class="btn btn-ghost btn-sm" href="/traces/{{ .Trace.ID }}?view=records" data-shortcut="d" data-shortcut-label="Open session details" data-shortcut-group="Transcript">Session details</a>
+        <p id="transcript-status" class="ml-auto" role="status">Loading transcript…</p>
+      </nav>
       {{ if eq .Trace.Harness "amp" }}
       <form class="amp-revisions" method="get">
-        <label for="revision">Archive view</label>
-        <select name="revision" id="revision">
+        <label for="revision" class="text-base-content/60">Archive view</label>
+        <select name="revision" id="revision" class="select select-sm w-56">
           <option value="">Merged archive</option>
-          {{ range .Trace.Revisions }}<option value="{{ .ID }}" {{ if eq $.Revision (printf "%d" .ID) }}selected{{ end }}>Revision {{ .ID }} · {{ .NativeUpdatedAt }}</option>{{ end }}
+          {{ range .Trace.Revisions }}<option value="{{ .ID }}" {{ if eq $.Revision (printf "%d" .ID) }}selected{{ end }}>Revision {{ .ID }}, {{ .NativeUpdatedAt }}</option>{{ end }}
         </select>
-        <button type="submit" class="header-toggle-btn">Inspect</button>
+        <button type="submit" class="btn btn-sm btn-ghost border-base-300 border">Inspect</button>
+        <details class="dropdown dropdown-end ml-auto">
+          <summary class="btn btn-sm btn-ghost">Download native Amp export</summary>
+          <ul class="dropdown-content menu menu-sm bg-base-100 rounded-box border-base-300 z-20 mt-1 w-80 border p-1.5 shadow-lg">
+            <li class="menu-title">Lossless source JSON for one revision, not the merged viewer data</li>
+            {{ range .Trace.Revisions }}<li><a href="/revisions/{{ .ID }}/file?path=source/export.json&amp;download=1">Revision {{ .ID }} <span class="text-base-content/60 ml-auto text-xs">{{ .NativeUpdatedAt }}</span></a></li>{{ end }}
+          </ul>
+        </details>
       </form>
-      <details class="amp-details"><summary>Download native Amp export</summary>
-        <p>Lossless source JSON for an individual revision, not the merged viewer data.</p>
-        {{ range .Trace.Revisions }}<p><a href="/revisions/{{ .ID }}/file?path=source/export.json&amp;download=1">Revision {{ .ID }} · {{ .NativeUpdatedAt }} · Native JSON</a></p>{{ end }}
-      </details>
       {{ end }}
-      <p id="transcript-status" role="status">Loading transcript…</p>
       <noscript>Enable JavaScript to use the interactive transcript viewer. Session details remain available without JavaScript.</noscript>
       <div id="header-container"></div>
       <div id="messages"></div>
@@ -57,7 +71,7 @@
       <img id="modal-image" src="" alt="">
     </div>
   </div>
-
+  {{ template "overlays" . }}
   <script src="/static/pi-transcript/marked.min.js"></script>
   <script src="/static/pi-transcript/highlight.min.js"></script>
   <script type="module" src="/static/pi-transcript/pi-transcript.js"></script>

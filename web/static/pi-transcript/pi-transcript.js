@@ -1,6 +1,7 @@
     // Adapted from Pi 0.85.1's MIT-licensed HTML export. See pi-LICENSE.txt.
     import { loadTranscriptSession } from './transcript-data.js';
     import { renderTranscriptEntry, renderTranscriptHeaderDetails, parseSkillBlock } from './transcript-render.js';
+    import { registerShortcuts, toast } from '../shortcuts.js';
     (async function() {
       'use strict';
 
@@ -861,6 +862,8 @@
           }
         }
 
+        if (success) toast('Link copied');
+        else toast('Copy failed. Your browser blocked clipboard access.', 'alert-error');
         if (success && button) {
           const originalHtml = button.innerHTML;
           button.innerHTML = '✓';
@@ -940,24 +943,24 @@
         if (globalStats.compactions) msgParts.push(`${globalStats.compactions} compactions`);
         if (globalStats.branchSummaries) msgParts.push(`${globalStats.branchSummaries} branch summaries`);
 
+        const kbd = (key) => `<kbd class="kbd kbd-xs">${escapeHtml(key)}</kbd>`;
         let html = `
           <div class="header">
-            <div class="session-eyebrow"><span class="harness-badge" aria-label="Harness">${escapeHtml(header?.harness || 'unknown')}</span><span>SESSION TRANSCRIPT</span></div>
+            <div class="session-eyebrow"><span class="harness-badge" aria-label="Harness">${escapeHtml(header?.harness || 'unknown')}</span><span>${header?.timestamp ? escapeHtml(new Date(header.timestamp).toLocaleString()) : 'Date unknown'}</span></div>
             <h1>${escapeHtml(header?.title || header?.id || 'Untitled session')}</h1>
             <div class="help-bar">
-              <span class="help-hint">T toggle thinking · O toggle tools</span>
+              <span class="help-hint">${kbd('J')}${kbd('K')} move between messages, ${kbd('T')} reasoning, ${kbd('O')} tool output, ${kbd('B')} branch tree, ${kbd('?')} all shortcuts</span>
               <div class="help-actions">
-                <button type="button" class="header-toggle-btn" data-action="toggle-thinking" title="Toggle thinking (T)">Toggle thinking</button>
-                <button type="button" class="header-toggle-btn" data-action="toggle-tools" title="Toggle tools (O)">Toggle tools</button>
-                <button type="button" class="download-json-btn" data-action="download-session" title="Download loaded normalized viewer entries, not native source records">↓ Viewer JSONL${data.hasMore ? ' (loaded only)' : ''}</button>
+                <button type="button" class="header-toggle-btn" data-action="toggle-thinking" aria-pressed="${thinkingExpanded}" title="Show or hide reasoning (T)">Reasoning</button>
+                <button type="button" class="header-toggle-btn" data-action="toggle-tools" aria-pressed="${toolOutputsExpanded}" title="Expand or collapse tool output (O)">Tool output</button>
+                <button type="button" class="download-json-btn" data-action="download-session" title="Download the loaded normalized viewer entries, not native source records">Download viewer JSONL${data.hasMore ? ' (loaded only)' : ''}</button>
               </div>
             </div>
             <div class="header-info">
-              <div class="info-item"><span class="info-label">Date:</span><span class="info-value">${header?.timestamp ? new Date(header.timestamp).toLocaleString() : 'unknown'}</span></div>
-              <div class="info-item"><span class="info-label">Models:</span><span class="info-value">${escapeHtml(globalStats.models.join(', ') || 'unknown')}</span></div>
-              <div class="info-item"><span class="info-label">Messages:</span><span class="info-value">${msgParts.join(', ') || '0'}</span></div>
-              <div class="info-item"><span class="info-label">Tool Calls:</span><span class="info-value">${globalStats.toolCalls}</span></div>
-              <div class="info-item"><span class="info-label">Directory:</span><span class="info-value">${escapeHtml(header?.cwd || 'unknown')}</span></div>
+              <div class="info-item"><span class="info-label">Models</span><span class="info-value">${escapeHtml(globalStats.models.join(', ') || 'unknown')}</span></div>
+              <div class="info-item"><span class="info-label">Messages</span><span class="info-value">${msgParts.join(', ') || '0'}</span></div>
+              <div class="info-item"><span class="info-label">Tool calls</span><span class="info-value">${globalStats.toolCalls}</span></div>
+              <div class="info-item"><span class="info-label">Directory</span><span class="info-value">${escapeHtml(header?.cwd || 'unknown')}</span></div>
             </div>
           </div>`;
 
@@ -1041,6 +1044,10 @@
         return template.content.firstElementChild;
       }
 
+      let pageStartShown = 0, pageEndShown = 0, pathLength = 0;
+      let loadMoreRecords = () => {};
+      let currentEntryId = null;
+
       function navigateTo(targetId, scrollMode = 'target', scrollToEntryId = null, pageStart = null) {
         currentLeafId = targetId;
         currentTargetId = scrollToEntryId || targetId;
@@ -1065,26 +1072,37 @@
         for (const entry of path.slice(start,end)) {
           for (const block of entry.message?.content || []) if (block.type === 'toolCall') visibleToolCalls.add(block.id);
         }
-        const pageButton = (label, offset) => {
+        const pageButton = (label, key, onClick) => {
+          const wrapper = document.createElement('div');
+          wrapper.className = 'page-nav';
           const button = document.createElement('button');
-          button.className = 'header-toggle-btn';
+          button.type = 'button';
+          button.className = 'btn btn-sm btn-outline';
           button.textContent = label;
-          button.addEventListener('click', () => navigateTo(targetId, 'none', null, offset));
-          return button;
+          button.addEventListener('click', onClick);
+          wrapper.appendChild(button);
+          if (key) {
+            const hint = document.createElement('kbd');
+            hint.className = 'kbd kbd-sm';
+            hint.textContent = key;
+            wrapper.appendChild(hint);
+          }
+          return wrapper;
         };
-        if (start > 0) fragment.appendChild(pageButton('← Earlier loaded messages', Math.max(0,start - 200)));
+        pageStartShown = start; pageEndShown = end; pathLength = path.length;
+        if (start > 0) fragment.appendChild(pageButton('Earlier messages', '[', () => navigateTo(targetId, 'none', null, Math.max(0,start - 200))));
         for (const entry of path.slice(start,end)) {
           const node = renderEntryToNode(entry);
           if (node) {
             fragment.appendChild(node);
           }
         }
-        if (end < path.length) fragment.appendChild(pageButton('Later loaded messages →', end));
+        if (end < path.length) fragment.appendChild(pageButton('Later messages', ']', () => navigateTo(targetId, 'none', null, end)));
         if (data.hasMore) {
-          const button = document.createElement('button');
-          button.className = 'header-toggle-btn';
-          button.textContent = 'Load next 200 records';
-          button.addEventListener('click', async () => {
+          const wrapper = pageButton('Load next 200 records', 'M', () => loadMoreRecords());
+          const button = wrapper.querySelector('button');
+          loadMoreRecords = async () => {
+            if (button.disabled) return;
             button.disabled = true;
             try {
               await data.loadMore();
@@ -1101,8 +1119,10 @@
               document.getElementById('transcript-status').textContent = error.message;
               button.disabled = false;
             }
-          });
-          fragment.appendChild(button);
+          };
+          fragment.appendChild(wrapper);
+        } else {
+          loadMoreRecords = () => {};
         }
 
         messagesEl.innerHTML = '';
@@ -1239,13 +1259,18 @@
       });
 
       // Filter buttons
-      document.querySelectorAll('.filter-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-          document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-          btn.classList.add('active');
-          filterMode = btn.dataset.filter;
-          forceTreeRerender();
+      const setFilterMode = (mode) => {
+        filterMode = mode;
+        document.querySelectorAll('.filter-btn').forEach(b => {
+          const active = b.dataset.filter === mode;
+          b.classList.toggle('btn-active', active);
+          b.classList.toggle('btn-ghost', !active);
+          b.setAttribute('aria-pressed', String(active));
         });
+        forceTreeRerender();
+      };
+      document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.addEventListener('click', () => setFilterMode(btn.dataset.filter));
       });
 
       // Sidebar toggle
@@ -1381,6 +1406,7 @@
 
       const setThinkingExpanded = (expanded) => {
         thinkingExpanded = expanded;
+        document.querySelector('[data-action="toggle-thinking"]')?.setAttribute('aria-pressed', String(expanded));
         document.querySelectorAll('.thinking-text').forEach(el => {
           el.style.display = thinkingExpanded ? '' : 'none';
         });
@@ -1391,6 +1417,7 @@
 
       const setToolOutputsExpanded = (expanded) => {
         toolOutputsExpanded = expanded;
+        document.querySelector('[data-action="toggle-tools"]')?.setAttribute('aria-pressed', String(expanded));
         document.querySelectorAll('.tool-execution details, .amp-summary details, .skill-invocation details').forEach(element => { element.open = toolOutputsExpanded; });
       };
 
@@ -1412,27 +1439,67 @@
         return element.isContentEditable || Boolean(element.closest?.('[contenteditable="true"]'));
       };
 
-      // Keyboard shortcuts
-      document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') {
+      // Keyboard shortcuts, registered with the shared palette and help dialog.
+      const contentEl = document.getElementById('content');
+      const messageElements = () => Array.from(document.querySelectorAll('#messages [id^="entry-"]'));
+      const setCurrentEntry = (element) => {
+        document.querySelectorAll('#messages .is-current').forEach(el => el.classList.remove('is-current'));
+        currentEntryId = element ? element.id.slice(6) : null;
+        element?.classList.add('is-current');
+      };
+      const stepMessage = (delta) => {
+        const elements = messageElements();
+        if (!elements.length) return;
+        const viewportTop = 0;
+        let index = elements.findIndex(el => el.id.slice(6) === currentEntryId);
+        const rect = index >= 0 ? elements[index].getBoundingClientRect() : null;
+        const inView = rect && rect.bottom > viewportTop && rect.top < window.innerHeight;
+        if (!inView) {
+          index = elements.findIndex(el => el.getBoundingClientRect().bottom > 60);
+          if (index < 0) index = elements.length - 1;
+          if (currentEntryId === null && delta > 0) delta = 0;
+        }
+        const next = Math.min(elements.length - 1, Math.max(0, index + delta));
+        setCurrentEntry(elements[next]);
+        elements[next].scrollIntoView({ block: 'start' });
+        window.scrollBy(0, -64);
+      };
+      document.getElementById('messages').addEventListener('click', (event) => {
+        const section = event.target.closest('[id^="entry-"]');
+        if (section) setCurrentEntry(section);
+      });
+      const toggleSidebar = () => {
+        if (isMobileLayout()) {
+          if (sidebar.classList.contains('open')) closeSidebar();
+          else hamburger.click();
+        } else {
+          document.body.classList.toggle('sidebar-collapsed');
+        }
+      };
+      const filterKeys = ['default', 'no-tools', 'user-only', 'labeled-only', 'all'];
+      const filterLabels = ['Default', 'No tools', 'User', 'Labeled', 'All'];
+      registerShortcuts([
+        { keys: 'j', label: 'Next message', group: 'Transcript', run: () => stepMessage(1) },
+        { keys: 'k', label: 'Previous message', group: 'Transcript', run: () => stepMessage(-1) },
+        { keys: 't', label: 'Show or hide reasoning', group: 'Transcript', run: () => toggleThinking() },
+        { keys: 'o', label: 'Expand or collapse tool output', group: 'Transcript', run: () => toggleToolOutputs() },
+        { keys: 'b', label: 'Toggle the branch tree', group: 'Transcript', run: toggleSidebar },
+        { keys: '/', label: 'Search the branch tree', group: 'Transcript', run: () => { document.body.classList.remove('sidebar-collapsed'); if (isMobileLayout()) hamburger.click(); searchInput.focus(); } },
+        { keys: '[', label: 'Earlier messages on this branch', group: 'Transcript', run: () => { if (pageStartShown > 0) navigateTo(currentLeafId, 'none', null, Math.max(0, pageStartShown - 200)); } },
+        { keys: ']', label: 'Later messages on this branch', group: 'Transcript', run: () => { if (pageEndShown < pathLength) navigateTo(currentLeafId, 'none', null, pageEndShown); } },
+        { keys: 'y', label: 'Copy link to the current message', group: 'Transcript', run: () => { if (currentEntryId) copyToClipboard(buildShareUrl(currentEntryId), null); else toast('Select a message first with J or K'); } },
+        { keys: 'm', label: 'Load more records', group: 'Transcript', run: () => loadMoreRecords() },
+        ...filterKeys.map((mode, index) => ({ keys: String(index + 1), label: `Tree filter: ${filterLabels[index]}`, group: 'Transcript', run: () => setFilterMode(mode), palette: false })),
+        { keys: 'escape', label: 'Reset to the latest message', group: 'Transcript', hidden: true, palette: false, run: () => {
+          if (document.activeElement === searchInput && !searchInput.value) { searchInput.blur(); return; }
+          if (isEditable(document.activeElement)) { document.activeElement.blur(); return; }
           searchInput.value = '';
           searchQuery = '';
           navigateTo(leafId, 'bottom');
-        }
-
-        if (isEditableTarget(document.activeElement)) {
-          return;
-        }
-
-        const key = e.key.toLowerCase();
-        if (key === 't') {
-          e.preventDefault();
-          toggleThinking();
-        } else if (key === 'o') {
-          e.preventDefault();
-          toggleToolOutputs();
-        }
-      });
+        } },
+      ]);
+      const isEditable = (element) => element && (['INPUT','TEXTAREA','SELECT'].includes(element.tagName) || element.isContentEditable);
+      void contentEl;
 
       // Delegate expansion instead of inline handlers to preserve Traicr's CSP.
       document.addEventListener('click', (event) => {
