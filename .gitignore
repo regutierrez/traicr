@@ -1,5 +1,8 @@
 /bin/
 /artifacts/
+web/app/node_modules/
+web/app/.svelte-kit/
+web/app/build/
 *.test
 coverage.out
 .amp/portals/

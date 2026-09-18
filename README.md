@@ -115,6 +115,16 @@ Collection reads but does not modify the native Claude JSONL files.
 
 ## Development
 
+Issue #9 UI concepts live in `web/app` (SvelteKit + shadcn-svelte). They are interactive copies of the homepage and trace viewer, not the production HTMX templates:
+
+```sh
+cd web/app
+npm install
+npm run dev
+```
+
+Open <http://127.0.0.1:5173>. Inbox, Studio, and Ledger each have a homepage and a viewer.
+
 Run the complete local checks and builds:
 
 ```sh
