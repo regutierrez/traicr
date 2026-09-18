@@ -2,8 +2,8 @@
 	import type { Snippet } from 'svelte';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import Book2Line from 'remixicon-svelte/icons/book-2-line.svelte';
-	import GitCommitLine from 'remixicon-svelte/icons/git-commit-line.svelte';
+	import Book2Line from 'remixicon-svelte/icons/book-2-line';
+	import GitCommitLine from 'remixicon-svelte/icons/git-commit-line';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 	import { Kbd } from '$lib/components/ui/kbd';

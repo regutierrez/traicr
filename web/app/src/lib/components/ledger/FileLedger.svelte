@@ -1,7 +1,7 @@
 <script lang="ts">
-	import EyeLine from 'remixicon-svelte/icons/eye-line.svelte';
-	import FileEditLine from 'remixicon-svelte/icons/file-edit-line.svelte';
-	import FileTextLine from 'remixicon-svelte/icons/file-text-line.svelte';
+	import EyeLine from 'remixicon-svelte/icons/eye-line';
+	import FileEditLine from 'remixicon-svelte/icons/file-edit-line';
+	import FileTextLine from 'remixicon-svelte/icons/file-text-line';
 	import { Badge } from '$lib/components/ui/badge';
 	import { ScrollArea } from '$lib/components/ui/scroll-area';
 	import type { FileChange } from '$lib/data/types';

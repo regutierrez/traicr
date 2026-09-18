@@ -1,11 +1,11 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import AlertLine from 'remixicon-svelte/icons/alert-line.svelte';
-	import ComputerLine from 'remixicon-svelte/icons/computer-line.svelte';
-	import FolderLine from 'remixicon-svelte/icons/folder-line.svelte';
-	import GitCommitLine from 'remixicon-svelte/icons/git-commit-line.svelte';
-	import SearchLine from 'remixicon-svelte/icons/search-line.svelte';
+	import AlertLine from 'remixicon-svelte/icons/alert-line';
+	import ComputerLine from 'remixicon-svelte/icons/computer-line';
+	import FolderLine from 'remixicon-svelte/icons/folder-line';
+	import GitCommitLine from 'remixicon-svelte/icons/git-commit-line';
+	import SearchLine from 'remixicon-svelte/icons/search-line';
 	import EvidenceRow from '$lib/components/ledger/EvidenceRow.svelte';
 	import LedgerShell from '$lib/components/ledger/LedgerShell.svelte';
 	import { Badge } from '$lib/components/ui/badge';

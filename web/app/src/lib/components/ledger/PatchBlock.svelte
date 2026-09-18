@@ -1,5 +1,5 @@
 <script lang="ts">
-	import GitCommitLine from 'remixicon-svelte/icons/git-commit-line.svelte';
+	import GitCommitLine from 'remixicon-svelte/icons/git-commit-line';
 	import { Kbd } from '$lib/components/ui/kbd';
 
 	let {

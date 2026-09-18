@@ -1,16 +1,16 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import AlertLine from 'remixicon-svelte/icons/alert-line.svelte';
-	import ArrowRightSLine from 'remixicon-svelte/icons/arrow-right-s-line.svelte';
-	import CheckboxCircleLine from 'remixicon-svelte/icons/checkbox-circle-line.svelte';
-	import ComputerLine from 'remixicon-svelte/icons/computer-line.svelte';
-	import EyeLine from 'remixicon-svelte/icons/eye-line.svelte';
-	import FileEditLine from 'remixicon-svelte/icons/file-edit-line.svelte';
-	import FolderLine from 'remixicon-svelte/icons/folder-line.svelte';
-	import GitBranchLine from 'remixicon-svelte/icons/git-branch-line.svelte';
-	import GitCommitLine from 'remixicon-svelte/icons/git-commit-line.svelte';
-	import TerminalBoxLine from 'remixicon-svelte/icons/terminal-box-line.svelte';
+	import AlertLine from 'remixicon-svelte/icons/alert-line';
+	import ArrowRightSLine from 'remixicon-svelte/icons/arrow-right-s-line';
+	import CheckboxCircleLine from 'remixicon-svelte/icons/checkbox-circle-line';
+	import ComputerLine from 'remixicon-svelte/icons/computer-line';
+	import EyeLine from 'remixicon-svelte/icons/eye-line';
+	import FileEditLine from 'remixicon-svelte/icons/file-edit-line';
+	import FolderLine from 'remixicon-svelte/icons/folder-line';
+	import GitBranchLine from 'remixicon-svelte/icons/git-branch-line';
+	import GitCommitLine from 'remixicon-svelte/icons/git-commit-line';
+	import TerminalBoxLine from 'remixicon-svelte/icons/terminal-box-line';
 	import FileLedger from '$lib/components/ledger/FileLedger.svelte';
 	import LedgerShell from '$lib/components/ledger/LedgerShell.svelte';
 	import PatchBlock from '$lib/components/ledger/PatchBlock.svelte';
