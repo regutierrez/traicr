@@ -6,7 +6,6 @@ import (
 	"mime"
 	"net/http"
 	"path"
-	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -95,46 +94,6 @@ func (app *application) trace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, trace)
-}
-
-func (app *application) transcriptPage(w http.ResponseWriter, r *http.Request) {
-	id, ok := requestID(w, r)
-	if !ok {
-		return
-	}
-	if r.URL.Query().Get("view") == "records" {
-		values := r.URL.Query()
-		values.Del("view")
-		target := "/traces/" + r.PathValue("id") + "/records"
-		if encoded := values.Encode(); encoded != "" {
-			target += "?" + encoded
-		}
-		http.Redirect(w, r, target, http.StatusSeeOther)
-		return
-	}
-	trace, err := app.store.Trace(r.Context(), id)
-	if err != nil {
-		app.failure(w, err)
-		return
-	}
-	title := trace.Title
-	if title == "" {
-		title = trace.NativeTraceID
-	}
-	selected := r.URL.Query().Get("revision")
-	if selected != "" {
-		found := false
-		for _, revision := range trace.Revisions {
-			if strconv.FormatInt(revision.ID, 10) == selected {
-				found = true
-			}
-		}
-		if !found || trace.Harness != "amp" {
-			writeError(w, 404, "revision_not_found", "Revision not found for this Amp trace")
-			return
-		}
-	}
-	app.render(w, r, "transcript", map[string]any{"Title": title, "Trace": trace, "Revision": selected})
 }
 
 func (app *application) events(w http.ResponseWriter, r *http.Request) {

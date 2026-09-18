@@ -1,13 +1,11 @@
 package server
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"html/template"
 	"io"
 	"io/fs"
 	"log/slog"
@@ -27,11 +25,10 @@ import (
 )
 
 type application struct {
-	config    config.ServerConfig
-	store     *store.Store
-	templates *template.Template
-	logger    *slog.Logger
-	uploads   chan struct{}
+	config  config.ServerConfig
+	store   *store.Store
+	logger  *slog.Logger
+	uploads chan struct{}
 }
 
 func NewHTTPHandler(configuration config.ServerConfig, database *store.Store, logger *slog.Logger) (http.Handler, error) {
@@ -41,11 +38,7 @@ func NewHTTPHandler(configuration config.ServerConfig, database *store.Store, lo
 	if configuration.ArchiveLimits.ArchiveBytes == 0 {
 		configuration.ArchiveLimits = archive.DefaultLimits()
 	}
-	templates, err := template.New("").ParseFS(assets.Files, "templates/*.html")
-	if err != nil {
-		return nil, err
-	}
-	app := &application{config: configuration, store: database, templates: templates, logger: logger, uploads: make(chan struct{}, 1)}
+	app := &application{config: configuration, store: database, logger: logger, uploads: make(chan struct{}, 1)}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", serveProcessHealth)
 	mux.Handle("GET /static/", http.FileServerFS(assets.Files))
@@ -55,8 +48,7 @@ func NewHTTPHandler(configuration config.ServerConfig, database *store.Store, lo
 	mux.HandleFunc("GET /login", app.loginPage)
 	mux.HandleFunc("POST /login", app.login)
 	mux.Handle("POST /logout", app.browser(app.logout))
-	// The vendored transcript viewer calls these URLs itself.
-	mux.Handle("GET /traces/{id}", app.browser(app.transcriptPage))
+	// JSON the transcript page fetches. The page itself is the Svelte app.
 	mux.Handle("GET /traces/{id}/events", app.browser(app.events))
 	mux.Handle("GET /traces/{id}/transcript", app.browser(app.transcriptAPI))
 	mux.Handle("GET /traces/resolve", app.browser(app.resolveTrace))
@@ -191,16 +183,4 @@ func pageLimit(w http.ResponseWriter, r *http.Request) (int, bool) {
 		return 0, false
 	}
 	return limit, true
-}
-
-func (app *application) render(w http.ResponseWriter, r *http.Request, name string, data map[string]any) {
-	data["CSRF"] = app.csrf(r)
-	data["Page"] = name
-	var body bytes.Buffer
-	if err := app.templates.ExecuteTemplate(&body, name, data); err != nil {
-		app.failure(w, err)
-		return
-	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_, _ = body.WriteTo(w)
 }

@@ -7,6 +7,7 @@
 	let { data, children } = $props();
 	let path = $derived(page.url.pathname);
 	let login = $derived(path === '/login');
+	let viewer = $derived(/^\/traces\/[^/]+$/.test(path));
 
 	function current(href: string) {
 		if (href === '/') return path === '/' ? 'page' : undefined;
@@ -18,12 +19,16 @@
 	<title>Traicr</title>
 </svelte:head>
 
-<a class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50" href="#main">Skip to content</a>
+{#if !viewer}
+	<a class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50" href="#main">Skip to content</a>
+{/if}
 
 {#if login}
 	<main id="main" class="mx-auto flex min-h-screen w-full max-w-5xl flex-col justify-center gap-10 px-6 py-16 md:flex-row md:items-center">
 		{@render children()}
 	</main>
+{:else if viewer}
+	{@render children()}
 {:else}
 	<div class="flex min-h-screen">
 		<aside class="bg-sidebar text-sidebar-foreground sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-sidebar-border md:flex">
