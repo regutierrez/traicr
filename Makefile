@@ -9,7 +9,7 @@ LDFLAGS := -X $(VERSION_PACKAGE).buildVersion=$(VERSION) \
 	-X $(VERSION_PACKAGE).buildCommit=$(COMMIT) \
 	-X $(VERSION_PACKAGE).buildDate=$(BUILD_DATE)
 
-.PHONY: all build build-collector build-server fmt lint test test-race clean
+.PHONY: all build build-collector build-server fmt lint test test-race ui ui-check clean
 
 all: lint test build
 
@@ -33,6 +33,14 @@ test:
 
 test-race:
 	$(GO) test -race ./...
+
+# Compiles Tailwind CSS + daisyUI into web/static/app.css and copies the theme
+# fonts. The output is committed, so the server build itself never needs Node.
+ui:
+	cd web/ui && npm ci && npm run build
+
+ui-check: ui
+	git diff --exit-code -- web/static/app.css web/static/fonts
 
 clean:
 	rm -rf $(BUILD_DIR) artifacts

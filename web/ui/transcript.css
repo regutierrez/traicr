@@ -1,0 +1,457 @@
+/*
+  Transcript viewer. pi-transcript.css (vendored from Pi's HTML export) provides
+  the layout and message structure; this file maps its variables onto the
+  daisyUI theme tokens and restyles the chrome. It is compiled into app.css.
+*/
+
+:root {
+  --accent: var(--color-primary);
+  --border: var(--color-base-300);
+  --borderAccent: var(--color-primary);
+  --borderMuted: var(--color-base-300);
+  --success: var(--color-success);
+  --error: var(--color-error);
+  --warning: var(--color-warning);
+  --muted: color-mix(in oklch, var(--color-base-content) 62%, var(--color-base-100));
+  --dim: color-mix(in oklch, var(--color-base-content) 62%, var(--color-base-100));
+  --text: var(--color-base-content);
+  --thinkingText: color-mix(in oklch, var(--color-base-content) 62%, var(--color-base-100));
+  --selectedBg: color-mix(in oklch, var(--color-primary) 14%, var(--color-base-100));
+  --hover: color-mix(in oklch, var(--color-primary) 8%, var(--color-base-100));
+  --scrollbarTrack: var(--color-base-200);
+  --scrollbarThumb: var(--color-base-300);
+  --searchMatchBg: var(--highlight);
+  --searchMatchText: var(--color-base-content);
+  --userMessageBg: var(--surface-user);
+  --userMessageText: var(--color-base-content);
+  --customMessageBg: var(--surface-tool);
+  --customMessageText: var(--color-base-content);
+  --customMessageLabel: var(--color-primary);
+  --toolPendingBg: var(--surface-tool);
+  --toolSuccessBg: var(--surface-tool);
+  --toolErrorBg: var(--surface-error);
+  --toolTitle: var(--color-base-content);
+  --toolOutput: var(--color-base-content);
+  --mdHeading: var(--color-base-content);
+  --mdLink: var(--color-primary);
+  --mdLinkUrl: var(--muted);
+  --mdCode: var(--color-primary);
+  --mdCodeBlock: var(--color-base-content);
+  --mdCodeBlockBorder: var(--color-base-300);
+  --mdQuote: var(--muted);
+  --mdQuoteBorder: var(--color-base-300);
+  --mdHr: var(--color-base-300);
+  --mdListBullet: var(--color-primary);
+  --toolDiffAdded: var(--color-success);
+  --toolDiffRemoved: var(--color-error);
+  --toolDiffContext: var(--muted);
+  --syntaxComment: var(--syntax-comment);
+  --syntaxKeyword: var(--syntax-keyword);
+  --syntaxFunction: var(--syntax-function);
+  --syntaxVariable: var(--syntax-variable);
+  --syntaxString: var(--syntax-string);
+  --syntaxNumber: var(--syntax-number);
+  --syntaxType: var(--syntax-type);
+  --syntaxOperator: var(--color-base-content);
+  --syntaxPunctuation: var(--color-base-content);
+  --body-bg: var(--color-base-200);
+  --container-bg: var(--color-base-100);
+  --info-bg: var(--surface-user);
+  --line-height: 24px;
+  --sidebar-width: 320px;
+}
+
+body.transcript-page {
+  font: 15px/1.55 var(--type-sans);
+  color: var(--color-base-content);
+  background: var(--color-base-200);
+}
+.transcript-page #app {
+  min-height: calc(100dvh - 3.25rem);
+}
+.transcript-page #sidebar,
+.transcript-page #sidebar-resizer {
+  top: 3.25rem;
+  height: calc(100dvh - 3.25rem);
+}
+.transcript-page #sidebar {
+  background: var(--color-base-100);
+  border-right-color: var(--color-base-300);
+}
+.transcript-page .sidebar-header {
+  border-bottom: 1px solid var(--color-base-300);
+  padding: 10px 10px 8px;
+}
+.transcript-page .sidebar-controls {
+  padding: 0 0 8px;
+}
+.transcript-page .sidebar-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+/* Pi's unlayered control rules would beat daisyUI's layered .btn; restate the look. */
+.transcript-page .filter-btn,
+.transcript-page .sidebar-close {
+  font: 500 11px/1 var(--type-sans);
+  padding: 0 8px;
+  height: 1.5rem;
+  border-radius: var(--radius-field);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted);
+}
+.transcript-page .filter-btn:hover,
+.transcript-page .sidebar-close:hover {
+  background: var(--hover);
+  color: var(--color-base-content);
+}
+.transcript-page .filter-btn.btn-active {
+  background: color-mix(in oklch, var(--color-primary) 14%, var(--color-base-100));
+  border-color: color-mix(in oklch, var(--color-primary) 35%, var(--color-base-300));
+  color: var(--color-primary);
+}
+.transcript-page.sidebar-collapsed #sidebar,
+.transcript-page.sidebar-collapsed #sidebar-resizer {
+  display: none;
+}
+.transcript-page #content {
+  display: block;
+}
+.transcript-page .tree-container {
+  padding: 6px 0;
+}
+.transcript-page .tree-node {
+  font: 12px/1.75 var(--type-mono);
+  padding: 2px 10px;
+  color: var(--muted);
+}
+.transcript-page .tree-node.in-path {
+  color: var(--color-base-content);
+}
+.transcript-page .tree-node:hover {
+  background: var(--hover);
+}
+.transcript-page .tree-node.active {
+  background: var(--selectedBg);
+}
+.transcript-page .tree-marker {
+  color: var(--color-primary);
+}
+.transcript-page .tree-prefix {
+  color: color-mix(in oklch, var(--color-base-content) 35%, var(--color-base-100));
+}
+.transcript-page .tree-role-user,
+.transcript-page .tree-role-skill,
+.transcript-page .tree-label {
+  color: var(--color-primary);
+  font-weight: 600;
+}
+.transcript-page .tree-role-assistant {
+  color: color-mix(in oklch, var(--color-base-content) 70%, var(--color-base-100));
+}
+.transcript-page .tree-role-tool {
+  color: var(--muted);
+}
+.transcript-page .tree-compaction,
+.transcript-page .tree-branch-summary {
+  color: var(--color-warning);
+}
+.transcript-page .tree-status {
+  font: 11px/1.6 var(--type-mono);
+  border-top: 1px solid var(--color-base-300);
+  padding: 8px 12px;
+  color: var(--muted);
+}
+.transcript-page #content {
+  padding: 20px 32px 64px;
+  background: var(--color-base-200);
+}
+.transcript-page #content > * {
+  width: 100%;
+  max-width: 920px;
+  margin-left: auto;
+  margin-right: auto;
+}
+.transcript-page #messages > * {
+  width: 100%;
+}
+.transcript-page #tree-search {
+  border: 1px solid var(--color-base-300);
+  background: var(--color-base-200);
+}
+.transcript-page #hamburger {
+  top: calc(3.25rem + 12px);
+  background: var(--color-base-100);
+  border: 1px solid var(--color-base-300);
+  color: var(--color-base-content);
+  border-radius: var(--radius-field);
+}
+.transcript-page #transcript-status {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 0 auto 16px;
+}
+#transcript-meta {
+  display: none;
+}
+
+/* Session header card, rendered by the viewer script. */
+.transcript-page .header {
+  border: 1px solid var(--color-base-300);
+  border-radius: var(--radius-box);
+  background: var(--color-base-100);
+  padding: 24px 28px;
+}
+.transcript-page .session-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.transcript-page .harness-badge {
+  display: inline-block;
+  color: var(--color-primary);
+  background: color-mix(in oklch, var(--color-primary) 12%, var(--color-base-100));
+  border-radius: var(--radius-selector);
+  padding: 2px 8px;
+  font-weight: 600;
+  font-size: 12px;
+}
+.transcript-page .header h1 {
+  font: 600 26px/1.25 var(--type-sans);
+  letter-spacing: -0.01em;
+  color: var(--color-base-content);
+  overflow-wrap: anywhere;
+  margin: 0 0 14px;
+}
+.transcript-page .help-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  margin: 0 0 14px;
+}
+.transcript-page .help-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-left: auto;
+}
+.transcript-page .help-hint kbd {
+  margin: 0 2px;
+}
+.transcript-page .header-info {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 6px 24px;
+  font-size: 13px;
+}
+.transcript-page .info-item {
+  display: grid;
+  grid-template-columns: 6rem minmax(0, 1fr);
+  gap: 8px;
+}
+.transcript-page .info-label {
+  color: var(--muted);
+}
+.transcript-page .info-value {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.transcript-page .header-toggle-btn,
+.transcript-page .download-json-btn {
+  font: 500 12px/1.4 var(--type-sans);
+  padding: 5px 10px;
+  border: 1px solid var(--color-base-300);
+  border-radius: var(--radius-field);
+  background: var(--color-base-100);
+  color: var(--color-base-content);
+  cursor: pointer;
+}
+.transcript-page .header-toggle-btn:hover,
+.transcript-page .download-json-btn:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+.transcript-page .header-toggle-btn[aria-pressed="true"] {
+  background: color-mix(in oklch, var(--color-primary) 12%, var(--color-base-100));
+  border-color: color-mix(in oklch, var(--color-primary) 40%, var(--color-base-300));
+  color: var(--color-primary);
+}
+
+/* Messages */
+.transcript-page .user-message,
+.transcript-page .assistant-message,
+.transcript-page .hook-message,
+.transcript-page .branch-summary {
+  padding: 18px 20px 16px;
+  border: 1px solid var(--color-base-300);
+  border-radius: var(--radius-box);
+  margin: 0;
+  width: 100%;
+}
+.transcript-page .assistant-message {
+  background: var(--color-base-100);
+}
+.transcript-page .user-message {
+  border-color: color-mix(in oklch, var(--color-primary) 28%, var(--color-base-300));
+}
+.transcript-page .message-timestamp {
+  font: 11px/1.6 var(--type-mono);
+  opacity: 1;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+.transcript-page .user-message > .message-timestamp {
+  color: var(--color-primary);
+}
+.transcript-page .is-current {
+  box-shadow: 0 0 0 2px color-mix(in oklch, var(--color-primary) 55%, transparent);
+}
+.transcript-page .thinking-text {
+  font-size: 13px;
+}
+.transcript-page .tool-execution {
+  border: 1px solid var(--color-base-300);
+  border-radius: var(--radius-field);
+}
+.transcript-page .tool-execution.success {
+  border-left: 2px solid var(--color-success);
+}
+.transcript-page .tool-command,
+.transcript-page .tool-output,
+.transcript-page .tool-diff,
+.transcript-page .tool-header,
+.transcript-page pre,
+.transcript-page code {
+  font-family: var(--type-mono);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.transcript-page .tool-command,
+.transcript-page .tool-header {
+  color: var(--color-primary);
+}
+.transcript-page .tool-output,
+.transcript-page .tool-diff {
+  color: var(--color-base-content);
+}
+.transcript-page .copy-link-btn {
+  border-radius: var(--radius-field);
+}
+.transcript-page .amp-details {
+  border: 1px solid var(--color-base-300);
+  border-radius: var(--radius-field);
+  margin: 10px 0;
+  padding: 8px 12px;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+  background: var(--color-base-100);
+}
+.transcript-page .amp-details summary {
+  cursor: pointer;
+  color: var(--color-primary);
+  font-weight: 500;
+}
+.transcript-page .amp-details pre,
+.transcript-page .tool-execution pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 480px;
+  overflow: auto;
+}
+.transcript-page .amp-details a,
+.transcript-page .amp-related a,
+.transcript-page .amp-attachment a {
+  color: var(--color-primary);
+}
+.transcript-page .amp-fields {
+  display: grid;
+  grid-template-columns: minmax(100px, max-content) minmax(0, 3fr);
+  gap: 2px 16px;
+  margin: 10px 0;
+  font-size: 12px;
+}
+.transcript-page .amp-fields dt {
+  color: var(--muted);
+}
+.transcript-page .amp-fields dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.transcript-page .amp-state {
+  font: 11px/1.6 var(--type-mono);
+  color: var(--muted);
+  padding: 2px 8px;
+}
+.transcript-page .amp-attachment,
+.transcript-page .amp-related {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+  margin: 10px 0;
+}
+.transcript-page .amp-summary {
+  margin: 8px 0;
+  width: 100%;
+}
+.transcript-page .amp-revisions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  margin: 0 auto 14px;
+  width: 100%;
+}
+.transcript-page .diff-added {
+  color: var(--color-success);
+  background: color-mix(in oklch, var(--color-success) 12%, transparent);
+}
+.transcript-page .diff-removed {
+  color: var(--color-error);
+  background: color-mix(in oklch, var(--color-error) 12%, transparent);
+}
+.transcript-page .amp-details .message-image {
+  max-width: 100%;
+  max-height: 480px;
+  object-fit: contain;
+  display: block;
+  border-radius: var(--radius-field);
+}
+.transcript-page .hljs {
+  background: none;
+}
+.transcript-page .page-nav {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  margin: 16px auto;
+}
+
+@media (max-width: 900px) {
+  .transcript-page #content {
+    padding: 16px 16px 40px;
+  }
+  .transcript-page .header {
+    padding: 18px;
+  }
+  .transcript-page .header h1 {
+    font-size: 22px;
+  }
+  .transcript-page .user-message,
+  .transcript-page .assistant-message,
+  .transcript-page .hook-message,
+  .transcript-page .branch-summary {
+    padding: 14px 14px 12px;
+  }
+  .transcript-page #sidebar {
+    top: 0;
+    height: 100vh;
+  }
+}
