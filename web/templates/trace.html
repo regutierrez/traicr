@@ -1,29 +1,29 @@
 {{ define "trace" }}
   {{ template "header" . }}
-  <a class="back" href="/traces/{{ .Trace.ID }}">← Back to transcript</a>
-  <section class="page-heading">
+  <a class="btn-ghost mb-4" href="/traces/{{ .Trace.ID }}">Back to transcript</a>
+  <section class="mb-8 flex flex-wrap items-end justify-between gap-4">
     <div>
       <p class="eyebrow">{{ .Trace.Harness }} / TRACE</p>
-      <h1>
+      <h1 class="text-3xl font-semibold tracking-tight">
         {{ if .Trace.Title }}{{ .Trace.Title }}{{ else }}Untitled trace{{ end }}
       </h1>
-      <p class="mono muted">{{ .Trace.NativeTraceID }}</p>
+      <p class="mono muted mt-2">{{ .Trace.NativeTraceID }}</p>
     </div>
-    <a class="button secondary" href="#retained">Retained revisions ↓</a>
+    <a class="btn-outline" href="#retained">Retained revisions</a>
   </section>
-  <div class="trace-layout">
-    <section class="timeline" aria-label="Trace events">
+  <div class="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+    <section class="flex flex-col gap-4" aria-label="Trace events">
       {{ range .Events }}
-        <article class="event" id="event-{{ .ID }}">
-          <div class="result-meta">
-            <span class="badge">{{ .Role }}</span>
-            <strong>{{ .Kind }}</strong>
+        <article class="card" id="event-{{ .ID }}">
+          <div class="text-muted-foreground flex flex-wrap items-center gap-2 font-mono text-[11px]">
+            <span class="badge-secondary">{{ .Role }}</span>
+            <strong class="text-foreground">{{ .Kind }}</strong>
             {{ if .Model }}
               <span>{{ .Model }}</span>
             {{ end }}
             <time>{{ .Timestamp }}</time>
           </div>
-          <div id="key-{{ .Key }}" class="event-links">
+          <div id="key-{{ .Key }}" class="text-muted-foreground flex flex-wrap gap-3 text-xs">
             {{ if .ParentKey }}
               <a
                 href="/traces/{{ $.Trace.ID }}?key={{ .ParentKey }}#key-{{ .ParentKey }}"
@@ -38,76 +38,78 @@
           </div>
           <pre>{{ .Text }}</pre>
           {{ range .Attachments }}
-            <p class="attachment">
+            <p class="text-muted-foreground text-xs">
               Attachment: {{ .Name }} {{ .MediaType }} {{ .Path }}
               {{ .URL }}
             </p>
           {{ end }}
-          <a class="source-link" href="/events/{{ .ID }}/sources">
-            Inspect Source Records →
+          <a class="text-sm" href="/events/{{ .ID }}/sources">
+            Inspect Source Records
           </a>
         </article>
       {{ else }}
         <div class="empty">
-          <h2>No normalized events</h2>
-          <p>
+          <h2 class="text-foreground text-base font-medium">No normalized events</h2>
+          <p class="mt-2">
             The native source files are still retained. Inspect a revision to
             see them and its parsing status.
           </p>
         </div>
       {{ end }}{{ if .NextCursor }}
         <a
-          class="button secondary next"
+          class="btn-outline"
           href="/traces/{{ .Trace.ID }}?view=records&amp;cursor={{ .NextCursor }}"
         >
-          Next events →
+          Next events
         </a>
       {{ end }}
     </section>
-    <aside class="trace-aside">
-      <h2>Trace details</h2>
-      <dl>
-        <dt>Harness</dt>
+    <aside class="card lg:sticky lg:top-6">
+      <h2 class="text-sm font-medium">Trace details</h2>
+      <dl class="grid grid-cols-[7rem_1fr] gap-x-3 gap-y-2 text-sm">
+        <dt class="text-muted-foreground">Harness</dt>
         <dd>{{ .Trace.Harness }}</dd>
-        <dt>Working directory</dt>
-        <dd>{{ .Trace.WorkingDirectory }}</dd>
-        <dt>Repository</dt>
-        <dd>{{ .Trace.Repository }}</dd>
+        <dt class="text-muted-foreground">Working directory</dt>
+        <dd class="break-all">{{ .Trace.WorkingDirectory }}</dd>
+        <dt class="text-muted-foreground">Repository</dt>
+        <dd class="break-all">{{ .Trace.Repository }}</dd>
       </dl>
-      <h2>Related traces</h2>
+      <h2 class="text-sm font-medium">Related traces</h2>
       {{ range .Trace.Parents }}
-        <a href="/traces/{{ .ID }}">↑ Parent: {{ .Title }}</a>
+        <a href="/traces/{{ .ID }}">Parent: {{ .Title }}</a>
       {{ end }}{{ range .Trace.Children }}
-        <a href="/traces/{{ .ID }}">↳ Child: {{ .Title }}</a>
+        <a href="/traces/{{ .ID }}">Child: {{ .Title }}</a>
       {{ else }}
         <p class="muted">No child traces collected.</p>
       {{ end }}
-      <h2 id="retained">Retained revisions</h2>
+      <h2 class="text-sm font-medium" id="retained">Retained revisions</h2>
+      <div class="flex flex-col gap-2">
       {{ range .Trace.Revisions }}
-        <a class="revision-card" href="/revisions/{{ .ID }}/sources">
-          <strong>Revision {{ .ID }}</strong>
-          <span>{{ .Status }}</span>
-          <small class="mono">{{ .Digest }}</small>
+        <a class="hover:bg-muted rounded-lg border p-3 no-underline" href="/revisions/{{ .ID }}/sources">
+          <strong class="text-foreground block">Revision {{ .ID }}</strong>
+          <span class="text-muted-foreground">{{ .Status }}</span>
+          <small class="mono mt-1 block">{{ .Digest }}</small>
         </a>
         {{ range .Diagnostics }}
           <p class="notice"><strong>{{ .Code }}</strong>: {{ .Message }}</p>
         {{ end }}
       {{ end }}
-      <details class="danger-zone">
-        <summary>Permanently delete trace</summary>
-        <p>
+      </div>
+      <details class="border-destructive/30 rounded-lg border p-3">
+        <summary class="text-destructive">Permanently delete trace</summary>
+        <p class="text-muted-foreground mt-2 text-sm">
           Deletes all revisions and events. This cannot be undone. Shared source
           files remain if another trace uses them.
         </p>
-        <form action="/traces/{{ .Trace.ID }}/delete" method="post">
+        <form class="mt-3 flex flex-col gap-3" action="/traces/{{ .Trace.ID }}/delete" method="post">
           <input type="hidden" name="csrf" value="{{ .CSRF }}" />
-          <label for="confirm">
+          <label class="label" for="confirm">
             Type
             <code>{{ .Trace.NativeTraceID }}</code>
             to confirm
           </label>
-          <input name="confirm" id="confirm" required autocomplete="off" />
-          <button class="danger" type="submit">Delete permanently</button>
+          <input class="field" name="confirm" id="confirm" required autocomplete="off" />
+          <button class="btn-destructive" type="submit">Delete permanently</button>
         </form>
       </details>
     </aside>

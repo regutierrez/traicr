@@ -1,36 +1,37 @@
 {{ define "login" }}
   {{ template "header" . }}
-  <section class="login-intro">
+  <section class="max-w-md flex-1">
     <p class="eyebrow">A MEMORY FOR YOUR WORK</p>
-    <h1>
+    <h1 class="text-4xl font-semibold tracking-tight">
       Every trace.
       <br />
       All in one place.
     </h1>
-    <p>
+    <p class="text-muted-foreground mt-4">
       Your coding history belongs to you. Preserve the original records and find
       the details worth coming back to.
     </p>
-    <div class="login-note">
-      <span class="status">
-        <span></span>
+    <div class="mt-8 flex flex-col gap-2">
+      <p class="text-muted-foreground flex items-center gap-2 text-xs">
+        <span class="bg-primary size-1.5 rounded-full"></span>
         One person. Multiple machines.
-      </span>
-      <p>
-        No accounts. No third-party analytics.
-        <br />
-        Just your private archive.
+      </p>
+      <p class="text-muted-foreground text-sm">
+        No accounts. No third-party analytics. Just your private archive.
       </p>
     </div>
   </section>
-  <section class="login-card">
-    <p class="eyebrow">WELCOME BACK</p>
-    <h2>Open your archive</h2>
-    <p>Use the admin token configured on your Traicr server.</p>
-    <form method="post" action="/login">
+  <section class="card w-full max-w-md">
+    <div>
+      <p class="eyebrow">WELCOME BACK</p>
+      <h2 class="text-xl font-semibold tracking-tight">Open your archive</h2>
+      <p class="text-muted-foreground mt-1">Use the admin token configured on your Traicr server.</p>
+    </div>
+    <form class="flex flex-col gap-3" method="post" action="/login">
       <input type="hidden" name="csrf" value="{{ .CSRF }}" />
-      <label for="token">Admin token</label>
+      <label class="label" for="token">Admin token</label>
       <input
+        class="field"
         id="token"
         name="token"
         type="password"
@@ -38,12 +39,9 @@
         required
         autofocus
       />
-      <button type="submit">
-        Unlock archive
-        <span aria-hidden="true">→</span>
-      </button>
+      <button class="btn btn-lg mt-1" type="submit">Unlock archive</button>
     </form>
-    <p class="fine">Use only over your private network or HTTPS.</p>
+    <p class="text-muted-foreground text-xs">Use only over your private network or HTTPS.</p>
   </section>
   {{ template "footer" . }}
 {{ end }}
