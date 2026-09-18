@@ -11,9 +11,9 @@
 	import { childTranscripts, featuredEvents, sessionById } from '$lib/data/archive';
 	import { IsMobile } from '$lib/hooks/is-mobile.svelte.js';
 	import type { ChildStatus, ChildTrace, Session, TraceEvent } from '$lib/data/types';
-	import ArrowRightSLine from 'remixicon-svelte/icons/arrow-right-s-line.svelte';
-	import CheckLine from 'remixicon-svelte/icons/check-line.svelte';
-	import CloseLine from 'remixicon-svelte/icons/close-line.svelte';
+	import ArrowRightSLine from 'remixicon-svelte/icons/arrow-right-s-line';
+	import CheckLine from 'remixicon-svelte/icons/check-line';
+	import CloseLine from 'remixicon-svelte/icons/close-line';
 
 	const mobile = new IsMobile();
 	const id = $derived(page.params.id ?? '');

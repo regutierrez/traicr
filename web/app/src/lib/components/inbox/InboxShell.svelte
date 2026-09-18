@@ -7,11 +7,11 @@
 	import { Separator } from '$lib/components/ui/separator/index.js';
 	import * as Tooltip from '$lib/components/ui/tooltip/index.js';
 	import { IsMobile } from '$lib/hooks/is-mobile.svelte.js';
-	import ArrowLeftLine from 'remixicon-svelte/icons/arrow-left-line.svelte';
-	import ComputerLine from 'remixicon-svelte/icons/computer-line.svelte';
-	import FileListLine from 'remixicon-svelte/icons/file-list-line.svelte';
-	import SearchLine from 'remixicon-svelte/icons/search-line.svelte';
-	import Upload2Line from 'remixicon-svelte/icons/upload-2-line.svelte';
+	import ArrowLeftLine from 'remixicon-svelte/icons/arrow-left-line';
+	import ComputerLine from 'remixicon-svelte/icons/computer-line';
+	import FileListLine from 'remixicon-svelte/icons/file-list-line';
+	import SearchLine from 'remixicon-svelte/icons/search-line';
+	import Upload2Line from 'remixicon-svelte/icons/upload-2-line';
 	import type { Snippet } from 'svelte';
 	import CommandSearch from './CommandSearch.svelte';
 
