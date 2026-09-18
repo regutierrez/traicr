@@ -1,0 +1,6 @@
+{
+  "name": "Traicr",
+  "install": "./.cursor/install.sh",
+  "start": "./.cursor/start.sh",
+  "ports": [8080]
+}
