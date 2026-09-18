@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"html/template"
 	"io"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"os"
@@ -51,25 +52,32 @@ func NewHTTPHandler(configuration config.ServerConfig, database *store.Store, lo
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", serveProcessHealth)
 	mux.Handle("GET /static/", http.FileServerFS(assets.Files))
+	// Built SvelteKit assets live under static/ui/_app. Skip the mount when the UI has not been built.
+	if ui, err := fs.Sub(assets.Files, "static/ui"); err == nil {
+		mux.Handle("GET /_app/", http.FileServer(http.FS(ui)))
+	}
 	mux.HandleFunc("GET /login", app.loginPage)
 	mux.HandleFunc("POST /login", app.login)
 	mux.Handle("POST /logout", app.browser(app.logout))
-	mux.Handle("GET /{$}", app.browser(app.searchPage))
+	mux.Handle("GET /{$}", app.browser(app.spa))
+	mux.Handle("GET /imports", app.browser(app.spa))
+	mux.Handle("GET /imports/{id}", app.browser(app.spa))
+	mux.Handle("GET /machines", app.browser(app.spa))
+	mux.Handle("GET /events/{id}/sources", app.browser(app.spa))
+	mux.Handle("GET /revisions/{id}/sources", app.browser(app.spa))
+	mux.Handle("GET /revisions/{id}/file", app.browser(app.sourceOrSpa))
+	mux.Handle("GET /traces/{id}/records", app.browser(app.spa))
 	mux.Handle("GET /traces/{id}", app.browser(app.tracePage))
 	mux.Handle("GET /traces/{id}/events", app.browser(app.eventsAPI))
 	mux.Handle("GET /traces/{id}/transcript", app.browser(app.transcriptAPI))
 	mux.Handle("GET /traces/resolve", app.browser(app.resolveTrace))
 	mux.Handle("POST /traces/{id}/delete", app.browser(app.deletePage))
-	mux.Handle("GET /events/{id}/sources", app.browser(app.sourcesPage))
-	mux.Handle("GET /revisions/{id}/sources", app.browser(app.revisionPage))
-	mux.Handle("GET /revisions/{id}/file", app.browser(app.sourceFile))
 	mux.Handle("GET /revisions/{id}/block", app.browser(app.sourceBlock))
 	mux.Handle("GET /revisions/{id}/attachment", app.browser(app.sourceAttachment))
-	mux.Handle("GET /imports", app.browser(app.importsPage))
-	mux.Handle("GET /imports/{id}", app.browser(app.reportPage))
-	mux.Handle("GET /machines", app.browser(app.machinesPage))
 	mux.Handle("POST /api/v1/imports", app.api(app.importZIP))
 	mux.Handle("GET /api/v1/search", app.api(app.searchPage))
+	mux.Handle("GET /api/v1/cards", app.api(app.cardsAPI))
+	mux.HandleFunc("GET /api/v1/csrf", app.csrfAPI)
 	mux.Handle("GET /api/v1/imports", app.api(app.importsPage))
 	mux.Handle("GET /api/v1/imports/{id}", app.api(app.reportPage))
 	mux.Handle("GET /api/v1/traces/{id}", app.api(app.tracePage))

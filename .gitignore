@@ -1,4 +1,8 @@
 /bin/
+/web/app/node_modules/
+/web/app/.svelte-kit/
+/web/static/ui/
+/web/ui/node_modules/
 /artifacts/
 *.test
 coverage.out
