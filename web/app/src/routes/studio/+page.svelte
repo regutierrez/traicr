@@ -11,10 +11,10 @@
 	import { ScrollArea } from '$lib/components/ui/scroll-area/index.js';
 	import { Separator } from '$lib/components/ui/separator/index.js';
 	import { Tabs, TabsList, TabsTrigger } from '$lib/components/ui/tabs/index.js';
-	import FileEditLine from 'remixicon-svelte/icons/file-edit-line.svelte';
-	import GitRepositoryLine from 'remixicon-svelte/icons/git-repository-line.svelte';
-	import StackLine from 'remixicon-svelte/icons/stack-line.svelte';
-	import TerminalBoxLine from 'remixicon-svelte/icons/terminal-box-line.svelte';
+	import FileEditLine from 'remixicon-svelte/icons/file-edit-line';
+	import GitRepositoryLine from 'remixicon-svelte/icons/git-repository-line';
+	import StackLine from 'remixicon-svelte/icons/stack-line';
+	import TerminalBoxLine from 'remixicon-svelte/icons/terminal-box-line';
 
 	let range = $state('all');
 

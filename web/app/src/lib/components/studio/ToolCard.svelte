@@ -7,8 +7,8 @@
 		CollapsibleTrigger
 	} from '$lib/components/ui/collapsible/index.js';
 	import { Separator } from '$lib/components/ui/separator/index.js';
-	import ArrowRightSLine from 'remixicon-svelte/icons/arrow-right-s-line.svelte';
-	import TerminalBoxLine from 'remixicon-svelte/icons/terminal-box-line.svelte';
+	import ArrowRightSLine from 'remixicon-svelte/icons/arrow-right-s-line';
+	import TerminalBoxLine from 'remixicon-svelte/icons/terminal-box-line';
 
 	let { event }: { event: TraceEvent } = $props();
 

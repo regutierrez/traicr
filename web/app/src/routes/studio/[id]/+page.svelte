@@ -13,10 +13,10 @@
 	import { Kbd } from '$lib/components/ui/kbd/index.js';
 	import { ScrollArea } from '$lib/components/ui/scroll-area/index.js';
 	import { Tabs, TabsContent, TabsList, TabsTrigger } from '$lib/components/ui/tabs/index.js';
-	import ArrowLeftLine from 'remixicon-svelte/icons/arrow-left-line.svelte';
-	import FileEditLine from 'remixicon-svelte/icons/file-edit-line.svelte';
-	import Robot2Line from 'remixicon-svelte/icons/robot-2-line.svelte';
-	import SendPlaneLine from 'remixicon-svelte/icons/send-plane-line.svelte';
+	import ArrowLeftLine from 'remixicon-svelte/icons/arrow-left-line';
+	import FileEditLine from 'remixicon-svelte/icons/file-edit-line';
+	import Robot2Line from 'remixicon-svelte/icons/robot-2-line';
+	import SendPlaneLine from 'remixicon-svelte/icons/send-plane-line';
 
 	let childId = $state<string | null>(null);
 	let pane = $state('timing');

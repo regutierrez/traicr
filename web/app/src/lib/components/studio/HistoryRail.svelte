@@ -9,8 +9,8 @@
 	import { Kbd } from '$lib/components/ui/kbd/index.js';
 	import { ScrollArea } from '$lib/components/ui/scroll-area/index.js';
 	import { Separator } from '$lib/components/ui/separator/index.js';
-	import HistoryLine from 'remixicon-svelte/icons/history-line.svelte';
-	import SearchLine from 'remixicon-svelte/icons/search-line.svelte';
+	import HistoryLine from 'remixicon-svelte/icons/history-line';
+	import SearchLine from 'remixicon-svelte/icons/search-line';
 
 	let { searchRef = $bindable(null) }: { searchRef?: HTMLInputElement | null } = $props();
 

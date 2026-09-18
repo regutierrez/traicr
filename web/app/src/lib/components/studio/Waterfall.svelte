@@ -3,7 +3,7 @@
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import { ScrollArea } from '$lib/components/ui/scroll-area/index.js';
 	import { Separator } from '$lib/components/ui/separator/index.js';
-	import TimeLine from 'remixicon-svelte/icons/time-line.svelte';
+	import TimeLine from 'remixicon-svelte/icons/time-line';
 
 	const DEFAULT_MS = 80;
 
