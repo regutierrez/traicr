@@ -359,7 +359,7 @@ List endpoints use stable cursor pagination rather than offset pagination. Error
 
 ## Web UI
 
-The server renders HTML with Go templates and uses HTMX for targeted interactions. There is no Node.js build, client-side application router, or separate frontend service.
+The server renders HTML with Go templates and uses HTMX for targeted interactions. Styling is Tailwind CSS with daisyUI, compiled ahead of time into a committed stylesheet (`make ui`); the server build has no Node.js step, and there is no client-side application router or separate frontend service.
 
 Initial pages:
 
