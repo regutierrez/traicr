@@ -12,8 +12,7 @@ uses a separate session-card query; API clients do not need to change.
 ## Viewer
 
 `web/static/pi-transcript/` adapts the HTML export viewer from Pi coding agent
-0.85.1. The viewer uses Traicr's shared light palette, green accents, and body
-typography, with monospace text reserved for code and the tree. A harness badge
+0.85.1. The viewer uses Traicr's shared theme tokens and body typography, with monospace text reserved for code and the tree. A harness badge
 appears beside the session heading. The Pi layout, searchable branch tree,
 filters, Markdown/code rendering, expandable
 tool output, copy links, sidebar resizing, mobile navigation, and T/O controls

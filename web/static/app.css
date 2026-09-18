@@ -5,8 +5,8 @@
 .transcript-card:hover { border-color: var(--green); }
 .transcript-card h3 { font-size: 1.2rem; line-height: 1.4; margin: 18px 0 8px; overflow-wrap: anywhere; }
 .transcript-card h3 a::after { content: ""; position: absolute; inset: 0; }
-.transcript-preview { color: var(--muted); display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; white-space: pre-wrap; }
-.transcript-repository { margin-top: auto; padding-top: 16px; color: var(--muted); overflow-wrap: anywhere; font-size: 0.8rem; }
+.transcript-preview { color: var(--muted-foreground); display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; white-space: pre-wrap; }
+.transcript-repository { margin-top: auto; padding-top: 16px; color: var(--muted-foreground); overflow-wrap: anywhere; font-size: 0.8rem; }
 .transcript-card .result-bottom { padding-top: 16px; font-size: 0.75rem; }
 .transcript-card time { font-size: 0.7rem; overflow-wrap: anywhere; }
 :root {
@@ -42,7 +42,7 @@ button,
   border: 1px solid var(--green);
   border-radius: 6px;
   background: var(--green);
-  color: white;
+  color: var(--primary-foreground);
   cursor: pointer;
   font-weight: 600;
 }
@@ -52,7 +52,7 @@ button:hover,
   text-decoration: none;
 }
 button.quiet {
-  color: var(--muted);
+  color: var(--muted-foreground);
   background: transparent;
   border: 0;
   padding: 8px;
@@ -70,7 +70,7 @@ select {
   padding: 11px 13px;
   background: var(--surface);
   color: var(--ink);
-  border: 1px solid #bdc8bd;
+  border: 1px solid var(--input);
   border-radius: 5px;
 }
 input:focus,
@@ -78,7 +78,7 @@ select:focus,
 button:focus-visible,
 a:focus-visible,
 summary:focus-visible {
-  outline: 3px solid #7ba483;
+  outline: 3px solid var(--ring);
   outline-offset: 3px;
 }
 label {
@@ -139,7 +139,7 @@ h3 {
   display: grid;
   place-items: center;
   background: var(--green);
-  color: white;
+  color: var(--primary-foreground);
   border-radius: 5px;
   font-family: Georgia, serif;
 }
@@ -148,7 +148,7 @@ h3 {
     9px ui-monospace,
     monospace;
   letter-spacing: 1px;
-  color: var(--muted);
+  color: var(--muted-foreground);
   margin-left: 14px;
   border-left: 1px solid var(--line);
   padding-left: 22px;
@@ -161,7 +161,7 @@ nav {
   align-items: stretch;
 }
 nav a {
-  color: var(--muted);
+  color: var(--muted-foreground);
   display: flex;
   align-items: center;
   border-bottom: 2px solid transparent;
@@ -196,7 +196,7 @@ main {
   margin-bottom: 14px;
 }
 .subtitle {
-  color: var(--muted);
+  color: var(--muted-foreground);
   margin: 14px 0 30px;
   max-width: 760px;
 }
@@ -208,7 +208,7 @@ main {
   gap: 8px;
   align-items: center;
   white-space: nowrap;
-  color: var(--muted);
+  color: var(--muted-foreground);
   font-size: 12px;
 }
 .status > span {
@@ -253,7 +253,7 @@ summary {
 }
 .filters summary span {
   font-weight: 400;
-  color: var(--muted);
+  color: var(--muted-foreground);
   margin-left: 14px;
 }
 .filter-grid {
@@ -276,7 +276,7 @@ summary {
   font:
     11px ui-monospace,
     monospace;
-  color: var(--muted);
+  color: var(--muted-foreground);
 }
 .result {
   border: 1px solid var(--line);
@@ -290,7 +290,7 @@ summary {
   align-items: center;
   flex-wrap: wrap;
   gap: 12px;
-  color: var(--muted);
+  color: var(--muted-foreground);
   font:
     11px/1.6 ui-monospace,
     monospace;
@@ -312,7 +312,7 @@ summary {
   color: var(--ink);
 }
 .result h3 span {
-  color: var(--muted);
+  color: var(--muted-foreground);
   font-size: 16px;
   padding-left: 5px;
 }
@@ -337,14 +337,14 @@ pre {
   display: flex;
   justify-content: space-between;
   gap: 20px;
-  border-top: 1px solid #edf0e9;
+  border-top: 1px solid var(--line);
   padding: 12px 0;
   font:
     11px/1.6 ui-monospace,
     monospace;
 }
 .result-bottom > span {
-  color: var(--muted);
+  color: var(--muted-foreground);
   overflow-wrap: anywhere;
 }
 .result-bottom > a {
@@ -355,7 +355,7 @@ pre {
   padding: 65px 25px;
   border: 1px dashed var(--line);
   border-radius: 8px;
-  color: var(--muted);
+  color: var(--muted-foreground);
 }
 .empty h3,
 .empty h2 {
@@ -387,7 +387,7 @@ pre {
   margin: 0 5vw;
   padding: 24px 0;
   border-top: 1px solid var(--line);
-  color: var(--muted);
+  color: var(--muted-foreground);
   font:
     10px/1.5 ui-monospace,
     monospace;
@@ -407,7 +407,7 @@ pre {
   letter-spacing: -3px;
 }
 .login-intro > p:not(.eyebrow) {
-  color: var(--muted);
+  color: var(--muted-foreground);
   max-width: 400px;
   margin-top: 25px;
 }
@@ -418,7 +418,7 @@ pre {
 }
 .login-note p {
   font-size: 12px;
-  color: var(--muted);
+  color: var(--muted-foreground);
   margin-top: 12px;
 }
 .login-card {
@@ -433,7 +433,7 @@ pre {
   margin-bottom: 12px;
 }
 .login-card > p:not(.eyebrow) {
-  color: var(--muted);
+  color: var(--muted-foreground);
   font-size: 13px;
 }
 .login-card form {
@@ -451,7 +451,7 @@ pre {
 }
 .back {
   display: inline-block;
-  color: var(--muted);
+  color: var(--muted-foreground);
   font-size: 12px;
   margin-bottom: 28px;
 }
@@ -461,7 +461,7 @@ pre {
   overflow-wrap: anywhere;
 }
 .muted {
-  color: var(--muted);
+  color: var(--muted-foreground);
 }
 .trace-layout {
   display: grid;
@@ -490,7 +490,7 @@ pre {
   font:
     10px/1.6 ui-monospace,
     monospace;
-  color: var(--muted);
+  color: var(--muted-foreground);
 }
 .source-link {
   font-size: 11px;
@@ -510,7 +510,7 @@ dl {
   margin: 20px 0 30px;
 }
 dt {
-  color: var(--muted);
+  color: var(--muted-foreground);
   margin-bottom: 3px;
 }
 dd {
@@ -528,7 +528,7 @@ dd {
   border-radius: 5px;
 }
 .revision-card span {
-  color: var(--muted);
+  color: var(--muted-foreground);
 }
 .revision-card small {
   font-size: 10px;
@@ -583,8 +583,8 @@ td {
 }
 th {
   font-weight: 600;
-  color: var(--muted);
-  background: #f0f3ed;
+  color: var(--muted-foreground);
+  background: var(--soft);
   white-space: nowrap;
 }
 tbody tr:last-child td {
@@ -623,7 +623,7 @@ tbody tr:last-child td {
   margin-bottom: 20px;
 }
 .machine > p {
-  color: var(--muted);
+  color: var(--muted-foreground);
 }
 .machine > a {
   font-size: 12px;
@@ -642,7 +642,7 @@ tbody tr:last-child td {
   top: -80px;
   left: 10px;
   padding: 12px;
-  background: white;
+  background: var(--surface);
   z-index: 10;
 }
 .skip:focus {
