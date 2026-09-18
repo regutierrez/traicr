@@ -1,6 +1,4 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
-	import { resolve } from '$app/paths';
 	import InboxShell from '$lib/components/inbox/InboxShell.svelte';
 	import SessionRow from '$lib/components/inbox/SessionRow.svelte';
 	import { ScrollArea } from '$lib/components/ui/scroll-area/index.js';
@@ -11,12 +9,14 @@
 	type Filter = 'all' | Harness;
 
 	let filter = $state<Filter>('all');
-	let cursor = $state(0);
+	let focusedId = $state(sessions[0]?.id ?? '');
 
 	const filtered = $derived.by(() => {
 		if (filter === 'all') return sessions;
 		return sessions.filter((session) => session.harness === filter);
 	});
+
+	const listIds = $derived(filtered.map((session) => session.id));
 
 	const groups = $derived.by(() => {
 		const grouped = groupSessions(filtered);
@@ -27,57 +27,20 @@
 		].filter((group) => group.items.length > 0);
 	});
 
-	const focusedId = $derived(filtered[Math.min(cursor, Math.max(filtered.length - 1, 0))]?.id);
-
-	function onFilterChange(next: string) {
-		filter = next as Filter;
-		cursor = 0;
-	}
-
-	function onKeydown(event: KeyboardEvent) {
-		if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
-		if (event.target instanceof HTMLElement) {
-			if (
-				event.target.closest(
-					'input, textarea, select, [contenteditable="true"], [role="dialog"]'
-				)
-			) {
-				return;
-			}
-		}
-
-		if (event.key === 'j' || event.key === 'ArrowDown') {
-			event.preventDefault();
-			cursor = Math.min(cursor + 1, Math.max(filtered.length - 1, 0));
-			return;
-		}
-
-		if (event.key === 'k' || event.key === 'ArrowUp') {
-			event.preventDefault();
-			cursor = Math.max(cursor - 1, 0);
-			return;
-		}
-
-		if (event.key === 'Enter' && focusedId) {
-			event.preventDefault();
-			goto(resolve('/inbox/[id]', { id: focusedId }));
-		}
-	}
+	const highlightId = $derived(listIds.includes(focusedId) ? focusedId : (listIds[0] ?? ''));
 </script>
 
 <svelte:head>
 	<title>Transcripts · traicr</title>
 </svelte:head>
 
-<svelte:window onkeydown={onKeydown} />
-
-<InboxShell>
+<InboxShell listIds={listIds} bind:focusedId>
 	<div class="flex min-h-0 min-w-0 flex-1 flex-col">
 		<div class="flex h-12 shrink-0 items-center px-4">
 			<h1 class="text-sm font-medium">Transcripts</h1>
 		</div>
 		<div class="px-3 pb-2">
-			<Tabs.Root value={filter} onValueChange={onFilterChange}>
+			<Tabs.Root bind:value={filter}>
 				<Tabs.List
 					variant="line"
 					class="h-auto w-full flex-wrap justify-start gap-1 bg-transparent p-0"
@@ -101,7 +64,7 @@
 							{group.label}
 						</p>
 						{#each group.items as session (session.id)}
-							<SessionRow {session} selected={session.id === focusedId} />
+							<SessionRow {session} selected={session.id === highlightId} />
 						{/each}
 					{/each}
 				</div>

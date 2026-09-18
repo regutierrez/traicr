@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { Badge } from '$lib/components/ui/badge/index.js';
@@ -17,10 +18,14 @@
 
 	let {
 		children,
-		compact
+		compact,
+		listIds = [],
+		focusedId = $bindable('')
 	}: {
 		children: Snippet;
 		compact?: boolean;
+		listIds?: string[];
+		focusedId?: string;
 	} = $props();
 
 	const mobile = new IsMobile();
@@ -50,6 +55,33 @@
 		) {
 			event.preventDefault();
 			searchOpen = true;
+			return;
+		}
+
+		if (searchOpen || event.metaKey || event.ctrlKey || event.altKey || isTypingTarget(event.target)) {
+			return;
+		}
+
+		if (!listIds.length) return;
+
+		const current = listIds.includes(focusedId) ? focusedId : listIds[0];
+		const index = Math.max(listIds.indexOf(current), 0);
+
+		if (event.key === 'j' || event.key === 'ArrowDown') {
+			event.preventDefault();
+			focusedId = listIds[Math.min(index + 1, listIds.length - 1)];
+			return;
+		}
+
+		if (event.key === 'k' || event.key === 'ArrowUp') {
+			event.preventDefault();
+			focusedId = listIds[Math.max(index - 1, 0)];
+			return;
+		}
+
+		if (event.key === 'Enter' && current) {
+			event.preventDefault();
+			goto(resolve('/inbox/[id]', { id: current }));
 		}
 	}
 </script>
