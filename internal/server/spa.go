@@ -45,9 +45,9 @@ func cspHash(value string) string {
 	return "'sha256-" + base64.StdEncoding.EncodeToString(sum[:]) + "'"
 }
 
-func (app *application) sourceOrSpa(w http.ResponseWriter, r *http.Request) {
+func (app *application) revisionFile(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Query().Get("download") == "1" {
-		app.sourceFile(w, r)
+		app.downloadSource(w, r)
 		return
 	}
 	app.spa(w, r)
