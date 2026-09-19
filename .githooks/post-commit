@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(git rev-parse --show-toplevel)"
+# shellcheck source=../scripts/no-cursor-attribution.sh
+source "${root}/scripts/no-cursor-attribution.sh"
+
+amend_head_if_cursor_ident

@@ -115,6 +115,16 @@ Collection reads but does not modify the native Claude JSONL files.
 
 ## Development
 
+### Git hooks
+
+This repository uses `core.hooksPath=.githooks` (no husky or lefthook). Enable the hooks once per clone:
+
+```sh
+git config core.hooksPath .githooks
+```
+
+`commit-msg` strips Cursor attribution trailers. `prepare-commit-msg` exports Rafael as `GIT_AUTHOR_*` / `GIT_COMMITTER_*` when the ident is Cursor Agent (and sets local `user.name` / `user.email`). Git resolves author before that hook, so `post-commit` amends the commit to `regutierrez <rpegutierrez@gmail.com>` when HEAD still has a Cursor author or committer. Hosted Cursor cloud agents may still force Cursor Agent as author; squash-merge to Rafael (`regutierrez` / `rpegutierrez@gmail.com`) if that happens.
+
 Run the complete local checks and builds:
 
 ```sh
