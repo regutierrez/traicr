@@ -123,7 +123,7 @@ This repository uses `core.hooksPath=.githooks` (no husky or lefthook). Enable t
 git config core.hooksPath .githooks
 ```
 
-`commit-msg` strips Cursor attribution trailers. `prepare-commit-msg` rewrites a Cursor Agent author or committer to `regutierrez <rpegutierrez@gmail.com>` for that commit. Hosted Cursor cloud agents may still force Cursor Agent as author; the `no-cursor-attribution` workflow and a squash-merge to Rafael (`regutierrez` / `rpegutierrez@gmail.com`) are the backstop.
+`commit-msg` strips Cursor attribution trailers. `prepare-commit-msg` exports Rafael as `GIT_AUTHOR_*` / `GIT_COMMITTER_*` when the ident is Cursor Agent (and sets local `user.name` / `user.email`). Git resolves author before that hook, so `post-commit` amends the commit to `regutierrez <rpegutierrez@gmail.com>` when HEAD still has a Cursor author or committer. Hosted Cursor cloud agents may still force Cursor Agent as author; the `no-cursor-attribution` workflow and a squash-merge to Rafael (`regutierrez` / `rpegutierrez@gmail.com`) are the backstop.
 
 Run the complete local checks and builds:
 

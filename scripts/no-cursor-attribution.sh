@@ -77,20 +77,51 @@ current_ident_is_cursor() {
     || ident_is_cursor "$committer_name" "$committer_email" "$committer_ident"
 }
 
-rewrite_cursor_ident() {
-  if ! current_ident_is_cursor; then
-    return 0
-  fi
+export_rafael_ident() {
   export GIT_AUTHOR_NAME="${REWRITE_AUTHOR_NAME}"
   export GIT_AUTHOR_EMAIL="${REWRITE_AUTHOR_EMAIL}"
   export GIT_COMMITTER_NAME="${REWRITE_AUTHOR_NAME}"
   export GIT_COMMITTER_EMAIL="${REWRITE_AUTHOR_EMAIL}"
-  # Hook exports do not reach the parent git process. Local config is what
-  # `git commit` reads after prepare-commit-msg when GIT_* is unset in the parent.
+}
+
+persist_rafael_ident() {
+  export_rafael_ident
+  # Hook exports do not reach the parent git process. Local config is used
+  # by later commits and by the post-commit amend.
   if git rev-parse --git-dir >/dev/null 2>&1; then
     git config --local user.name "${REWRITE_AUTHOR_NAME}"
     git config --local user.email "${REWRITE_AUTHOR_EMAIL}"
   fi
+}
+
+rewrite_cursor_ident() {
+  if ! current_ident_is_cursor; then
+    return 0
+  fi
+  persist_rafael_ident
+}
+
+# git resolves author before prepare-commit-msg/pre-commit, so those hooks
+# cannot change THIS commit. Amend HEAD when it still carries Cursor identity.
+amend_head_if_cursor_ident() {
+  if [[ "${CURSOR_IDENT_REWRITE:-}" == "1" ]]; then
+    return 0
+  fi
+  if [[ -d "$(git rev-parse --git-path rebase-merge)" || -d "$(git rev-parse --git-path rebase-apply)" ]]; then
+    return 0
+  fi
+  local author_name author_email committer_name committer_email
+  author_name="$(git log -1 --format='%an')"
+  author_email="$(git log -1 --format='%ae')"
+  committer_name="$(git log -1 --format='%cn')"
+  committer_email="$(git log -1 --format='%ce')"
+  if ! ident_is_cursor "$author_name" "$author_email" "" \
+    && ! ident_is_cursor "$committer_name" "$committer_email" ""; then
+    return 0
+  fi
+  persist_rafael_ident
+  export CURSOR_IDENT_REWRITE=1
+  git commit --amend --no-edit --reset-author
 }
 
 print_fix_guidance() {
