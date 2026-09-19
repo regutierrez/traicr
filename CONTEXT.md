@@ -56,3 +56,15 @@ The outcome of an import, listing imported, unchanged, updated, and failed trace
 
 **Repository**:
 One codebase associated with traces across source machines, independently of the local path used on each machine.
+
+**Patch**:
+One recorded file edit produced by a tool call in a trace, typically a write or apply-patch on a single path.
+_Avoid_: Change burst, hunk (unless referring to a diff region inside a Patch)
+
+**Anchor**:
+A recorded link between a commit in a Repository and the Trace that produced it. It lives in the archive, not in the repository other people clone.
+_Avoid_: Git note, git trail, survival
+
+**Signal**:
+A deterministic finding derived from a Trace's Events, such as a tool error, a repeated command, an oversized tool result, or a file read many times in a short window.
+_Avoid_: Evaluation, score, annotation
