@@ -29,6 +29,7 @@ type application struct {
 	store   *store.Store
 	logger  *slog.Logger
 	uploads chan struct{}
+	ui      spaDocument
 }
 
 func NewHTTPHandler(configuration config.ServerConfig, database *store.Store, logger *slog.Logger) (http.Handler, error) {
@@ -38,12 +39,12 @@ func NewHTTPHandler(configuration config.ServerConfig, database *store.Store, lo
 	if configuration.ArchiveLimits.ArchiveBytes == 0 {
 		configuration.ArchiveLimits = archive.DefaultLimits()
 	}
-	app := &application{config: configuration, store: database, logger: logger, uploads: make(chan struct{}, 1)}
+	app := &application{config: configuration, store: database, logger: logger, uploads: make(chan struct{}, 1), ui: loadSPA()}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", serveProcessHealth)
 	mux.Handle("GET /static/", http.FileServerFS(assets.Files))
 	if ui, err := fs.Sub(assets.Files, "static/ui"); err == nil {
-		mux.Handle("GET /_app/", http.FileServer(http.FS(ui)))
+		mux.Handle("GET /_app/", immutableAssets(http.FileServer(http.FS(ui))))
 	}
 	mux.HandleFunc("GET /login", app.loginPage)
 	mux.HandleFunc("POST /login", app.login)
@@ -69,6 +70,8 @@ func NewHTTPHandler(configuration config.ServerConfig, database *store.Store, lo
 	mux.Handle("GET /api/v1/revisions/{id}/file", app.api(app.sourceFile))
 	mux.Handle("GET /api/v1/machines", app.api(app.machines))
 	mux.Handle("DELETE /api/v1/traces/{id}", app.api(app.deleteAPI))
+	// Unknown API paths must not fall through to the browser shell below.
+	mux.HandleFunc("GET /api/", apiNotFound)
 	mux.Handle("GET /", app.browser(app.spa))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")

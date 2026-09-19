@@ -5,6 +5,7 @@ import (
 	"io"
 	"mime"
 	"net/http"
+	"net/url"
 	"path"
 	"strings"
 	"time"
@@ -13,21 +14,26 @@ import (
 	"github.com/regutierrez/traicr/internal/store"
 )
 
-func (app *application) search(w http.ResponseWriter, r *http.Request) {
-	limit, ok := pageLimit(w, r)
-	if !ok {
-		return
-	}
-	values := r.URL.Query()
-	query := store.SearchQuery{
+const searchTimeout = 30 * time.Second
+
+// searchQuery reads the filters shared by the search and cards endpoints.
+func searchQuery(values url.Values, limit int) store.SearchQuery {
+	return store.SearchQuery{
 		Query: values.Get("q"), Mode: values.Get("mode"), Harness: values.Get("harness"),
 		Model: values.Get("model"), Machine: values.Get("machine"), Repository: values.Get("repository"),
 		After: values.Get("after"), Before: values.Get("before"), Role: values.Get("role"),
 		Kind: values.Get("kind"), Tool: values.Get("tool"), Cursor: values.Get("cursor"), Limit: limit,
 	}
-	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+}
+
+func (app *application) search(w http.ResponseWriter, r *http.Request) {
+	limit, ok := pageLimit(w, r)
+	if !ok {
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), searchTimeout)
 	defer cancel()
-	page, err := app.store.Search(ctx, query)
+	page, err := app.store.Search(ctx, searchQuery(r.URL.Query(), limit))
 	if err != nil {
 		app.failure(w, err)
 		return
@@ -35,52 +41,53 @@ func (app *application) search(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, page)
 }
 
+// transcriptCard is the session summary the home page renders.
+type transcriptCard struct {
+	ID            int64  `json:"id"`
+	Title         string `json:"title,omitempty"`
+	Harness       string `json:"harness"`
+	NativeTraceID string `json:"native_trace_id"`
+	Repository    string `json:"repository,omitempty"`
+	UpdatedAt     string `json:"updated_at"`
+	Snippet       string `json:"snippet,omitempty"`
+	EventCount    int    `json:"event_count"`
+	RevisionCount int    `json:"revision_count"`
+}
+
+type transcriptCardPage struct {
+	Cards      []transcriptCard `json:"cards"`
+	NextCursor string           `json:"next_cursor,omitempty"`
+}
+
+func newTranscriptCard(item store.TranscriptCard) transcriptCard {
+	snippet := item.MatchSnippet
+	if snippet == "" {
+		snippet = item.Preview
+	}
+	return transcriptCard{
+		ID: item.ID, Title: item.Title, Harness: item.Harness, NativeTraceID: item.NativeTraceID,
+		Repository: item.Repository, UpdatedAt: item.UpdatedAt, Snippet: snippet,
+		EventCount: item.EventCount, RevisionCount: item.RevisionCount,
+	}
+}
+
 func (app *application) cards(w http.ResponseWriter, r *http.Request) {
 	limit, ok := pageLimit(w, r)
 	if !ok {
 		return
 	}
-	values := r.URL.Query()
-	query := store.SearchQuery{
-		Query: values.Get("q"), Mode: values.Get("mode"), Harness: values.Get("harness"),
-		Model: values.Get("model"), Machine: values.Get("machine"), Repository: values.Get("repository"),
-		After: values.Get("after"), Before: values.Get("before"), Role: values.Get("role"),
-		Kind: values.Get("kind"), Tool: values.Get("tool"), Cursor: values.Get("cursor"), Limit: limit,
-	}
-	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(r.Context(), searchTimeout)
 	defer cancel()
-	page, err := app.store.TranscriptCards(ctx, query)
+	page, err := app.store.TranscriptCards(ctx, searchQuery(r.URL.Query(), limit))
 	if err != nil {
 		app.failure(w, err)
 		return
 	}
-	type card struct {
-		ID            int64  `json:"id"`
-		Title         string `json:"title,omitempty"`
-		Harness       string `json:"harness"`
-		NativeTraceID string `json:"native_trace_id"`
-		Repository    string `json:"repository,omitempty"`
-		UpdatedAt     string `json:"updated_at"`
-		Snippet       string `json:"snippet,omitempty"`
-		EventCount    int    `json:"event_count"`
-		RevisionCount int    `json:"revision_count"`
-	}
-	cards := make([]card, 0, len(page.Cards))
+	cards := make([]transcriptCard, 0, len(page.Cards))
 	for _, item := range page.Cards {
-		snippet := item.MatchSnippet
-		if snippet == "" {
-			snippet = item.Preview
-		}
-		cards = append(cards, card{
-			ID: item.ID, Title: item.Title, Harness: item.Harness, NativeTraceID: item.NativeTraceID,
-			Repository: item.Repository, UpdatedAt: item.UpdatedAt, Snippet: snippet,
-			EventCount: item.EventCount, RevisionCount: item.RevisionCount,
-		})
+		cards = append(cards, newTranscriptCard(item))
 	}
-	writeJSON(w, struct {
-		Cards      []card `json:"cards"`
-		NextCursor string `json:"next_cursor,omitempty"`
-	}{Cards: cards, NextCursor: page.NextCursor})
+	writeJSON(w, transcriptCardPage{Cards: cards, NextCursor: page.NextCursor})
 }
 
 func (app *application) trace(w http.ResponseWriter, r *http.Request) {
@@ -145,12 +152,22 @@ func (app *application) revisionSources(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, sources)
 }
 
+// sourceFile is the API route: JSON preview on request, otherwise the original bytes.
 func (app *application) sourceFile(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Query().Get("preview") == "1" {
 		app.previewSource(w, r)
 		return
 	}
 	app.downloadSource(w, r)
+}
+
+// revisionFile is the browser route: the original bytes on request, otherwise the preview page.
+func (app *application) revisionFile(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Query().Get("download") == "1" {
+		app.downloadSource(w, r)
+		return
+	}
+	app.spa(w, r)
 }
 
 func (app *application) previewSource(w http.ResponseWriter, r *http.Request) {
