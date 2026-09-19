@@ -127,8 +127,9 @@ func TestFoundationServerImage(t *testing.T) {
 		if rootResponse.statusCode != http.StatusOK {
 			t.Errorf("GET / status = %d, want %d", rootResponse.statusCode, http.StatusOK)
 		}
-		if !strings.HasPrefix(rootResponse.contentType, "text/html") || !strings.Contains(string(rootResponse.body), "Open your archive") {
-			t.Errorf("GET / did not serve the login page: Content-Type=%q body=%q", rootResponse.contentType, rootResponse.body)
+		rootBody := string(rootResponse.body)
+		if !strings.HasPrefix(rootResponse.contentType, "text/html") || !isSvelteDocument(rootBody) {
+			t.Errorf("GET / did not serve the Svelte document: Content-Type=%q body=%q", rootResponse.contentType, rootBody)
 		}
 
 		postHealthResponse := requestServer(t, http.MethodPost, serverURL+"/healthz")
@@ -192,6 +193,10 @@ func TestFoundationComposeConfiguration(t *testing.T) {
 			t.Errorf("compose configuration does not contain %q:\n%s", requiredConfiguration, output)
 		}
 	}
+}
+
+func isSvelteDocument(body string) bool {
+	return strings.Contains(body, "data-sveltekit") || strings.Contains(body, "/_app/immutable/")
 }
 
 func requireDockerEngine(t *testing.T) {

@@ -44,6 +44,14 @@ func TestBuiltUIAssetsAreServed(t *testing.T) {
 			t.Fatalf("%s: %d %q", path, response.Code, response.Header().Get("Cache-Control"))
 		}
 	}
+	login := request(handler, "GET", "/login", nil, "")
+	html := login.Body.String()
+	if login.Code != http.StatusOK || !strings.HasPrefix(login.Header().Get("Content-Type"), "text/html") {
+		t.Fatalf("login document: %d %s", login.Code, html)
+	}
+	if !strings.Contains(html, "data-sveltekit") && !strings.Contains(html, "/_app/immutable/") {
+		t.Fatalf("login is not the Svelte document: %s", html)
+	}
 }
 
 func testHandler(t *testing.T, secure bool) http.Handler {
