@@ -85,6 +85,9 @@ body { font: 15px/1.6 var(--font-body); }
 .thinking-text { font-size: 13px; }
 .tool-execution { border: 1px solid var(--line); border-radius: 8px; }
 .tool-command, .tool-output, .tool-diff, .tool-header, pre, code { font-family: var(--font-code); font-size: 12px; line-height: 1.6; }
+/* The app stylesheet's Tailwind preflight removes list markers; Pi's Markdown relies on them. */
+.markdown-content ul { list-style: disc; }
+.markdown-content ol { list-style: decimal; }
 .tool-command, .tool-header { color: var(--green); }
 .tool-output, .tool-diff { color: var(--ink); }
 .header-toggle-btn:focus-visible, .download-json-btn:focus-visible, a:focus-visible, .filter-btn:focus-visible { outline: 2px solid var(--green); outline-offset: 3px; }

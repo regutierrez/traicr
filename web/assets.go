@@ -2,5 +2,7 @@ package web
 
 import "embed"
 
-//go:embed templates/*.html static/*
+// all: keeps SvelteKit's _app directory, which a plain directory pattern would skip.
+//
+//go:embed all:static
 var Files embed.FS

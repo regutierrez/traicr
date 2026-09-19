@@ -133,7 +133,7 @@ func TestAmpDownloadedImagesSurviveArchiveImport(t *testing.T) {
 	if !strings.Contains(page.Body.String(), `"archived_path":"`+imagePath+`"`) || !strings.Contains(page.Body.String(), `"path":"screenshot.png"`) {
 		t.Fatalf("archived image missing from transcript: %s", page.Body)
 	}
-	if response := get("/traces/1?view=records"); response.Code != 200 || !strings.Contains(response.Body.String(), "amp_image_unavailable") || !strings.Contains(response.Body.String(), "Recollect and upload") {
+	if response := request(handler, "GET", "/api/v1/traces/1", nil, adminToken); response.Code != 200 || !strings.Contains(response.Body.String(), "amp_image_unavailable") || !strings.Contains(response.Body.String(), "Recollect and upload") {
 		t.Fatalf("missing image diagnostic not shown: %d %s", response.Code, response.Body)
 	}
 	for _, path := range []string{"/revisions/1/attachment?pointer=/messages/0/content/0", "/revisions/1/file?path=" + imagePath + "&download=1"} {
@@ -282,12 +282,11 @@ func TestAmpTranscriptRevisionAndSourceInspection(t *testing.T) {
 	if response.Code != 200 || !strings.Contains(response.Body.String(), "Preserve the boundary case") || strings.Contains(response.Body.String(), "Inspect the build") {
 		t.Fatalf("precise block: %s", response.Body)
 	}
-	response = get("/traces/1?revision=1")
-	if response.Code != 200 || !strings.Contains(response.Body.String(), `value="1" selected`) || !strings.Contains(response.Body.String(), "Download native Amp export") {
-		t.Fatalf("revision controls: %s", response.Body)
-	}
-	if response := get("/traces/1?revision=999"); response.Code != 404 {
-		t.Fatalf("unrelated viewer revision: %d", response.Code)
+	// Revision selection now happens in the browser app, so every viewer URL serves the shell.
+	for _, path := range []string{"/traces/1?revision=1", "/traces/1?revision=999"} {
+		if response := get(path); response.Code != 200 || !strings.HasPrefix(response.Header().Get("Content-Type"), "text/html") {
+			t.Fatalf("viewer shell %s: %d %s", path, response.Code, response.Body)
+		}
 	}
 	response = get("/revisions/1/file?path=source/export.json&download=1")
 	if response.Code != 200 || !strings.Contains(response.Header().Get("Content-Disposition"), "attachment") || !strings.Contains(response.Body.String(), "PRIVATE_SIGNATURE") {
@@ -342,19 +341,26 @@ func TestTranscriptHomeAndBrowserEventPagination(t *testing.T) {
 		handler.ServeHTTP(r, req)
 		return r
 	}
-	for _, path := range []string{"/", "/?q=matching"} {
-		response := browserGet(path)
-		if response.Code != 200 || strings.Count(response.Body.String(), `class="transcript-card"`) != 2 || strings.Contains(response.Body.String(), "Recent events") {
-			t.Fatalf("not session cards: %s %d %s", path, response.Code, response.Body)
+	for _, path := range []string{"/api/v1/cards", "/api/v1/cards?q=matching"} {
+		response := request(handler, "GET", path, nil, adminToken)
+		var payload struct {
+			Cards []struct {
+				ID int64 `json:"id"`
+			} `json:"cards"`
 		}
+		if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil || response.Code != 200 || len(payload.Cards) != 2 {
+			t.Fatalf("not session cards: %s %d %s %v", path, response.Code, response.Body, err)
+		}
+	}
+	if response := browserGet("/"); response.Code != 200 || strings.Contains(response.Body.String(), "Recent events") {
+		t.Fatalf("home: %d %s", response.Code, response.Body)
 	}
 	viewer := browserGet("/traces/1")
-	for _, marker := range []string{"tree-search", "pi-transcript.js", "transcript-status", "Session details", `data-harness="pi"`, "/static/traicr-theme.css"} {
-		if !strings.Contains(viewer.Body.String(), marker) {
-			t.Fatalf("missing Pi viewer element: %s", marker)
-		}
+	if viewer.Code != 200 || strings.Contains(viewer.Body.String(), "Recent events") {
+		t.Fatalf("viewer: %d %s", viewer.Code, viewer.Body)
 	}
-	if strings.Contains(viewer.Header().Get("Content-Security-Policy"), "unsafe-inline") {
+	csp := viewer.Header().Get("Content-Security-Policy")
+	if !strings.Contains(csp, "script-src 'self'") || strings.Contains(csp, "script-src 'unsafe-inline'") {
 		t.Fatal("viewer weakened CSP")
 	}
 	if response := request(handler, "GET", "/traces/1/events", nil, ""); response.Code != http.StatusSeeOther {
@@ -370,7 +376,7 @@ func TestTranscriptHomeAndBrowserEventPagination(t *testing.T) {
 	if err := json.Unmarshal(second.Body.Bytes(), &page); err != nil || len(page.Events) != 5 || page.NextCursor != "" {
 		t.Fatalf("second event page: %d %v", len(page.Events), err)
 	}
-	if response := browserGet("/traces/1?view=records"); response.Code != 200 || !strings.Contains(response.Body.String(), "Retained revisions") {
-		t.Fatalf("source details unavailable: %d", response.Code)
+	if response := request(handler, "GET", "/api/v1/traces/1", nil, adminToken); response.Code != 200 || !strings.Contains(response.Body.String(), `"revisions"`) {
+		t.Fatalf("source details unavailable: %d %s", response.Code, response.Body)
 	}
 }
