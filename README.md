@@ -115,6 +115,16 @@ Collection reads but does not modify the native Claude JSONL files.
 
 ## Development
 
+The browser UI is a SvelteKit app in `web/app`, using shadcn-svelte. Go serves that client for every page, including the transcript viewer, and the JSON API under `/api/v1`. Build the UI before `go run` if you want the real pages instead of the fallback shell:
+
+```sh
+cd web/app
+npm ci
+npm run build
+```
+
+`npm run dev` serves the UI on port 5173 and proxies `/api`, login, and the transcript viewer to `http://127.0.0.1:8080`. The Docker image builds the UI itself.
+
 ### Git hooks
 
 This repository uses `core.hooksPath=.githooks` (no husky or lefthook). Enable the hooks once per clone:

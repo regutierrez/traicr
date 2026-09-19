@@ -160,7 +160,7 @@
     }
 
     .sidebar-search::placeholder {
-      color: var(--muted);
+      color: var(--muted-foreground);
     }
 
     .filter-btn {
@@ -168,7 +168,7 @@
       font-size: 10px;
       font-family: inherit;
       background: transparent;
-      color: var(--muted);
+      color: var(--muted-foreground);
       border: 1px solid var(--dim);
       border-radius: 3px;
       cursor: pointer;
@@ -191,7 +191,7 @@
       font-size: 12px;
       font-family: inherit;
       background: transparent;
-      color: var(--muted);
+      color: var(--muted-foreground);
       border: 1px solid var(--dim);
       border-radius: 3px;
       cursor: pointer;
@@ -244,7 +244,7 @@
     }
 
     .tree-prefix {
-      color: var(--muted);
+      color: var(--muted-foreground);
       flex-shrink: 0;
       font-family: monospace;
       white-space: pre;
@@ -278,11 +278,11 @@
     }
 
     .tree-role-tool {
-      color: var(--muted);
+      color: var(--muted-foreground);
     }
 
     .tree-muted {
-      color: var(--muted);
+      color: var(--muted-foreground);
     }
 
     .tree-error {
@@ -304,7 +304,7 @@
     .tree-status {
       padding: 4px 12px;
       font-size: 10px;
-      color: var(--muted);
+      color: var(--muted-foreground);
       flex-shrink: 0;
     }
 
@@ -441,7 +441,7 @@
       background: var(--container-bg);
       border: 1px solid var(--dim);
       border-radius: 4px;
-      color: var(--muted);
+      color: var(--muted-foreground);
       cursor: pointer;
       opacity: 0;
       transition: opacity 0.15s, background 0.15s, color 0.15s;
@@ -723,7 +723,7 @@
     }
 
     .system-prompt-expand-hint {
-      color: var(--muted);
+      color: var(--muted-foreground);
       font-style: italic;
       margin-top: 4px;
     }
@@ -753,7 +753,7 @@
     .system-prompt-note {
       font-size: 10px;
       font-style: italic;
-      color: var(--muted);
+      color: var(--muted-foreground);
       margin-top: 4px;
     }
 
@@ -785,7 +785,7 @@
     }
 
     .tool-params-hint {
-      color: var(--muted);
+      color: var(--muted-foreground);
       font-style: italic;
     }
 
@@ -1056,7 +1056,7 @@
       font-size: 12px;
       font-family: inherit;
       background: transparent;
-      color: var(--muted);
+      color: var(--muted-foreground);
       border: 1px solid var(--dim);
       border-radius: 3px;
       cursor: pointer;
