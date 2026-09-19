@@ -87,7 +87,7 @@
 {#snippet follow(entry: SessionEntry)}
 	{#if entry.type === 'message' && entry.message?.role === 'assistant'}
 		<section class="flex flex-col gap-3" id="entry-{entry.id}">
-			<p class="text-muted-foreground font-mono text-[11px] tracking-widest">ASSISTANT{#if entry.message.model} · {entry.message.model}{/if}</p>
+			<p class="text-muted-foreground font-mono text-[11px] tracking-widest">ASSISTANT{#if entry.message.model}<span> · {entry.message.model}</span>{/if}</p>
 			{@render messageBlocks(entry.message)}
 			{#if entry.message.stopReason && !['stop', 'toolUse', 'complete'].includes(entry.message.stopReason)}
 				<p class="text-destructive text-sm">Recorded response state: {entry.message.stopReason}</p>
@@ -96,7 +96,7 @@
 	{:else if entry.type === 'message' && entry.message?.role === 'toolResult'}
 		<details class="bg-muted/40 rounded-lg border px-3 py-2" id="entry-{entry.id}" open={showTools}>
 			<summary class="cursor-pointer font-mono text-sm font-medium">
-				{entry.message.toolName || 'tool result'}{#if entry.message.isError} · error{/if}
+				{entry.message.toolName || 'tool result'}{#if entry.message.isError}<span> · error</span>{/if}
 			</summary>
 			<pre class="mt-2 font-mono text-xs whitespace-pre-wrap">{resultText(entry.message)}</pre>
 			{#each attachments(entry.message.content) as block, index (`result-attach-${index}`)}
