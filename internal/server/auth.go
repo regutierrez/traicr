@@ -122,15 +122,21 @@ func (app *application) loginPage(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
 	}
-	value := app.setSession(w, "login")
-	r.AddCookie(&http.Cookie{Name: sessionCookie, Value: value})
-	// Replace a stale cookie rather than allowing it to select the form token.
-	r.Header.Set("Cookie", sessionCookie+"="+value)
+	// Reuse a live login cookie so a second GET /login cannot invalidate the
+	// CSRF token already rendered in the Svelte form.
+	if app.session(r, "login") == "" {
+		value := app.setSession(w, "login")
+		r.AddCookie(&http.Cookie{Name: sessionCookie, Value: value})
+		r.Header.Set("Cookie", sessionCookie+"="+value)
+	}
 	app.spa(w, r)
 }
 
 func (app *application) csrfAPI(w http.ResponseWriter, r *http.Request) {
-	if app.session(r, "session") == "" && app.session(r, "login") == "" {
+	// If the browser already has a session cookie, sign that value. Minting a
+	// second cookie here desyncs the form token when the Set-Cookie is dropped
+	// (SvelteKit's load fetch) or arrives after the page has rendered.
+	if _, err := r.Cookie(sessionCookie); err != nil && app.session(r, "session") == "" && app.session(r, "login") == "" {
 		value := app.setSession(w, "login")
 		r.AddCookie(&http.Cookie{Name: sessionCookie, Value: value})
 		r.Header.Set("Cookie", sessionCookie+"="+value)

@@ -5,12 +5,35 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
 	import { Input } from '$lib/components/ui/input';
+	import { submitGoForm } from '$lib/forms';
 	import { recordsHref, revisionSourcesHref, transcriptHref } from '$lib/links';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
 	let trace = $derived(data.trace);
 	let cursor = $derived(page.url.searchParams.get('cursor') ?? '');
+	let deleteError = $state('');
+	let deleting = $state(false);
+
+	async function removeTrace(event: SubmitEvent) {
+		event.preventDefault();
+		const form = event.currentTarget;
+		if (!(form instanceof HTMLFormElement)) return;
+		deleting = true;
+		deleteError = '';
+		try {
+			const result = await submitGoForm(form);
+			if (result.ok) {
+				location.assign(result.url);
+				return;
+			}
+			deleteError = result.message;
+		} catch {
+			deleteError = 'Could not reach the server';
+		} finally {
+			deleting = false;
+		}
+	}
 </script>
 
 <svelte:head><title>{trace?.title || 'Trace'} · Traicr</title></svelte:head>
@@ -91,11 +114,14 @@
 				</div>
 				<details class="border-destructive/30 rounded-lg border p-3">
 					<summary class="text-destructive cursor-pointer">Permanently delete trace</summary>
-					<form class="mt-3 flex flex-col gap-3" action="/traces/{trace.id}/delete" method="post" data-sveltekit-reload>
+					<form class="mt-3 flex flex-col gap-3" action="/traces/{trace.id}/delete" method="post" onsubmit={removeTrace} aria-busy={deleting}>
 						<input type="hidden" name="csrf" value={data.csrf} />
 						<label class="text-sm font-medium" for="confirm">Type <code>{trace.native_trace_id}</code> to confirm</label>
-						<Input id="confirm" name="confirm" required autocomplete="off" />
-						<Button type="submit" variant="destructive">Delete permanently</Button>
+						<Input id="confirm" name="confirm" required autocomplete="off" aria-invalid={deleteError ? true : undefined} aria-describedby={deleteError ? 'delete-error' : undefined} />
+						{#if deleteError}
+							<p id="delete-error" class="text-destructive text-sm" role="alert">{deleteError}</p>
+						{/if}
+						<Button type="submit" variant="destructive" disabled={deleting}>{deleting ? 'Deleting…' : 'Delete permanently'}</Button>
 					</form>
 				</details>
 				{#if cursor}<p class="text-muted-foreground text-xs">Showing a later page of events.</p>{/if}

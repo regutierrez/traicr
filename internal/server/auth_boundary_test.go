@@ -4,6 +4,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -99,6 +100,55 @@ func TestLoginRejectsInvalidReferrersAndForwardedHeaderSpoofing(t *testing.T) {
 				t.Fatalf("invalid source accepted: %d %s", response.Code, response.Body)
 			}
 		})
+	}
+}
+
+func TestLoginPageReusesLiveLoginCookie(t *testing.T) {
+	handler := testHandler(t, false)
+	first := request(handler, http.MethodGet, "/login", nil, "")
+	if first.Code != http.StatusOK || len(first.Result().Cookies()) != 1 {
+		t.Fatalf("first login page: %d cookies=%d", first.Code, len(first.Result().Cookies()))
+	}
+	cookie := first.Result().Cookies()[0]
+	second := httptest.NewRequest(http.MethodGet, "/login", nil)
+	second.AddCookie(cookie)
+	replay := httptest.NewRecorder()
+	handler.ServeHTTP(replay, second)
+	if replay.Code != http.StatusOK {
+		t.Fatalf("replayed login page: %d", replay.Code)
+	}
+	if cookies := replay.Result().Cookies(); len(cookies) != 0 {
+		t.Fatalf("replayed login page rotated the cookie: %#v", cookies)
+	}
+}
+
+func TestCSRFAPISignsExistingCookieInsteadOfMintingAnother(t *testing.T) {
+	handler := testHandler(t, false)
+	page := request(handler, http.MethodGet, "/login", nil, "")
+	cookie := page.Result().Cookies()[0]
+	want := csrfFor(cookie)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/csrf", nil)
+	req.AddCookie(cookie)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, req)
+	if response.Code != http.StatusOK {
+		t.Fatalf("csrf: %d %s", response.Code, response.Body)
+	}
+	if got := response.Result().Cookies(); len(got) != 0 {
+		t.Fatalf("csrf rotated the cookie: %#v", got)
+	}
+	var body struct {
+		CSRF string `json:"csrf"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil || body.CSRF != want {
+		t.Fatalf("csrf token: %s want %s err=%v", response.Body, want, err)
+	}
+
+	form := url.Values{"csrf": {body.CSRF}, "token": {adminToken}}
+	login := submit(handler, "/login", form, cookie, "http://example.com")
+	if login.Code != http.StatusSeeOther {
+		t.Fatalf("login with signed existing cookie: %d %s", login.Code, login.Body)
 	}
 }
 
