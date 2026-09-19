@@ -1,6 +1,6 @@
 # Traicr
 
-A private archive for collecting and searching one person's AI coding traces from multiple personal machines.
+A private archive for collecting, searching, and reading one person's AI coding traces from multiple personal machines, including the file edits and commits those traces produced.
 
 ## Language
 
