@@ -1,11 +1,11 @@
+import { readJSON } from '$lib/api';
 import type { LayoutLoad } from './$types';
 
 export const ssr = false;
 export const prerender = false;
 
+// Every form posted to the Go server carries this token; the endpoint mints a login cookie when there is none.
 export const load: LayoutLoad = async ({ fetch }) => {
-	const response = await fetch('/api/v1/csrf', { headers: { accept: 'application/json' } });
-	if (!response.ok) return { csrf: '' };
-	const body = (await response.json()) as { csrf?: string };
-	return { csrf: body.csrf ?? '' };
+	const result = await readJSON<{ csrf?: string }>(fetch, '/api/v1/csrf');
+	return { csrf: result.ok ? (result.data.csrf ?? '') : '' };
 };

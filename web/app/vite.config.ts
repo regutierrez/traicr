@@ -2,6 +2,22 @@ import tailwindcss from '@tailwindcss/vite';
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vite';
 
+const server = 'http://127.0.0.1:8080';
+
+type Request = { url?: string; method?: string };
+
+// Some browser paths are Svelte pages for GET and Go handlers otherwise, or Go handlers only for
+// particular sub-paths. Returning the URL from bypass keeps the request in Vite.
+function pageUnless(isServerRequest: (request: Request) => boolean) {
+	return {
+		target: server,
+		bypass: (request: Request) => (isServerRequest(request) ? undefined : request.url)
+	};
+}
+
+const isMutation = (request: Request) => request.method !== 'GET' && request.method !== 'HEAD';
+const pathOf = (request: Request) => new URL(request.url ?? '/', server);
+
 export default defineConfig({
 	plugins: [tailwindcss(), sveltekit()],
 	server: {
@@ -9,22 +25,15 @@ export default defineConfig({
 		port: 5173,
 		strictPort: true,
 		proxy: {
-			'/api': 'http://127.0.0.1:8080',
-			'/logout': 'http://127.0.0.1:8080',
-			'/static': 'http://127.0.0.1:8080',
-			'/login': {
-				target: 'http://127.0.0.1:8080',
-				bypass: (req) => (req.method === 'GET' ? req.url : undefined)
-			},
-			'/traces': {
-				target: 'http://127.0.0.1:8080',
-				bypass: (req) => {
-					const url = req.url ?? '';
-					if (url.includes('/events') || url.includes('/transcript') || url.includes('/resolve')) return undefined;
-					if (req.method !== 'GET' && req.method !== 'HEAD') return undefined;
-					return url;
-				}
-			}
+			'/api': server,
+			'/logout': server,
+			'/static': server,
+			'/login': pageUnless(isMutation),
+			'/traces': pageUnless((request) => isMutation(request) || /\/(events|transcript|resolve)$/.test(pathOf(request).pathname)),
+			'/revisions': pageUnless((request) => {
+				const url = pathOf(request);
+				return /\/(attachment|block)$/.test(url.pathname) || url.searchParams.get('download') === '1';
+			})
 		}
 	}
 });

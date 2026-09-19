@@ -6,9 +6,11 @@
 	import { Card, CardContent } from '$lib/components/ui/card';
 	import { Input } from '$lib/components/ui/input';
 	import { highlightParts } from '$lib/highlight';
-	import { harnesses, type Card as TranscriptCard } from '$lib/types';
+	import { transcriptHref, withQuery } from '$lib/links';
+	import { harnesses, type TranscriptCard } from '$lib/types';
+	import type { PageProps } from './$types';
 
-	let { data } = $props();
+	let { data }: PageProps = $props();
 	let query = $derived(page.url.searchParams.get('q') ?? '');
 	let mode = $derived(page.url.searchParams.get('mode') ?? 'fulltext');
 
@@ -19,7 +21,7 @@
 	function nextHref(cursor: string) {
 		const params = new URLSearchParams(page.url.searchParams);
 		params.set('cursor', cursor);
-		return resolve(`/?${params.toString()}`);
+		return withQuery(resolve('/'), params);
 	}
 </script>
 
@@ -124,12 +126,12 @@
 				<time datetime={card.updated_at}>{card.updated_at}</time>
 			</div>
 			<h3 class="text-base font-medium">
-				<a class="text-foreground after:absolute after:inset-0" href={resolve('/traces/[id]', { id: String(card.id) })} data-sveltekit-reload>
+				<a class="text-foreground after:absolute after:inset-0" href={transcriptHref(card.id)}>
 					{card.title || card.native_trace_id}
 				</a>
 			</h3>
 			<p class="text-muted-foreground line-clamp-4 whitespace-pre-wrap">
-				{#each highlightParts(card.snippet || 'Open the transcript to explore this session.', query, mode) as part, index (index)}
+				{#each highlightParts(card.snippet || 'Open the transcript to explore this session.', query, mode) as part}
 					{#if part.mark}<mark>{part.text}</mark>{:else}{part.text}{/if}
 				{/each}
 			</p>

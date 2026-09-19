@@ -1,4 +1,4 @@
-export type Card = {
+export type TranscriptCard = {
 	id: number;
 	title?: string;
 	harness: string;
@@ -10,8 +10,8 @@ export type Card = {
 	revision_count: number;
 };
 
-export type CardPage = {
-	cards: Card[];
+export type TranscriptCardPage = {
+	cards: TranscriptCard[];
 	next_cursor?: string;
 };
 

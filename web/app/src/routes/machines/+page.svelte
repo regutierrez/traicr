@@ -1,8 +1,10 @@
 <script lang="ts">
-	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
 	import { resolve } from '$app/paths';
+	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
+	import { withQuery } from '$lib/links';
+	import type { PageProps } from './$types';
 
-	let { data } = $props();
+	let { data }: PageProps = $props();
 </script>
 
 <svelte:head><title>Source machines · Traicr</title></svelte:head>
@@ -30,7 +32,7 @@
 					<dt class="text-muted-foreground">Last seen</dt>
 					<dd>{machine.last_seen}</dd>
 				</dl>
-				<a href={resolve(`/?machine=${machine.id}`)}>Search this machine</a>
+				<a href={withQuery(resolve('/'), { machine: machine.id })}>Search this machine</a>
 			</CardContent>
 		</Card>
 	{:else}
