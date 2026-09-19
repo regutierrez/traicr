@@ -4,7 +4,6 @@ FROM node:22-bookworm AS ui
 
 WORKDIR /src
 COPY web/app/package.json web/app/package-lock.json web/app/
-COPY web/static/traicr-theme.css web/static/traicr-theme.css
 WORKDIR /src/web/app
 RUN npm ci
 COPY web/app/ ./

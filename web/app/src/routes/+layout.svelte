@@ -2,7 +2,6 @@
 	import { beforeNavigate } from '$app/navigation';
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
-	import { Button } from '$lib/components/ui/button';
 	import type { LayoutProps } from './$types';
 	import './layout.css';
 
@@ -12,9 +11,9 @@
 	let viewer = $derived(isViewer(path));
 
 	const navigation = [
-		['/', 'Transcripts'],
-		['/imports', 'Imports'],
-		['/machines', 'Machines']
+		{ href: '/', label: 'Sessions', icon: 'sessions' },
+		{ href: '/imports', label: 'Archive', icon: 'archive' },
+		{ href: '/machines', label: 'Machines', icon: 'machines' }
 	] as const;
 
 	const viewerPath = /^\/traces\/[^/]+$/;
@@ -44,17 +43,40 @@
 	<title>Traicr</title>
 </svelte:head>
 
-{#snippet brand(size: 'sm' | 'md')}
-	<a class={['flex items-center gap-2 font-semibold no-underline', size === 'sm' ? 'text-sm' : 'px-4 py-4 text-base tracking-tight text-sidebar-foreground']} href={resolve('/')} aria-label="Traicr home">
-		<span class={['grid place-items-center rounded-lg', size === 'sm' ? 'bg-primary text-primary-foreground size-7 text-xs' : 'bg-sidebar-primary text-sidebar-primary-foreground size-8 text-sm']}>t</span>
-		traicr
-	</a>
+{#snippet icon(name: 'sessions' | 'archive' | 'machines' | 'logout')}
+	{#if name === 'sessions'}
+		<svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+			<path d="M3 4h10M3 8h10M3 12h7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
+		</svg>
+	{:else if name === 'archive'}
+		<svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+			<rect x="2.5" y="3.5" width="11" height="3" rx="0.6" stroke="currentColor" stroke-width="1.4" />
+			<path d="M3.5 6.5h9v6.2a.8.8 0 0 1-.8.8H4.3a.8.8 0 0 1-.8-.8V6.5Z" stroke="currentColor" stroke-width="1.4" />
+			<path d="M6.5 9h3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
+		</svg>
+	{:else if name === 'machines'}
+		<svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+			<rect x="2.5" y="3.5" width="11" height="7.5" rx="1" stroke="currentColor" stroke-width="1.4" />
+			<path d="M6 13.5h4M8 11v2.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
+		</svg>
+	{:else}
+		<svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+			<path d="M6 4.5H4.2A1.2 1.2 0 0 0 3 5.7v6.1A1.2 1.2 0 0 0 4.2 13h7.6A1.2 1.2 0 0 0 13 11.8V5.7A1.2 1.2 0 0 0 11.8 4.5H10" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
+			<path d="M8 2.5v6.2M6.2 7.2 8 9l1.8-1.8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" />
+		</svg>
+	{/if}
 {/snippet}
 
-{#snippet links(size: 'sm' | 'default')}
-	{#each navigation as [href, label] (href)}
-		<Button href={resolve(href)} {size} variant={current(href) ? 'secondary' : 'ghost'} class={size === 'default' ? 'justify-start' : ''} aria-current={current(href)}>{label}</Button>
-	{/each}
+{#snippet railLink(href: string, label: string, name: 'sessions' | 'archive' | 'machines')}
+	<a
+		class={['rail-link', current(href) && 'is-current']}
+		href={resolve(href)}
+		aria-current={current(href)}
+		title={label}
+		aria-label={label}
+	>
+		{@render icon(name)}
+	</a>
 {/snippet}
 
 {#if !viewer}
@@ -62,34 +84,165 @@
 {/if}
 
 {#if login}
-	<main id="main" class="mx-auto flex min-h-screen w-full max-w-5xl flex-col justify-center gap-10 px-6 py-16 md:flex-row md:items-center">
+	<main id="main" class="login-shell">
 		{@render children()}
 	</main>
 {:else if viewer}
 	{@render children()}
 {:else}
-	<div class="flex min-h-screen">
-		<aside class="bg-sidebar text-sidebar-foreground sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-sidebar-border md:flex">
-			{@render brand('md')}
-			<p class="text-muted-foreground px-4 pb-3 font-mono text-[10px] tracking-widest">PRIVATE ARCHIVE</p>
-			<nav class="flex flex-1 flex-col gap-1 px-2" aria-label="Main navigation">
-				{@render links('default')}
+	<div class="app-shell">
+		<aside class="rail" aria-label="Main navigation">
+			<a class="rail-brand" href={resolve('/')} aria-label="Traicr home" title="Traicr">t</a>
+			<nav class="rail-nav">
+				{#each navigation as item (item.href)}
+					{@render railLink(item.href, item.label, item.icon)}
+				{/each}
 			</nav>
+			<form class="rail-logout" action="/logout" method="post" data-sveltekit-reload>
+				<input type="hidden" name="csrf" value={data.csrf} />
+				<button class="rail-link" type="submit" title="Log out" aria-label="Log out">
+					{@render icon('logout')}
+				</button>
+			</form>
 		</aside>
-		<div class="flex min-w-0 flex-1 flex-col">
-			<header class="flex flex-wrap items-center gap-2 border-b px-4 py-3">
-				<div class="md:hidden">{@render brand('sm')}</div>
-				<nav class="flex w-full items-center gap-1 md:hidden" aria-label="Main navigation">
-					{@render links('sm')}
-				</nav>
+		<div class="workspace">
+			<nav class="mobile-rail" aria-label="Main navigation">
+				<a class="rail-brand" href={resolve('/')} aria-label="Traicr home" title="Traicr">t</a>
+				{#each navigation as item (item.href)}
+					{@render railLink(item.href, item.label, item.icon)}
+				{/each}
 				<form class="ml-auto" action="/logout" method="post" data-sveltekit-reload>
 					<input type="hidden" name="csrf" value={data.csrf} />
-					<Button type="submit" variant="ghost">Log out</Button>
+					<button class="rail-link" type="submit" title="Log out" aria-label="Log out">
+						{@render icon('logout')}
+					</button>
 				</form>
-			</header>
-			<main id="main" class="mx-auto w-full max-w-6xl flex-1 px-4 py-8 md:px-8">
+			</nav>
+			<main id="main" class="workspace-main">
 				{@render children()}
 			</main>
 		</div>
 	</div>
 {/if}
+
+<style>
+	.login-shell {
+		min-height: 100vh;
+		display: grid;
+		place-items: center;
+		padding: 2rem 1.25rem;
+		background: var(--background);
+	}
+
+	.app-shell {
+		display: flex;
+		min-height: 100vh;
+		background: var(--background);
+	}
+
+	.rail {
+		display: none;
+		width: 48px;
+		flex-shrink: 0;
+		flex-direction: column;
+		align-items: center;
+		padding: 0.5rem 0;
+		background: var(--sidebar);
+		border-right: 1px solid var(--sidebar-border);
+	}
+
+	.workspace {
+		display: flex;
+		min-width: 0;
+		flex: 1;
+		flex-direction: column;
+		background: var(--background);
+	}
+
+	.mobile-rail {
+		display: flex;
+		align-items: center;
+		gap: 0.15rem;
+		padding: 0.25rem 0.4rem;
+		background: var(--sidebar);
+		border-bottom: 1px solid var(--sidebar-border);
+	}
+
+	.workspace-main {
+		flex: 1;
+		width: 100%;
+		max-width: 72rem;
+		margin: 0 auto;
+		padding: 1rem 1.25rem 2rem;
+	}
+
+	.rail-brand {
+		display: grid;
+		place-items: center;
+		width: 28px;
+		height: 28px;
+		margin: 0.15rem 0 0.35rem;
+		border-radius: 6px;
+		background: var(--sidebar-accent);
+		color: var(--sidebar-foreground);
+		font-size: 12px;
+		font-weight: 650;
+		text-decoration: none;
+	}
+
+	.rail-nav {
+		display: flex;
+		flex: 1;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.15rem;
+	}
+
+	.rail-logout {
+		margin-top: auto;
+	}
+
+	.rail-link {
+		display: grid;
+		place-items: center;
+		width: 32px;
+		height: 32px;
+		border: 0;
+		border-radius: 6px;
+		background: transparent;
+		color: var(--muted-foreground);
+		cursor: pointer;
+		text-decoration: none;
+	}
+
+	.rail-link :global(svg) {
+		width: 16px;
+		height: 16px;
+	}
+
+	.rail-link:hover,
+	.rail-link:focus-visible {
+		background: var(--sidebar-accent);
+		color: var(--sidebar-foreground);
+	}
+
+	.rail-link.is-current {
+		background: var(--sidebar-accent);
+		color: var(--primary);
+		box-shadow: inset 2px 0 0 var(--primary);
+	}
+
+	@media (min-width: 768px) {
+		.rail {
+			display: flex;
+		}
+
+		.mobile-rail {
+			display: none;
+		}
+
+		.workspace-main {
+			padding: 1.25rem 1.75rem 2.5rem;
+		}
+	}
+</style>

@@ -115,7 +115,7 @@ Collection reads but does not modify the native Claude JSONL files.
 
 ## Development
 
-The browser UI is a SvelteKit app in `web/app`, using shadcn-svelte. Go serves that client for every page, including the transcript viewer, and the JSON API under `/api/v1`. Build the UI before `go run` if you want the real pages instead of the fallback shell:
+The browser UI is a SvelteKit app in `web/app`: Svelte 5, SvelteKit 2, and dark-only shadcn-svelte (bits-ui) + Tailwind 4. There is no light theme and no theme toggle. Go serves JSON under `/api/v1` and the static Svelte shell for every other browser GET, including the transcript viewer. Build the UI before `go run` if you want the real pages instead of the fallback shell:
 
 ```sh
 cd web/app
