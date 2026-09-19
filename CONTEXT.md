@@ -1,6 +1,6 @@
 # Traicr
 
-A private archive for collecting and searching one person's AI coding traces from multiple personal machines.
+A private archive for collecting, searching, and reading one person's AI coding traces from multiple personal machines, including the file edits and commits those traces produced.
 
 ## Language
 
@@ -32,6 +32,10 @@ _Avoid_: Harness parser
 **Event**:
 A common searchable representation derived from Source Records, such as a message, tool call, tool result, or model change.
 
+**Turn**:
+A user Event and the assistant Events that follow it until the next user Event.
+_Avoid_: Bubble, message group
+
 **Branch**:
 An alternative continuation within a trace.
 
@@ -56,3 +60,15 @@ The outcome of an import, listing imported, unchanged, updated, and failed trace
 
 **Repository**:
 One codebase associated with traces across source machines, independently of the local path used on each machine.
+
+**Patch**:
+One recorded file edit produced by a tool call in a trace, typically a write or apply-patch on a single path.
+_Avoid_: Change burst, hunk (unless referring to a diff region inside a Patch)
+
+**Anchor**:
+A recorded link between a commit in a Repository and the Trace that produced it. It lives in the archive, not in the repository other people clone.
+_Avoid_: Git note, git trail, survival
+
+**Signal**:
+A deterministic finding derived from a Trace's Events, such as a tool error, a repeated command, an oversized tool result, or a file read many times in a short window.
+_Avoid_: Evaluation, score, annotation
