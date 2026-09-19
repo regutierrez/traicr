@@ -1,42 +1,110 @@
 {{ define "header" }}
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="ledger">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="htmx-config" content='{"allowEval":false,"allowScriptTags":false,"historyCacheSize":0,"includeIndicatorStyles":false}'>
     <title>{{ .Title }} · Traicr</title>
+    <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
     <link rel="stylesheet" href="/static/app.css">
+    <script src="/static/theme.js"></script>
     <script src="/static/htmx.min.js" defer></script>
+    <script type="module" src="/static/shortcuts.js"></script>
   </head>
-  <body>
-    <a class="skip" href="#main">Skip to content</a>
-    <header class="topbar">
-      <a class="brand" href="/" aria-label="Traicr home">
-        <span class="brand-icon">t</span>traicr
-        <span class="private">PRIVATE ARCHIVE</span>
-      </a>
-      {{ if not .Login }}
-        <nav aria-label="Main navigation">
-          <a href="/" {{ if eq .Page "search" }}aria-current="page"{{ end }}>Transcripts</a>
-          <a href="/imports" {{ if eq .Page "imports" }}aria-current="page"{{ end }}>Imports</a>
-          <a href="/machines" {{ if eq .Page "machines" }}aria-current="page"{{ end }}>Machines</a>
+  <body class="{{ if .Login }}login-page{{ end }}">
+    <a class="btn btn-sm btn-primary sr-only fixed top-2 left-2 z-50 focus:not-sr-only" href="#main">Skip to content</a>
+    {{ template "topbar" . }}
+    <main id="main" class="{{ if .Login }}mx-auto w-full max-w-5xl px-6 py-12{{ else }}mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 sm:py-10{{ end }}">
+{{ end }}
+
+{{ define "topbar" }}
+    <header class="navbar border-base-300 bg-base-100/95 sticky top-0 z-30 min-h-13 border-b px-4 backdrop-blur sm:px-6">
+      <div class="mx-auto flex w-full items-center gap-5 {{ if .Viewer }}max-w-none{{ else }}max-w-6xl{{ end }}">
+        <a class="flex items-center gap-2 font-semibold tracking-tight" href="/" aria-label="Traicr, sessions" data-shortcut="g s" data-shortcut-label="Sessions" data-shortcut-group="Go to">
+          <span class="bg-primary text-primary-content grid size-6 place-items-center rounded-sm font-mono text-[15px] leading-none font-semibold">t</span>
+          <span class="text-[17px]">traicr</span>
+        </a>
+        {{ if not .Login }}
+        <nav aria-label="Main" class="hidden items-center gap-1 sm:flex">
+          <a class="btn btn-ghost btn-sm font-normal {{ if eq .Page "search" }}btn-active font-medium{{ end }}" href="/" {{ if eq .Page "search" }}aria-current="page"{{ end }}>Sessions</a>
+          <a class="btn btn-ghost btn-sm font-normal {{ if or (eq .Page "imports") (eq .Page "report") }}btn-active font-medium{{ end }}" href="/imports" {{ if eq .Page "imports" }}aria-current="page"{{ end }} data-shortcut="g i" data-shortcut-label="Imports" data-shortcut-group="Go to">Imports</a>
+          <a class="btn btn-ghost btn-sm font-normal {{ if eq .Page "machines" }}btn-active font-medium{{ end }}" href="/machines" {{ if eq .Page "machines" }}aria-current="page"{{ end }} data-shortcut="g m" data-shortcut-label="Machines" data-shortcut-group="Go to">Machines</a>
         </nav>
-        <form action="/logout" method="post">
-          <input type="hidden" name="csrf" value="{{ .CSRF }}">
-          <button class="quiet" type="submit">Log out ↗</button>
-        </form>
-      {{ end }}
+        <div class="ml-auto flex items-center gap-1">
+          <button type="button" class="btn btn-ghost btn-sm border-base-300 text-base-content/70 hidden gap-2 border pr-1.5 font-normal sm:inline-flex" data-open-palette title="Jump anywhere, switch themes, run page actions">
+            Commands
+            <kbd class="kbd kbd-xs">⌘</kbd><kbd class="kbd kbd-xs">K</kbd>
+          </button>
+          <button type="button" class="btn btn-ghost btn-sm btn-square sm:hidden" data-open-palette aria-label="Command palette">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3"/></svg>
+          </button>
+          {{ template "thememenu" . }}
+          <form action="/logout" method="post" class="contents">
+            <input type="hidden" name="csrf" value="{{ .CSRF }}">
+            <button class="btn btn-ghost btn-sm btn-square" type="submit" title="Log out" aria-label="Log out">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+            </button>
+          </form>
+        </div>
+        {{ else }}
+        <div class="ml-auto">{{ template "thememenu" . }}</div>
+        {{ end }}
+      </div>
     </header>
-    <main id="main" class="{{ if .Login }}login-layout{{ end }}">
+    {{ if and (not .Login) (not .Viewer) }}
+    <nav aria-label="Main, small screens" class="dock dock-sm sm:hidden">
+      <a href="/" class="{{ if eq .Page "search" }}dock-active{{ end }}"><span class="dock-label">Sessions</span></a>
+      <a href="/imports" class="{{ if eq .Page "imports" }}dock-active{{ end }}"><span class="dock-label">Imports</span></a>
+      <a href="/machines" class="{{ if eq .Page "machines" }}dock-active{{ end }}"><span class="dock-label">Machines</span></a>
+    </nav>
+    {{ end }}
+{{ end }}
+
+{{ define "thememenu" }}
+          <div class="dropdown dropdown-end">
+            <button type="button" tabindex="0" class="btn btn-ghost btn-sm gap-2 font-normal" aria-label="Theme" title="Switch theme (g then t)">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg>
+              <span class="hidden sm:inline" data-theme-label>Ledger</span>
+            </button>
+            <ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-box border-base-300 z-40 mt-2 w-72 border p-1.5 shadow-lg">
+              <li class="menu-title">Theme</li>
+              <li><button type="button" data-set-theme="ledger" class="items-start py-2"><span class="grid gap-0.5"><span class="flex items-center gap-2 font-medium">Ledger <span class="theme-swatch" data-swatch="ledger"></span></span><span class="text-base-content/60 text-xs">Cool paper, pine ink. IBM Plex.</span></span></button></li>
+              <li><button type="button" data-set-theme="console" class="items-start py-2"><span class="grid gap-0.5"><span class="flex items-center gap-2 font-medium">Console <span class="theme-swatch" data-swatch="console"></span></span><span class="text-base-content/60 text-xs">Blue-slate, amber signal. Schibsted Grotesk.</span></span></button></li>
+              <li><button type="button" data-set-theme="blueprint" class="items-start py-2"><span class="grid gap-0.5"><span class="flex items-center gap-2 font-medium">Blueprint <span class="theme-swatch" data-swatch="blueprint"></span></span><span class="text-base-content/60 text-xs">Drafting paper, cobalt lines. Source Serif.</span></span></button></li>
+            </ul>
+          </div>
 {{ end }}
 
 {{ define "footer" }}
     </main>
-    <footer class="footer">
-      <span>TRAICR / YOUR WORK, PRESERVED.</span>
-      <span>Native records. One searchable archive.</span>
-    </footer>
+    {{ template "overlays" . }}
   </body>
 </html>
+{{ end }}
+
+{{ define "overlays" }}
+    <dialog id="palette" class="modal modal-top sm:modal-middle" aria-label="Command palette">
+      <div class="modal-box bg-base-100 border-base-300 mt-[10vh] w-full max-w-xl overflow-hidden border p-0 shadow-xl sm:mt-0">
+        <label class="input input-ghost border-base-300 flex h-12 w-full items-center gap-3 rounded-none border-0 border-b px-4 focus-within:outline-none">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-base-content/50" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          <input id="palette-input" type="text" class="grow" placeholder="Where to, or what to do?" autocomplete="off" aria-label="Search commands" aria-controls="palette-list">
+          <kbd class="kbd kbd-xs">Esc</kbd>
+        </label>
+        <ul id="palette-list" class="menu menu-sm scrollbar-thin max-h-[60vh] w-full flex-nowrap overflow-y-auto p-1.5" role="listbox"></ul>
+      </div>
+      <form method="dialog" class="modal-backdrop"><button aria-label="Close">close</button></form>
+    </dialog>
+    <dialog id="shortcuts-help" class="modal" aria-labelledby="shortcuts-title">
+      <div class="modal-box bg-base-100 border-base-300 max-w-2xl border">
+        <h2 id="shortcuts-title" class="text-lg font-semibold tracking-tight">Keyboard shortcuts</h2>
+        <p class="text-base-content/60 mt-1 text-sm">Shortcuts pause while you type in a field. Sequences such as g then s have a short window between keys.</p>
+        <div id="shortcuts-groups" class="mt-5 grid gap-6 sm:grid-cols-2"></div>
+        <form method="dialog" class="modal-action">
+          <button class="btn btn-sm">Close</button>
+        </form>
+      </div>
+      <form method="dialog" class="modal-backdrop"><button aria-label="Close">close</button></form>
+    </dialog>
+    <div id="toast" class="toast toast-center toast-bottom z-50 hidden"></div>
 {{ end }}

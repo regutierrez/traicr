@@ -1,117 +1,116 @@
 {{ define "imports" }}
   {{ template "header" . }}
-  <p class="eyebrow">COLLECTION HISTORY</p>
-  <h1>Imports</h1>
-  <p class="subtitle">
-    Every upload, its outcome, and anything that needs your attention.
-  </p>
-  <div class="table-scroll">
-    <table>
+  {{ template "pagehead" (dict "Heading" "Imports" "Lede" "Every upload, what it added, and anything that needs your attention.") }}
+  {{ if .Imports }}
+  <div class="card bg-base-100 border-base-300 overflow-x-auto border">
+    <table class="table">
       <thead>
         <tr>
           <th>Import</th>
           <th>Source machine</th>
           <th>Collected</th>
-          <th>New</th>
-          <th>Updated</th>
-          <th>Unchanged</th>
-          <th>Partial / unsupported</th>
-          <th>Failed</th>
+          <th class="text-right">New</th>
+          <th class="text-right">Updated</th>
+          <th class="text-right">Unchanged</th>
+          <th class="text-right">Partial</th>
+          <th class="text-right">Unsupported</th>
+          <th class="text-right">Failed</th>
         </tr>
       </thead>
       <tbody>
         {{ range .Imports }}
-          <tr>
-            <td><a href="/imports/{{ .ID }}">#{{ .ID }} →</a></td>
+          <tr class="hover:bg-base-200/60">
+            <td><a class="link link-primary link-hover font-medium" href="/imports/{{ .ID }}">#{{ .ID }}</a></td>
             <td>{{ .Machine.Hostname }}</td>
-            <td>{{ .CreatedAt }}</td>
-            <td>{{ .Imported }}</td>
-            <td>{{ .Updated }}</td>
-            <td>{{ .Unchanged }}</td>
-            <td>{{ .Partial }} / {{ .Unsupported }}</td>
-            <td>{{ .Failed }}</td>
-          </tr>
-        {{ else }}
-          <tr>
-            <td colspan="8">
-              No imports yet. Upload a Trace ZIP with the collector to get
-              started.
-            </td>
+            <td class="text-base-content/60 whitespace-nowrap">{{ .CreatedAt }}</td>
+            <td class="text-right tabular-nums">{{ .Imported }}</td>
+            <td class="text-right tabular-nums">{{ .Updated }}</td>
+            <td class="text-right tabular-nums">{{ .Unchanged }}</td>
+            <td class="text-right tabular-nums {{ if .Partial }}text-warning font-medium{{ end }}">{{ .Partial }}</td>
+            <td class="text-right tabular-nums {{ if .Unsupported }}text-warning font-medium{{ end }}">{{ .Unsupported }}</td>
+            <td class="text-right tabular-nums {{ if .Failed }}text-error font-medium{{ end }}">{{ .Failed }}</td>
           </tr>
         {{ end }}
       </tbody>
     </table>
   </div>
+  {{ else }}
+    <div class="border-base-300 rounded-box border border-dashed px-6 py-16 text-center">
+      <h2 class="text-lg font-medium">No imports yet</h2>
+      <p class="text-base-content/60 mt-1 text-sm">Upload a Trace ZIP with the collector and its report appears here.</p>
+    </div>
+  {{ end }}
   {{ if .NextCursor }}
-    <a class="button secondary next" href="/imports?cursor={{ .NextCursor }}">
-      Older imports →
-    </a>
-  {{ end }}{{ template "footer" . }}
+    <div class="mt-6">
+      <a class="btn btn-outline" href="/imports?cursor={{ .NextCursor }}" data-shortcut="n" data-shortcut-label="Older imports" data-shortcut-group="Imports">Older imports</a>
+    </div>
+  {{ end }}
+  {{ template "footer" . }}
 {{ end }}
+
 {{ define "report" }}
   {{ template "header" . }}
-  <a class="back" href="/imports">← All imports</a>
-  <p class="eyebrow">
-    IMPORT #{{ .Report.ID }} /
-    {{ .Report.Machine.Hostname }}
-  </p>
-  <h1>Import report</h1>
-  <p class="subtitle">{{ .Report.CreatedAt }}</p>
+  <a class="btn btn-ghost btn-sm text-base-content/60 -ml-2 mb-4" href="/imports">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
+    All imports
+  </a>
+  {{ template "pagehead" (dict "Heading" (printf "Import #%d" .Report.ID) "Lede" (printf "From %s, %s." .Report.Machine.Hostname .Report.CreatedAt)) }}
+  <div class="stats stats-vertical sm:stats-horizontal border-base-300 mb-8 w-full border">
+    <div class="stat py-3"><div class="stat-title text-xs">New</div><div class="stat-value text-2xl">{{ .Report.Imported }}</div></div>
+    <div class="stat py-3"><div class="stat-title text-xs">Updated</div><div class="stat-value text-2xl">{{ .Report.Updated }}</div></div>
+    <div class="stat py-3"><div class="stat-title text-xs">Unchanged</div><div class="stat-value text-2xl">{{ .Report.Unchanged }}</div></div>
+    <div class="stat py-3"><div class="stat-title text-xs">Partial</div><div class="stat-value text-2xl {{ if .Report.Partial }}text-warning{{ end }}">{{ .Report.Partial }}</div></div>
+    <div class="stat py-3"><div class="stat-title text-xs">Unsupported</div><div class="stat-value text-2xl {{ if .Report.Unsupported }}text-warning{{ end }}">{{ .Report.Unsupported }}</div></div>
+    <div class="stat py-3"><div class="stat-title text-xs">Failed</div><div class="stat-value text-2xl {{ if .Report.Failed }}text-error{{ end }}">{{ .Report.Failed }}</div></div>
+  </div>
+  <ol class="card bg-base-100 border-base-300 divide-base-300 divide-y border">
   {{ range .Report.Traces }}
-    <article class="panel">
-      <div class="result-meta">
-        <span class="badge">{{ .Harness }}</span>
-        <strong>{{ .Status }}</strong>
+    <li class="p-4">
+      <div class="flex flex-wrap items-center gap-2">
+        <span class="badge badge-soft badge-primary badge-sm rounded-sm font-medium">{{ .Harness }}</span>
+        <span class="text-sm font-medium {{ if eq .Status "failed" }}text-error{{ else if or (eq .Status "partially_parsed") (eq .Status "unsupported") }}text-warning{{ else if eq .Status "unchanged" }}text-base-content/60{{ else }}text-success{{ end }}">{{ .Status }}</span>
+        <span class="text-base-content/50 ml-auto max-w-[12rem] truncate font-mono text-xs" title="{{ .RevisionDigest }}">{{ .RevisionDigest }}</span>
       </div>
-      <h2>
-        {{ if .TraceID }}
-          <a href="/traces/{{ .TraceID }}">{{ .NativeTraceID }} →</a>
-        {{ else }}
-          {{ .NativeTraceID }}
-        {{ end }}
+      <h2 class="mt-1.5 font-medium break-all">
+        {{ if .TraceID }}<a class="hover:text-primary" href="/traces/{{ .TraceID }}">{{ .NativeTraceID }}</a>{{ else }}{{ .NativeTraceID }}{{ end }}
       </h2>
-      {{ if .Error }}
-        <p class="notice error">{{ .Error }}</p>
-      {{ end }}{{ range .Warnings }}
-        <p class="notice">
-          <strong>{{ .Code }}</strong>
-          : {{ .Message }}
-        </p>
+      {{ if .Error }}<div class="alert alert-error alert-soft mt-3 text-sm" role="alert"><span><strong>Import failed.</strong> {{ .Error }}</span></div>{{ end }}
+      {{ range .Warnings }}
+        <p class="text-base-content/65 mt-2 text-sm"><span class="badge badge-ghost badge-xs mr-2 font-mono">{{ .Code }}</span>{{ .Message }}</p>
       {{ end }}
-      <p class="mono digest">{{ .RevisionDigest }}</p>
-    </article>
-  {{ end }}{{ template "footer" . }}
+    </li>
+  {{ end }}
+  </ol>
+  {{ template "footer" . }}
 {{ end }}
+
 {{ define "machines" }}
   {{ template "header" . }}
-  <p class="eyebrow">WHERE YOUR WORK HAPPENS</p>
-  <h1>Source machines</h1>
-  <p class="subtitle">
-    Machine identity tracks provenance. The same trace stays one trace, wherever
-    it was collected.
-  </p>
-  <div class="machine-grid">
+  {{ template "pagehead" (dict "Heading" "Source machines" "Lede" "Where your sessions were collected. A session stays one session no matter how many machines saw it.") }}
+  {{ if .Machines }}
+  <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
     {{ range .Machines }}
-      <article class="panel machine">
-        <span class="machine-icon" aria-hidden="true">▤</span>
-        <h2>{{ .Hostname }}</h2>
-        <p>{{ .OS }} / {{ .Arch }}</p>
-        <dl>
-          <dt>Machine ID</dt>
-          <dd class="mono">{{ .ID }}</dd>
-          <dt>First seen</dt>
-          <dd>{{ .FirstSeen }}</dd>
-          <dt>Last seen</dt>
-          <dd>{{ .LastSeen }}</dd>
-        </dl>
-        <a href="/?machine={{ .ID }}">Search this machine →</a>
+      <article class="card card-sm bg-base-100 border-base-300 border">
+        <div class="card-body">
+          <h2 class="card-title text-lg">{{ .Hostname }}</h2>
+          <p class="text-base-content/60 text-sm">{{ .OS }} / {{ .Arch }}</p>
+          <dl class="mt-2 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
+            <dt class="text-base-content/60">Machine ID</dt><dd class="truncate font-mono text-xs leading-5" title="{{ .ID }}">{{ .ID }}</dd>
+            <dt class="text-base-content/60">First seen</dt><dd>{{ .FirstSeen }}</dd>
+            <dt class="text-base-content/60">Last seen</dt><dd>{{ .LastSeen }}</dd>
+          </dl>
+          <div class="card-actions mt-3">
+            <a class="btn btn-outline btn-sm" href="/?machine={{ .ID }}">Sessions from this machine</a>
+          </div>
+        </div>
       </article>
-    {{ else }}
-      <div class="empty">
-        <h2>No machines yet</h2>
-        <p>Your source machines appear here after their first upload.</p>
-      </div>
     {{ end }}
   </div>
+  {{ else }}
+    <div class="border-base-300 rounded-box border border-dashed px-6 py-16 text-center">
+      <h2 class="text-lg font-medium">No machines yet</h2>
+      <p class="text-base-content/60 mt-1 text-sm">Source machines appear here after their first upload.</p>
+    </div>
+  {{ end }}
   {{ template "footer" . }}
 {{ end }}

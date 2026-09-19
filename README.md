@@ -132,6 +132,14 @@ make all
 make test-race
 ```
 
+The web UI is server-rendered Go templates with htmx, styled with Tailwind CSS and daisyUI. Its stylesheet and fonts are committed under `web/static`, so the Go build and the Docker image never need Node. After changing templates or `web/ui/*.css`, recompile with Node 22:
+
+```sh
+make ui
+```
+
+Three themes ship (Ledger, Console, Blueprint); switch from the theme menu, the command palette (`Ctrl`/`⌘` `K`), or `g` then `t`. Press `?` on any page for its keyboard shortcuts.
+
 Run the Docker-backed end-to-end tests explicitly:
 
 ```sh

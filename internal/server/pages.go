@@ -72,7 +72,13 @@ func (app *application) searchPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	page, err := app.store.TranscriptCards(ctx, query)
-	data := map[string]any{"Title": "Your sessions.", "Query": query, "Cards": page.Cards, "Elapsed": time.Since(started).Milliseconds(), "Harnesses": []string{"amp", "claude-code", "codex", "cursor", "cursor-agent", "grok-build", "opencode", "pi"}}
+	filtering := 0
+	for _, value := range []string{query.Harness, query.Model, query.Machine, query.Repository, query.After, query.Before, query.Role, query.Kind, query.Tool} {
+		if value != "" {
+			filtering++
+		}
+	}
+	data := map[string]any{"Title": "Sessions", "Query": query, "Cards": page.Cards, "Elapsed": time.Since(started).Milliseconds(), "Filtering": filtering, "Harnesses": []string{"amp", "claude-code", "codex", "cursor", "cursor-agent", "grok-build", "opencode", "pi"}}
 	if err != nil {
 		if !errors.Is(err, store.ErrInvalidQuery) {
 			app.failure(w, err)
@@ -119,7 +125,7 @@ func (app *application) tracePage(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		app.render(w, r, "transcript", map[string]any{"Title": title, "Trace": trace, "Revision": selected})
+		app.render(w, r, "transcript", map[string]any{"Title": title, "Trace": trace, "Revision": selected, "Viewer": true})
 		return
 	}
 	limit, ok := pageLimit(w, r)

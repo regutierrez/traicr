@@ -344,12 +344,12 @@ func TestTranscriptHomeAndBrowserEventPagination(t *testing.T) {
 	}
 	for _, path := range []string{"/", "/?q=matching"} {
 		response := browserGet(path)
-		if response.Code != 200 || strings.Count(response.Body.String(), `class="transcript-card"`) != 2 || strings.Contains(response.Body.String(), "Recent events") {
+		if response.Code != 200 || strings.Count(response.Body.String(), `class="transcript-card `) != 2 || strings.Contains(response.Body.String(), "Recent events") {
 			t.Fatalf("not session cards: %s %d %s", path, response.Code, response.Body)
 		}
 	}
 	viewer := browserGet("/traces/1")
-	for _, marker := range []string{"tree-search", "pi-transcript.js", "transcript-status", "Session details", `data-harness="pi"`, "/static/traicr-theme.css"} {
+	for _, marker := range []string{"tree-search", "pi-transcript.js", "transcript-status", "Session details", `data-harness="pi"`, "/static/app.css", "data-shortcut"} {
 		if !strings.Contains(viewer.Body.String(), marker) {
 			t.Fatalf("missing Pi viewer element: %s", marker)
 		}

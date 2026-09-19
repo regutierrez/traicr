@@ -12,12 +12,21 @@ uses a separate session-card query; API clients do not need to change.
 ## Viewer
 
 `web/static/pi-transcript/` adapts the HTML export viewer from Pi coding agent
-0.85.1. The viewer uses Traicr's shared light palette, green accents, and body
-typography, with monospace text reserved for code and the tree. A harness badge
-appears beside the session heading. The Pi layout, searchable branch tree,
-filters, Markdown/code rendering, expandable
-tool output, copy links, sidebar resizing, mobile navigation, and T/O controls
-are retained.
+0.85.1. `pi-transcript.css` keeps Pi's layout; `web/ui/transcript.css` (compiled
+into `app.css`) maps Pi's variables onto the daisyUI theme tokens, so the viewer
+follows the selected theme (Ledger, Console, or Blueprint) with monospace text
+reserved for code and the tree. A harness badge appears beside the session
+heading. The Pi layout, searchable branch tree, filters, Markdown/code rendering,
+expandable tool output, copy links, sidebar resizing, and mobile navigation are
+retained.
+
+Keyboard shortcuts are registered with the shared `web/static/shortcuts.js`
+module, so they appear in the command palette and the `?` help dialog: `J`/`K`
+move between messages, `T` toggles reasoning, `O` toggles tool output, `B`
+toggles the branch tree, `/` searches the tree, `[`/`]` page along the branch,
+`Y` copies a link to the current message, `M` loads more Amp records, `D` opens
+session details, `1`–`5` pick a tree filter, and `Esc` returns to the latest
+message.
 
 The adapter groups normalized message blocks into turns and connects tool results
 to their calls. The viewer preserves known parent branches and guards against
@@ -148,9 +157,11 @@ and source text are escaped. Authentication still protects transcript data.
 GOTOOLCHAIN=auto go test ./internal/store ./internal/server
 node --test web/static/pi-transcript/*.test.mjs
 node --check web/static/pi-transcript/pi-transcript.js
+node --check web/static/shortcuts.js
+make ui-check
 ```
 
-The Node commands are manual checks. They are not part of `make all` or CI.
+The Node commands run in the `ui` CI job; `make all` stays Go-only.
 
 Browser checks should cover session cards, search grouping, Amp, Claude Code, and Pi
 transcripts, multiple event pages, branch navigation, tool expansion, T/O keys,

@@ -1,0 +1,21 @@
+{
+  "name": "traicr-ui",
+  "private": true,
+  "type": "module",
+  "description": "Compiles Tailwind CSS + daisyUI for the Go-rendered, htmx-driven Traicr web UI. Only the CSS build needs Node; the server image does not.",
+  "scripts": {
+    "build": "tailwindcss -i ./app.css -o ../static/app.css --minify && node ./copy-fonts.mjs",
+    "watch": "tailwindcss -i ./app.css -o ../static/app.css --watch"
+  },
+  "devDependencies": {
+    "@fontsource-variable/ibm-plex-sans": "^5.2.6",
+    "@fontsource-variable/jetbrains-mono": "^5.2.6",
+    "@fontsource-variable/schibsted-grotesk": "^5.2.6",
+    "@fontsource-variable/source-code-pro": "^5.2.6",
+    "@fontsource-variable/source-serif-4": "^5.2.6",
+    "@fontsource/ibm-plex-mono": "^5.2.6",
+    "@tailwindcss/cli": "^4.3.3",
+    "daisyui": "^5.0.0",
+    "tailwindcss": "^4.3.3"
+  }
+}

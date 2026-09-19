@@ -43,6 +43,7 @@ func NewHTTPHandler(configuration config.ServerConfig, database *store.Store, lo
 	templates, err := template.New("").Funcs(template.FuncMap{
 		"json": func(value any) string { data, _ := json.MarshalIndent(value, "", "  "); return string(data) },
 		"mark": markMatches,
+		"dict": templateDict,
 	}).ParseFS(assets.Files, "templates/*.html")
 	if err != nil {
 		return nil, err
@@ -85,7 +86,7 @@ func NewHTTPHandler(configuration config.ServerConfig, database *store.Store, lo
 		// Chrome needs same-origin referrers to send a non-null Origin on form POSTs.
 		w.Header().Set("Referrer-Policy", "same-origin")
 		w.Header().Set("Cache-Control", "no-store")
-		w.Header().Set("Content-Security-Policy", "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'")
+		w.Header().Set("Content-Security-Policy", "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'")
 		mux.ServeHTTP(w, r)
 	}), nil
 }
@@ -144,6 +145,16 @@ func (app *application) importZIP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	app.logger.Info("import finished", "import_id", report.ID, "traces", len(report.Traces), "failed", report.Failed, "duration", time.Since(started))
+}
+
+// templateDict builds a map from alternating keys and values for shared template fragments.
+func templateDict(values ...any) map[string]any {
+	result := make(map[string]any, len(values)/2)
+	for i := 0; i+1 < len(values); i += 2 {
+		key, _ := values[i].(string)
+		result[key] = values[i+1]
+	}
+	return result
 }
 
 func writeJSON(w http.ResponseWriter, value any) {

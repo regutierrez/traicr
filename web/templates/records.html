@@ -1,34 +1,46 @@
+{{ define "pagehead" }}
+  <header class="mb-8 flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
+    <div class="min-w-0 max-w-[62ch]">
+      <h1 class="text-[1.75rem] leading-tight font-semibold tracking-tight break-words">{{ .Heading }}</h1>
+      {{ if .Lede }}<p class="text-base-content/65 mt-2 text-[0.95rem] leading-relaxed">{{ .Lede }}</p>{{ end }}
+    </div>
+  </header>
+{{ end }}
+
 {{ define "sources" }}
   {{ template "header" . }}
-  <p class="eyebrow">EVENT {{ .EventID }} / PROVENANCE</p>
-  <h1>{{ .Title }}</h1>
-  <p class="subtitle">
-    Native records are retained exactly as collected. Conflicting observations
-    remain inspectable.
-  </p>
+  {{ template "pagehead" (dict "Heading" (printf "Source records for event %d" .EventID) "Lede" "Native records are kept exactly as collected. When observations disagree, both stay inspectable.") }}
+  {{ if .Sources }}
+  <div class="space-y-4">
   {{ range .Sources }}
-    <article class="panel">
-      <pre>{{ json . }}</pre>
-      <a href="/revisions/{{ .RevisionID }}/sources">Open revision files →</a>
+    <article class="card bg-base-100 border-base-300 border">
+      <div class="border-base-300 flex flex-wrap items-center gap-x-4 gap-y-1 border-b px-4 py-2.5 text-sm">
+        <span class="font-medium">Revision {{ .RevisionID }}</span>
+        {{ if .Path }}<span class="text-base-content/60 font-mono text-xs">{{ .Path }}{{ if .Line }}:{{ .Line }}{{ end }}</span>{{ end }}
+        <a class="link link-primary link-hover ml-auto text-sm" href="/revisions/{{ .RevisionID }}/sources">Revision files</a>
+      </div>
+      <pre class="scrollbar-thin max-h-[32rem] overflow-auto p-4 font-mono text-xs leading-relaxed break-words whitespace-pre-wrap">{{ json . }}</pre>
     </article>
+  {{ end }}
+  </div>
   {{ else }}
-    <div class="empty">No source references for this event.</div>
-  {{ end }}{{ template "footer" . }}
+    <div class="border-base-300 rounded-box border border-dashed p-10 text-center">
+      <h2 class="font-medium">No source references</h2>
+      <p class="text-base-content/60 mt-1 text-sm">This event has no retained source observations.</p>
+    </div>
+  {{ end }}
+  {{ template "footer" . }}
 {{ end }}
+
 {{ define "revision" }}
   {{ template "header" . }}
-  <p class="eyebrow">REVISION {{ .RevisionID }} / LOSSLESS SOURCE</p>
-  <h1>{{ .Title }}</h1>
-  <p class="subtitle">
-    These files are the retained source of truth, including fields the
-    normalizer does not yet understand.
-  </p>
-  <div class="table-scroll">
-    <table>
+  {{ template "pagehead" (dict "Heading" (printf "Native source files, revision %d" .RevisionID) "Lede" "These files are the retained source of truth, including fields the normalizer does not understand yet.") }}
+  <div class="card bg-base-100 border-base-300 overflow-x-auto border">
+    <table class="table">
       <thead>
         <tr>
           <th>File</th>
-          <th>Bytes</th>
+          <th class="text-right">Bytes</th>
           <th>SHA-256</th>
           <th></th>
         </tr>
@@ -36,20 +48,10 @@
       <tbody>
         {{ range .Sources }}
           <tr>
-            <td>
-              <a href="/revisions/{{ .RevisionID }}/file?path={{ .Path }}">
-                {{ .Path }}
-              </a>
-            </td>
-            <td>{{ .Size }}</td>
-            <td class="mono digest">{{ .Digest }}</td>
-            <td>
-              <a
-                href="/revisions/{{ .RevisionID }}/file?path={{ .Path }}&amp;download=1"
-              >
-                Download ↓
-              </a>
-            </td>
+            <td><a class="link link-primary link-hover font-mono text-xs" href="/revisions/{{ .RevisionID }}/file?path={{ .Path }}">{{ .Path }}</a></td>
+            <td class="text-right tabular-nums whitespace-nowrap">{{ .Size }}</td>
+            <td class="text-base-content/60 max-w-[18rem] truncate font-mono text-xs" title="{{ .Digest }}">{{ .Digest }}</td>
+            <td class="text-right"><a class="btn btn-ghost btn-xs" href="/revisions/{{ .RevisionID }}/file?path={{ .Path }}&amp;download=1">Download</a></td>
           </tr>
         {{ end }}
       </tbody>
@@ -57,28 +59,23 @@
   </div>
   {{ template "footer" . }}
 {{ end }}
+
 {{ define "file" }}
   {{ template "header" . }}
-  <a class="back" href="/revisions/{{ .RevisionID }}/sources">
-    ← Revision files
+  <a class="btn btn-ghost btn-sm text-base-content/60 -ml-2 mb-4" href="/revisions/{{ .RevisionID }}/sources">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
+    Revision files
   </a>
-  <section class="page-heading">
-    <div>
-      <p class="eyebrow">NATIVE SOURCE / PREVIEW</p>
-      <h1>{{ .Title }}</h1>
+  <header class="mb-6 flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
+    <div class="min-w-0">
+      <h1 class="font-mono text-2xl font-semibold tracking-tight break-all">{{ .Path }}</h1>
+      <p class="text-base-content/65 mt-2 text-sm">Native source preview from revision {{ .RevisionID }}.</p>
     </div>
-    <a
-      class="button secondary"
-      href="/revisions/{{ .RevisionID }}/file?path={{ .Path }}&amp;download=1"
-    >
-      Download original ↓
-    </a>
-  </section>
+    <a class="btn btn-outline btn-sm" href="/revisions/{{ .RevisionID }}/file?path={{ .Path }}&amp;download=1">Download original</a>
+  </header>
   {{ if .Truncated }}
-    <p class="notice">
-      Preview limited to 1 MiB. Download the original for the complete file.
-    </p>
+    <div class="alert alert-soft alert-warning mb-4" role="status"><span>Preview limited to 1 MiB. Download the original for the complete file.</span></div>
   {{ end }}
-  <pre class="source-content">{{ .Content }}</pre>
+  <pre class="card bg-base-100 border-base-300 scrollbar-thin overflow-auto border p-4 font-mono text-xs leading-relaxed break-words whitespace-pre-wrap">{{ .Content }}</pre>
   {{ template "footer" . }}
 {{ end }}
