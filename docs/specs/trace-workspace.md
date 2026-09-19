@@ -8,6 +8,73 @@ I can collect traces into Traicr, but reading them is worse than the products th
 
 Traicr stays a private single-user archive and becomes the place I read my own agent work. After I unlock it I get a dark, Cursor-like three-pane shell: a rail, a dense session list, and a workspace with Conversation, Changes, Timeline, and Details. Conversation is Turns in a column; a tree appears only when the Event graph forks. Changes lists Patches. Timeline is a log with Signal ticks and commit rows. Anchors live only in the archive. Insights wait until this workspace is not finicky.
 
+This replaces the Linear-inspired, light-and-dark direction in issue #9. The reference is Cursor's agent list and chat workspace, not Linear and not the old Traicr paper/green theme.
+
+## Visual language
+
+The agreed aesthetic is **Cursor-like, dark-only, dense, and quiet**. Implementers treat this section as a constraint, not a later polish pass. Token-level pixel matching waits on screenshots; until those exist, use shadcn-svelte dark tokens tuned toward Cursor, not a new brand.
+
+### Reference
+
+- **Primary**: Cursor Cloud Agents / agent list, and Cursor's chat workspace (composer + agent transcript).
+- **Not the reference**: Linear (issue #9), traces.com marketing, AgentTrace eval dashboards, the current Traicr paper/green tokens (`--paper`, `--ink`, `--green`), daisyUI, or the vendored Pi transcript chrome.
+- A later screenshot pass may retune exact greys, accent, and radius. Do not invent a second theme while waiting.
+
+### Surfaces and color
+
+- Dark mode only. No light theme, no theme toggle, no `prefers-color-scheme` flip.
+- Near-black application canvas. The rail is the darkest strip. The session list and workspace sit on a slightly lighter surface. Selected rows and sticky headers use a third, still-quiet lift — not a bright card.
+- Hairline separators (`1px` border at ~10–12% white) instead of boxed cards, drop shadows, or tinted panels.
+- One muted accent (Cursor-like blue/teal) for selection, focus, and the active rail icon. Semantic color is reserved for Signal chips and diff hunks: red/green only on `+/-` and errors; amber only on warnings.
+- No decorative gradients, glass, or blur. Respect `prefers-reduced-motion`; if motion exists it is short and spatial (pane collapse), never ornamental.
+
+### Type and density
+
+- UI chrome is compact: ~13px body, 11–12px meta, tabular figures for counts and times.
+- Conversation prose is the exception: comfortable reading measure (~68–80ch), not the chrome size.
+- Titles truncate to one line in the list. Meta (harness, repo, model, duration, counts, relative time) is secondary and never competes with the title.
+- Monospace for SHAs, paths, diffs, tool names, and code. Highlight.js uses a dark theme that matches the chrome.
+
+### Shell
+
+Three panes, hideable:
+
+1. **Rail** (~48px): icon-only. Sessions, Repositories, Archive. Insights is omitted or visibly disabled until that ticket. Active icon: quiet fill + accent, not a badge count.
+2. **Session list** (~320–360px): dense rows grouped by day (`Today`, `Yesterday`, weekday, then date). Not a card grid. `[` / `]` hide and show it; the collapsed state is remembered. Below ~1100px the list is a full page with a back chevron.
+3. **Workspace**: Conversation / Changes / Timeline / Details. Sticky header with title, harness, counts, Signal chips (only when a Signal fired), Amp revision selector when relevant, and underline tabs — not pill cards.
+
+`j` / `k` / `Enter` move the list. The open Trace is the URL. On a wide screen the workspace updates in place so the list stays visible.
+
+### Conversation
+
+- A single Turn column. User and assistant share a left-aligned document flow (Cursor chat), not chat bubbles and not a card stack.
+- Thinking and tools start collapsed. A tool is one quiet row (`tool · path or status`); expand in place for args and result. `T` and `O` toggle thinking and tools.
+- Token totals stay on Details, not in the Conversation header.
+- A conversation tree exists only when the Event parent graph forks. Linear graphs must not grow a fake tree.
+- A Child Trace is a compact card/row that opens that Trace in the same workspace. Do not dock a second transcript pane (that was issue #8 concept A / the Linear plan). A missing child says it was never collected.
+
+### Changes
+
+- File list on the left of the workspace (or a stacked list on narrow widths): path, tool, `+/-`.
+- Selected file shows a unified diff. No split view in the first slice.
+- Anchors for that path sit under the file as commit rows (short SHA, subject, time). Clicking a SHA opens the Repository page.
+
+### Timeline
+
+- A vertical log, not a Gantt and not swimlanes.
+- Phase labels (`user`, `think`, `read`, `exec`, `write`) and Signal ticks in the gutter.
+- Anchor commits interpolate as commit rows on the same clock.
+- Clicking a row jumps to Conversation or Changes.
+
+### What this is not
+
+- The old Traicr paper/green theme, daisyUI, or shadcn-on-Go-templates.
+- A card grid of sessions.
+- Light mode or a third theme.
+- A command palette (later ticket).
+- Eval dashboards, score colors, or AgentTrace-style charts.
+- Heavy headers, floating toolbars, or a permanently open right-hand inspector.
+
 ## User Stories
 
 1. As the archive owner, I want to open Traicr and land on my sessions, so that I can pick up a recent Trace without searching first.
@@ -78,7 +145,8 @@ Traicr stays a private single-user archive and becomes the place I read my own a
 - Session list uses the existing session-card search seam (one row per Trace, session cursors, fulltext/exact/regex). Change presentation, not the query contract, until files-changed and duration need new stored fields; those fields are filled from Events/Patches when present.
 - Repository page is a new browser route over existing Repository grouping plus Anchors.
 - Insights is specified but not built in the first implementation slice.
-- Dark-only shadcn tokens. Cursor-faithful token pass waits on screenshots.
+- Dark-only shadcn-svelte (bits-ui) + Tailwind 4 tokens. Cursor-faithful token pass waits on screenshots. Until then, tune the default dark palette toward Cursor (near-black canvas, hairline borders, one muted accent) and delete the paper/green Traicr theme from any route the Svelte app owns.
+- Issue #9 (Linear-inspired, light-and-dark, right-hand inspector, command palette first) is superseded. Keep its useful constraints: density, keyboard, fewer cards, `prefers-reduced-motion`. Drop light mode, Linear-as-reference, and the child-transcript side pane.
 - Keyboard: `j`/`k`/`Enter` on the list, `[`/`]` for the list pane, `T`/`O` in Conversation. Command palette is a later ticket.
 
 ### Test seams
@@ -109,14 +177,18 @@ Do not add a second Event parser in the browser.
 - Patch survival, blame, change bursts, Context tree of model input.
 - Git notes, post-commit hooks that run for collaborators, pushing any Traicr ref.
 - Insights page (deferred).
-- Command palette, third theme, light mode.
+- Command palette, third theme, light mode, Linear-as-reference (issue #9), and a right-hand child-transcript inspector.
 - Reconstructing file bytes from disk at collect time.
 - Inlining Child Trace history that was not collected.
 
 ## Further Notes
 
-Implementation order: (1) land SvelteKit on `main` and fix e2e, (2) Svelte Conversation, (3) Changes from Patches, (4) Timeline and Signal chips, (5) three-pane session list, (6) Repository page, (7) Insights.
+Implementation order: (1) land SvelteKit on `main` and fix e2e, (2) Svelte Conversation, (3) Changes from Patches, (4) Timeline and Signal chips, (5) three-pane session list, (6) Anchors plus Repository page, (7) Insights.
+
+Every UI ticket in that sequence must ship the Visual language for the surfaces it touches. Aesthetic is not a trailing cleanup ticket.
 
 ADRs: 0006 nothing leaves the archive; 0007 embedded SvelteKit; 0008 archive-side Anchors. Glossary: Trace, Event, Turn, Branch, Child Trace, Patch, Anchor, Signal, Repository.
+
+Issue #9 is superseded by this spec. Issue #8 is satisfied by Child Trace cards in Conversation, not by the paper-theme mockups in `docs/mockups/subagent-transcript-concepts.md`.
 
 PR 21's GitHub base is `cursor/shadcn-ui-d7e0`, not `main`. Landing it means replaying those commits onto `main`, not using the GitHub merge button on that base.
