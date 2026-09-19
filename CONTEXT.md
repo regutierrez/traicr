@@ -32,6 +32,10 @@ _Avoid_: Harness parser
 **Event**:
 A common searchable representation derived from Source Records, such as a message, tool call, tool result, or model change.
 
+**Turn**:
+A user Event and the assistant Events that follow it until the next user Event.
+_Avoid_: Bubble, message group
+
 **Branch**:
 An alternative continuation within a trace.
 
