@@ -10,11 +10,13 @@
 	let login = $derived(path === '/login');
 	let viewer = $derived(isViewer(path));
 
-	const navigation = [
+	type AppPath = '/' | '/imports' | '/machines';
+
+	const navigation: { href: AppPath; label: string; icon: 'sessions' | 'archive' | 'machines' }[] = [
 		{ href: '/', label: 'Sessions', icon: 'sessions' },
 		{ href: '/imports', label: 'Archive', icon: 'archive' },
 		{ href: '/machines', label: 'Machines', icon: 'machines' }
-	] as const;
+	];
 
 	const viewerPath = /^\/traces\/[^/]+$/;
 
@@ -67,7 +69,7 @@
 	{/if}
 {/snippet}
 
-{#snippet railLink(href: string, label: string, name: 'sessions' | 'archive' | 'machines')}
+{#snippet railLink(href: AppPath, label: string, name: 'sessions' | 'archive' | 'machines')}
 	<a
 		class={['rail-link', current(href) && 'is-current']}
 		href={resolve(href)}

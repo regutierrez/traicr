@@ -256,6 +256,7 @@
 		overflow: hidden;
 		display: -webkit-box;
 		-webkit-box-orient: vertical;
+		line-clamp: 2;
 		-webkit-line-clamp: 2;
 	}
 
