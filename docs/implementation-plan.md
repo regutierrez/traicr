@@ -25,8 +25,8 @@ internal/
   version/
 migrations/
 web/
+  app/
   static/
-  templates/
 testdata/
   collector/
   harnesses/
