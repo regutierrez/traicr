@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+msg_file="${1:?commit-msg: missing commit message path}"
+root="$(git rev-parse --show-toplevel)"
+# shellcheck source=../scripts/no-cursor-attribution.sh
+source "${root}/scripts/no-cursor-attribution.sh"
+
+strip_cursor_attribution_file "$msg_file"
+if ! commit_message_has_subject "$msg_file"; then
+  echo "commit-msg: commit message is empty after stripping Cursor attribution" >&2
+  exit 1
+fi

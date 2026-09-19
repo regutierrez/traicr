@@ -115,6 +115,16 @@ Collection reads but does not modify the native Claude JSONL files.
 
 ## Development
 
+### Git hooks
+
+This repository uses `core.hooksPath=.githooks` (no husky or lefthook). Enable the hooks once per clone:
+
+```sh
+git config core.hooksPath .githooks
+```
+
+`commit-msg` strips Cursor attribution trailers. `prepare-commit-msg` rewrites a Cursor Agent author or committer to `regutierrez <rpegutierrez@gmail.com>` for that commit. Hosted Cursor cloud agents may still force Cursor Agent as author; the `no-cursor-attribution` workflow and a squash-merge to Rafael (`regutierrez` / `rpegutierrez@gmail.com`) are the backstop.
+
 Run the complete local checks and builds:
 
 ```sh
