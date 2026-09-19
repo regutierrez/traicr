@@ -282,12 +282,11 @@ func TestAmpTranscriptRevisionAndSourceInspection(t *testing.T) {
 	if response.Code != 200 || !strings.Contains(response.Body.String(), "Preserve the boundary case") || strings.Contains(response.Body.String(), "Inspect the build") {
 		t.Fatalf("precise block: %s", response.Body)
 	}
-	response = get("/traces/1?revision=1")
-	if response.Code != 200 || !strings.Contains(response.Body.String(), `name="csrf"`) {
-		t.Fatalf("viewer shell: %d %s", response.Code, response.Body)
-	}
-	if response := get("/traces/1?revision=999"); response.Code != 200 || !strings.Contains(response.Body.String(), `name="csrf"`) {
-		t.Fatalf("viewer shell: %d", response.Code)
+	// Revision selection now happens in the browser app, so every viewer URL serves the shell.
+	for _, path := range []string{"/traces/1?revision=1", "/traces/1?revision=999"} {
+		if response := get(path); response.Code != 200 || !strings.HasPrefix(response.Header().Get("Content-Type"), "text/html") {
+			t.Fatalf("viewer shell %s: %d %s", path, response.Code, response.Body)
+		}
 	}
 	response = get("/revisions/1/file?path=source/export.json&download=1")
 	if response.Code != 200 || !strings.Contains(response.Header().Get("Content-Disposition"), "attachment") || !strings.Contains(response.Body.String(), "PRIVATE_SIGNATURE") {

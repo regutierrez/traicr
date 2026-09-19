@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -106,11 +105,11 @@ func TestLoginRejectsInvalidReferrersAndForwardedHeaderSpoofing(t *testing.T) {
 func freshLoginForm(t *testing.T, handler http.Handler) (*http.Cookie, string) {
 	t.Helper()
 	response := request(handler, http.MethodGet, "/login", nil, "")
-	match := regexp.MustCompile(`name="csrf" value="([^"]+)"`).FindStringSubmatch(response.Body.String())
-	if response.Code != http.StatusOK || len(match) != 2 || len(response.Result().Cookies()) != 1 {
+	if response.Code != http.StatusOK || len(response.Result().Cookies()) != 1 {
 		t.Fatalf("login page: %d %s", response.Code, response.Body)
 	}
-	return response.Result().Cookies()[0], match[1]
+	cookie := response.Result().Cookies()[0]
+	return cookie, csrfToken(t, handler, cookie)
 }
 
 func signedCookie(purpose string, expires int64) *http.Cookie {
