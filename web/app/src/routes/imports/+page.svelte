@@ -1,8 +1,10 @@
 <script lang="ts">
-	import { Button } from '$lib/components/ui/button';
 	import { resolve } from '$app/paths';
+	import { Button } from '$lib/components/ui/button';
+	import { withQuery } from '$lib/links';
+	import type { PageProps } from './$types';
 
-	let { data } = $props();
+	let { data }: PageProps = $props();
 </script>
 
 <svelte:head><title>Imports · Traicr</title></svelte:head>
@@ -32,7 +34,7 @@
 		<tbody>
 			{#each data.imports as item (item.id)}
 				<tr class="border-t">
-					<td class="px-3 py-3"><a href={resolve(`/imports/${item.id}`)}>#{item.id}</a></td>
+					<td class="px-3 py-3"><a href={resolve('/imports/[id]', { id: String(item.id) })}>#{item.id}</a></td>
 					<td class="px-3 py-3">{item.source_machine.hostname}</td>
 					<td class="px-3 py-3">{item.created_at}</td>
 					<td class="px-3 py-3">{item.imported}</td>
@@ -48,5 +50,5 @@
 	</table>
 </div>
 {#if data.next}
-	<Button class="mt-6" variant="outline" href={resolve(`/imports?cursor=${data.next}`)}>Older imports</Button>
+	<Button class="mt-6" variant="outline" href={withQuery(resolve('/imports'), { cursor: data.next })}>Older imports</Button>
 {/if}

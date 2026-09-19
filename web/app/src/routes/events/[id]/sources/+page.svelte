@@ -1,8 +1,9 @@
 <script lang="ts">
 	import { Card, CardContent } from '$lib/components/ui/card';
-	import { resolve } from '$app/paths';
+	import { revisionSourcesHref } from '$lib/links';
+	import type { PageProps } from './$types';
 
-	let { data } = $props();
+	let { data }: PageProps = $props();
 </script>
 
 <svelte:head><title>Source records · Traicr</title></svelte:head>
@@ -17,7 +18,7 @@
 			<Card>
 				<CardContent>
 					<pre class="bg-muted overflow-x-auto rounded-lg p-3 font-mono text-xs whitespace-pre-wrap">{JSON.stringify(source, null, 2)}</pre>
-					<a href={resolve(`/revisions/${source.revision_id}/sources`)}>Open revision files</a>
+					<a href={revisionSourcesHref(source.revision_id)}>Open revision files</a>
 				</CardContent>
 			</Card>
 		{:else}

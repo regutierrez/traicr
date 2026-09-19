@@ -1,31 +1,37 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
+	import { recordsHref, sourceFileHref } from '$lib/links';
 	import { onMount } from 'svelte';
+	import type { PageProps } from './$types';
 
-	let { data } = $props();
+	let { data }: PageProps = $props();
 	let trace = $derived(data.trace);
 	let title = $derived(trace?.title || trace?.native_trace_id || 'Trace');
 
+	function loadScript(src: string, type?: 'module') {
+		return new Promise<void>((done, fail) => {
+			const script = document.createElement('script');
+			if (type) script.type = type;
+			script.src = src;
+			script.onload = () => done();
+			script.onerror = () => fail(new Error(`Could not load ${src}`));
+			document.body.appendChild(script);
+		});
+	}
+
+	// The vendored Pi viewer renders as soon as its module evaluates, so it is loaded after the
+	// containers it expects exist. The root layout forces a full document load in and out of this
+	// page because that module only evaluates once per document.
+	async function loadViewer() {
+		await Promise.all([loadScript('/static/pi-transcript/marked.min.js'), loadScript('/static/pi-transcript/highlight.min.js')]);
+		await loadScript('/static/pi-transcript/pi-transcript.js', 'module');
+	}
+
 	onMount(() => {
 		if (!trace) return;
-		let cancelled = false;
-		const load = (src: string, module = false) =>
-			new Promise<void>((resolve, reject) => {
-				const script = document.createElement('script');
-				if (module) script.type = 'module';
-				script.src = src;
-				script.onload = () => resolve();
-				script.onerror = () => reject(new Error(src));
-				document.body.appendChild(script);
-			});
-		void (async () => {
-			await load('/static/pi-transcript/marked.min.js');
-			await load('/static/pi-transcript/highlight.min.js');
-			if (!cancelled) await load('/static/pi-transcript/pi-transcript.js', true);
-		})();
-		return () => {
-			cancelled = true;
-		};
+		loadViewer().catch((error: Error) => {
+			document.getElementById('transcript-status')?.replaceChildren(error.message);
+		});
 	});
 </script>
 
@@ -63,9 +69,9 @@
 		<div id="sidebar-resizer" role="separator" aria-orientation="vertical" aria-label="Resize session tree sidebar"></div>
 		<main id="content">
 			<nav class="transcript-navigation">
-				<a class="transcript-brand" href={resolve('/')} aria-label="Traicr home" data-sveltekit-reload><span>t</span>traicr</a>
-				<a href={resolve('/')} data-sveltekit-reload>← Transcripts</a>
-				<a href={resolve('/traces/[id]/records', { id: String(trace.id) })}>Session details & source records</a>
+				<a class="transcript-brand" href={resolve('/')} aria-label="Traicr home"><span>t</span>traicr</a>
+				<a href={resolve('/')}>← Transcripts</a>
+				<a href={recordsHref(trace.id)}>Session details & source records</a>
 			</nav>
 			{#if trace.harness === 'amp'}
 				<form class="amp-revisions" method="get" data-sveltekit-reload>
@@ -82,7 +88,7 @@
 					<summary>Download native Amp export</summary>
 					<p>Lossless source JSON for an individual revision, not the merged viewer data.</p>
 					{#each trace.revisions ?? [] as revision (revision.id)}
-						<p><a href={resolve(`/revisions/${revision.id}/file?path=source/export.json&download=1`)} data-sveltekit-reload>Revision {revision.id} · {revision.native_updated_at} · Native JSON</a></p>
+						<p><a href={sourceFileHref(revision.id, 'source/export.json', { download: true })} data-sveltekit-reload>Revision {revision.id} · {revision.native_updated_at} · Native JSON</a></p>
 					{/each}
 				</details>
 			{/if}

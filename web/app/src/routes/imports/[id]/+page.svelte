@@ -1,16 +1,18 @@
 <script lang="ts">
+	import { resolve } from '$app/paths';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
-	import { resolve } from '$app/paths';
 	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
+	import { transcriptHref } from '$lib/links';
+	import type { PageProps } from './$types';
 
-	let { data } = $props();
+	let { data }: PageProps = $props();
 	let report = $derived(data.report);
 </script>
 
 <svelte:head><title>Import report · Traicr</title></svelte:head>
 
-	<Button class="mb-4" variant="ghost" href={resolve('/imports')}>All imports</Button>
+<Button class="mb-4" variant="ghost" href={resolve('/imports')}>All imports</Button>
 {#if data.error || !report}
 	<p class="text-destructive" role="alert">{data.error || 'Import not found'}</p>
 {:else}
@@ -27,7 +29,7 @@
 					</div>
 					<CardTitle>
 						{#if trace.trace_id}
-							<a href={resolve('/traces/[id]', { id: String(trace.trace_id) })} data-sveltekit-reload>{trace.native_trace_id}</a>
+							<a href={transcriptHref(trace.trace_id)}>{trace.native_trace_id}</a>
 						{:else}
 							{trace.native_trace_id}
 						{/if}

@@ -1,7 +1,8 @@
 <script lang="ts">
-	import { resolve } from '$app/paths';
+	import { sourceFileHref } from '$lib/links';
+	import type { PageProps } from './$types';
 
-	let { data } = $props();
+	let { data }: PageProps = $props();
 </script>
 
 <svelte:head><title>Native source files · Traicr</title></svelte:head>
@@ -24,10 +25,10 @@
 			<tbody>
 				{#each data.files as file (file.path)}
 					<tr class="border-t">
-						<td class="px-3 py-3"><a href={resolve(`/revisions/${data.id}/file?path=${encodeURIComponent(file.path)}`)}>{file.path}</a></td>
+						<td class="px-3 py-3"><a href={sourceFileHref(file.revision_id, file.path)}>{file.path}</a></td>
 						<td class="px-3 py-3">{file.size}</td>
 						<td class="px-3 py-3 font-mono text-xs break-all">{file.digest}</td>
-						<td class="px-3 py-3"><a href={resolve(`/revisions/${file.revision_id}/file?path=${encodeURIComponent(file.path)}&download=1`)} data-sveltekit-reload>Download</a></td>
+						<td class="px-3 py-3"><a href={sourceFileHref(file.revision_id, file.path, { download: true })} data-sveltekit-reload>Download</a></td>
 					</tr>
 				{/each}
 			</tbody>
