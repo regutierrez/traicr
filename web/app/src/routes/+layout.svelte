@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { beforeNavigate } from '$app/navigation';
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
 	import { Button } from '$lib/components/ui/button';
@@ -9,30 +8,12 @@
 	let { data, children }: LayoutProps = $props();
 	let path = $derived(page.url.pathname);
 	let login = $derived(path === '/login');
-	let viewer = $derived(isViewer(path));
 
 	const navigation = [
 		['/', 'Transcripts'],
 		['/imports', 'Imports'],
 		['/machines', 'Machines']
 	] as const;
-
-	const viewerPath = /^\/traces\/[^/]+$/;
-
-	function isViewer(pathname: string) {
-		return viewerPath.test(pathname);
-	}
-
-	// The Pi viewer is a vendored module script that renders once per document and attaches
-	// document-wide listeners. Give it a fresh document on the way in and on the way out instead
-	// of letting SvelteKit swap components under it.
-	beforeNavigate(({ from, to, type, cancel }) => {
-		if (type === 'leave' || !from || !to) return;
-		const samePage = from.url.pathname === to.url.pathname && from.url.search === to.url.search;
-		if (samePage || (!isViewer(from.url.pathname) && !isViewer(to.url.pathname))) return;
-		cancel();
-		location.assign(to.url.href);
-	});
 
 	function current(href: string) {
 		if (href === '/') return path === '/' ? 'page' : undefined;
@@ -57,16 +38,12 @@
 	{/each}
 {/snippet}
 
-{#if !viewer}
-	<a class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50" href="#main">Skip to content</a>
-{/if}
+<a class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50" href="#main">Skip to content</a>
 
 {#if login}
 	<main id="main" class="mx-auto flex min-h-screen w-full max-w-5xl flex-col justify-center gap-10 px-6 py-16 md:flex-row md:items-center">
 		{@render children()}
 	</main>
-{:else if viewer}
-	{@render children()}
 {:else}
 	<div class="flex min-h-screen">
 		<aside class="bg-sidebar text-sidebar-foreground sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-sidebar-border md:flex">

@@ -85,10 +85,15 @@ export type TraceEvent = {
 	kind: string;
 	role?: string;
 	model?: string;
+	provider?: string;
 	tool?: string;
 	call_id?: string;
 	timestamp?: string;
 	text: string;
+	revision_id?: number;
+	aliases?: string[];
+	attachments?: Record<string, unknown>[];
+	metadata?: Record<string, unknown>;
 };
 
 export type EventPage = {
