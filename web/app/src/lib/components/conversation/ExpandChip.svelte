@@ -56,7 +56,7 @@
 		max-width: 100%;
 		align-items: center;
 		gap: 5px;
-		min-height: 1.5rem;
+		min-height: 24px;
 		cursor: pointer;
 		color: var(--muted-foreground);
 		font-family: var(--font-sans);

@@ -387,17 +387,17 @@
 	.row {
 		position: relative;
 		max-width: 54rem;
-		padding: 0 0 0 2.875rem;
+		padding: 0 0 0 46px;
 		font-size: 14px;
 		line-height: 20px;
 	}
 
 	.row.is-user {
-		margin: 0 0 1.5rem;
+		margin: 0 0 24px;
 	}
 
 	.row.is-agent {
-		margin: 1.5rem 0;
+		margin: 24px 0;
 	}
 
 	.row.is-quiet {
@@ -411,7 +411,7 @@
 
 	.avatar {
 		position: absolute;
-		top: 0.5rem;
+		top: 8px;
 		left: 1px;
 		display: flex;
 		width: 18px;
