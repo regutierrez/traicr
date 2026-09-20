@@ -231,6 +231,23 @@ test('stream rows keep the user bubble off the following agent turn and tools', 
 	).toEqual(['u', 'a', 't', 'm']);
 });
 
+test('streamRows keep the first path message first, not a window around the leaf', () => {
+	const path = Array.from({ length: 250 }, (_, index) => ({
+		id: String(index + 1),
+		parentId: index === 0 ? null : String(index),
+		type: 'message' as const,
+		message: {
+			role: index % 2 === 0 ? 'user' : 'assistant',
+			content: [{ type: 'text' as const, text: `message ${index + 1}` }]
+		}
+	})) as TranscriptEntry[];
+	const rows = streamRows(path);
+	expect(rows[0]).toMatchObject({ chrome: 'user', id: '1' });
+	expect(rows[0].entries[0].id).toBe('1');
+	expect(rows.at(-1)).toMatchObject({ chrome: 'agent', id: '250' });
+	expect(rows).toHaveLength(250);
+});
+
 test('tool-only assistant messages stay quiet rows', () => {
 	expect(
 		isToolOnlyMessage({
