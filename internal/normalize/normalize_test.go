@@ -36,11 +36,11 @@ func TestRunSanitizedFixtures(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			root, err := findFixtureRoot()
+			source, err := fixtureSource(test.name)
 			if err != nil {
 				t.Fatal(err)
 			}
-			result, err := Run(context.Background(), domain.Descriptor{Harness: test.harness, Adapter: test.adapter}, os.DirFS(root+"/"+fixtureDirectory(test.name)))
+			result, err := Run(context.Background(), domain.Descriptor{Harness: test.harness, Adapter: test.adapter}, source)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -61,11 +61,7 @@ func TestRunSanitizedFixtures(t *testing.T) {
 }
 
 func TestAttachmentIndexesMetadataWithoutPayload(t *testing.T) {
-	root, err := findFixtureRoot()
-	if err != nil {
-		t.Fatal(err)
-	}
-	result, err := Run(context.Background(), domain.Descriptor{Harness: "claude-code", Adapter: "claude-code-jsonl"}, os.DirFS(root+"/claude-code"))
+	result, err := Run(context.Background(), domain.Descriptor{Harness: "claude-code", Adapter: "claude-code-jsonl"}, recordsFS(claudeCodeRecords))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -201,11 +197,7 @@ func TestRunKeepsAllHumanTextFields(t *testing.T) {
 }
 
 func TestPiUsesParentGraphOrder(t *testing.T) {
-	root, err := findFixtureRoot()
-	if err != nil {
-		t.Fatal(err)
-	}
-	result, err := Run(context.Background(), domain.Descriptor{Harness: "pi", Adapter: "pi-jsonl"}, os.DirFS(root+"/pi-v3"))
+	result, err := Run(context.Background(), domain.Descriptor{Harness: "pi", Adapter: "pi-jsonl"}, recordsFS(piV3Records))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -484,16 +476,26 @@ func assertFields(t *testing.T, events []domain.Event, kind, callID, model strin
 	}
 }
 
-func fixtureDirectory(name string) string {
+func fixtureSource(name string) (fs.FS, error) {
 	switch name {
 	case "pi":
-		return "pi-v3"
+		return recordsFS(piV3Records), nil
+	case "claude":
+		return recordsFS(claudeCodeRecords), nil
+	}
+	root, err := findFixtureRoot()
+	if err != nil {
+		return nil, err
+	}
+	return os.DirFS(root + "/" + fixtureDirectory(name)), nil
+}
+
+func fixtureDirectory(name string) string {
+	switch name {
 	case "opencode":
 		return "opencode-v2"
 	case "codex":
 		return "codex-app-server"
-	case "claude":
-		return "claude-code"
 	case "grok":
 		return "grok-build"
 	default:

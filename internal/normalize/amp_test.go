@@ -113,7 +113,7 @@ func TestAmpPreservesResultShapesAndExecutionDetails(t *testing.T) {
 }
 
 func TestAmpRetainsTranscriptDetailsAndUnknownContent(t *testing.T) {
-	result, err := Run(context.Background(), domain.Descriptor{Harness: "amp"}, os.DirFS("../../testdata/harnesses/amp-rich"))
+	result, err := Run(context.Background(), domain.Descriptor{Harness: "amp"}, exportFS(ampRichExport))
 	if err != nil {
 		t.Fatal(err)
 	}
