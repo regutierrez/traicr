@@ -88,7 +88,7 @@ Pi / Claude parent-graph extras:
   (`gpt-6-astra` → `GPT 6 Astra`).
 - Pi `custom` records are extension sidecars (`plannotator`,
   `pi-rename-titles`, `context:skill_loaded`, `tps-stats`). They stay
-  quiet notes: `(used pi-extension <name>)`. They are not chat turns.
+  quiet notes: `(used pi-extension <name>)`. They are not Turns.
 
 If a later harness adds Process, Cron, or another traces.com kind, map it
 onto the existing kind list rather than adding a per-harness pane.

@@ -209,7 +209,7 @@ export function buildTranscriptSession(events: TranscriptEvent[], metadata: Sess
 					entry = append({
 						id: String(event.id),
 						parentId: null,
-						type: 'custom_message',
+						type: 'custom',
 						timestamp: event.timestamp,
 						customType: text || 'custom',
 						display: true,

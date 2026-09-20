@@ -7,18 +7,18 @@ export { parseSkillBlock } from './skill';
 export { defaultLeafId, findNewestLeaf, getPath, graphHasFork, graphLeaves, leafCount, treeLabel } from './tree';
 export {
 	chatRows,
+	customNote,
 	displayModel,
 	entryMatchesFilter,
 	groupTurns,
 	isToolOnlyMessage,
 	pathSessionFacts,
-	piExtensionNote,
 	streamCounts,
 	streamRows,
 	toolResults,
 	visibleToolCalls
 } from './turns';
-export type { SessionFacts, StreamChrome, StreamCounts, StreamFilter, StreamRow } from './turns';
+export type { CustomNote, SessionFacts, StreamChrome, StreamCounts, StreamFilter, StreamRow } from './turns';
 export {
 	requestedEdit,
 	resultFiles,

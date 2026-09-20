@@ -1,6 +1,7 @@
 import { afterEach, test, expect } from 'vitest';
 import { buildTranscriptSession } from './session';
 import { loadTranscriptSession } from './load';
+import { customNote } from './turns';
 import type { SessionMetadata, TranscriptEvent } from './types';
 
 const metadata: SessionMetadata = {
@@ -237,10 +238,32 @@ test('cycles cannot trap the viewer parent traversal', () => {
 
 test('Pi custom sidecars keep the extension name instead of the custom kind', () => {
 	const data = buildTranscriptSession(
-		[{ id: 3, key: 'custom:sidecar', kind: 'custom', text: 'pi-rename-titles' }],
+		[{ id: 3, key: 'custom:sidecar', kind: 'custom', text: '  pi-rename-titles  ' }],
 		metadata
 	);
-	expect(data.entries[0]).toMatchObject({ type: 'custom_message', customType: 'pi-rename-titles', content: '' });
+	expect(data.entries[0]).toMatchObject({ type: 'custom', customType: '  pi-rename-titles  ', content: '' });
+	expect(customNote(data.entries[0])).toEqual({ title: '(used pi-extension pi-rename-titles)', body: '' });
+});
+
+test('unknown native kinds stay custom_message leftovers', () => {
+	const empty = buildTranscriptSession([{ id: 4, key: 'unknown:kind', kind: 'oracle-phase', text: '' }], metadata);
+	expect(empty.entries[0]).toMatchObject({ type: 'custom_message', customType: 'oracle-phase', content: '' });
+	expect(customNote(empty.entries[0])).toEqual({ title: 'oracle-phase', body: '' });
+
+	const unknown = buildTranscriptSession(
+		[{ id: 5, key: 'unknown:json', kind: 'unknown', text: '{"x":1}' }],
+		metadata
+	);
+	expect(customNote(unknown.entries[0])).toEqual({ title: 'Unsupported', body: '{"x":1}' });
+});
+
+test('Pi custom_message leftovers keep their type name and text', () => {
+	const data = buildTranscriptSession(
+		[{ id: 6, key: 'custom-message:1', kind: 'custom_message', text: 'hello' }],
+		metadata
+	);
+	expect(data.entries[0]).toMatchObject({ type: 'custom_message', customType: 'custom_message', content: 'hello' });
+	expect(customNote(data.entries[0])).toEqual({ title: 'custom_message', body: 'hello' });
 });
 
 test('loads every page rather than rendering only the first 200 records', async () => {

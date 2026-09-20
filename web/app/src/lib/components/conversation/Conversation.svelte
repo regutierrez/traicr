@@ -8,7 +8,7 @@
 		entryMatchesFilter,
 		isToolOnlyMessage,
 		pathSessionFacts,
-		piExtensionNote,
+		customNote,
 		streamCounts,
 		streamRows,
 		toolResults,
@@ -264,21 +264,15 @@
 						<Markdown text={entry.summary || ''} />
 					</ExpandChip>
 				</div>
-			{:else if entry.type === 'custom_message'}
-				{#if entry.customType === 'unknown'}
+			{:else}
+				{const note = customNote(entry)}
+				{#if note}
 					<section class="note" id="entry-{entry.id}">
-						Unsupported
-						<pre>{entry.content}</pre>
+						{note.title}
+						{#if note.body}
+							<pre>{note.body}</pre>
+						{/if}
 					</section>
-				{:else if !(entry.content || '') && entry.customType !== 'custom_message'}
-					{@const note = piExtensionNote(entry.customType || '')}
-					{#if note}
-						<p class="note" id="entry-{entry.id}">{note}</p>
-					{/if}
-				{:else if entry.content}
-					<div class="note" id="entry-{entry.id}">
-						<Markdown text={entry.content} />
-					</div>
 				{/if}
 			{/if}
 		{/snippet}

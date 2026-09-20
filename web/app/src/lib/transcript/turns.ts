@@ -134,6 +134,7 @@ function turnRole(entry: TranscriptEntry): Turn['role'] {
 		entry.type === 'thinking_level_change' ||
 		entry.type === 'compaction' ||
 		entry.type === 'branch_summary' ||
+		entry.type === 'custom' ||
 		entry.type === 'custom_message'
 	) {
 		return 'system';
@@ -184,9 +185,19 @@ export function displayModel(provider?: string, modelId?: string) {
 		.replace(/\bGpt\b/g, 'GPT');
 }
 
-export function piExtensionNote(name: string) {
-	const extension = name.trim();
-	return extension ? `(used pi-extension ${extension})` : '';
+export type CustomNote = {
+	title: string;
+	body: string;
+};
+
+export function customNote(entry: TranscriptEntry): CustomNote | null {
+	if (entry.type === 'custom') {
+		const extension = (entry.customType || '').trim();
+		return extension ? { title: `(used pi-extension ${extension})`, body: (entry.content || '').trim() } : null;
+	}
+	if (entry.type !== 'custom_message') return null;
+	if (entry.customType === 'unknown') return { title: 'Unsupported', body: entry.content || '' };
+	return { title: (entry.customType || '').trim() || entry.type, body: entry.content || '' };
 }
 
 export function pathSessionFacts(path: TranscriptEntry[]): SessionFacts {
