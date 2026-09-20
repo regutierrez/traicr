@@ -8,7 +8,6 @@
 	import { groupTurns, isToolOnlyMessage, pageWindow, toolResults } from '$lib/transcript/turns';
 	import type { LoadedSession, TranscriptEntry } from '$lib/transcript/types';
 	import type { Trace } from '$lib/types';
-	import { onDestroy } from 'svelte';
 	import AttachmentBlock from './AttachmentBlock.svelte';
 	import BranchTree from './BranchTree.svelte';
 	import ChildCard from './ChildCard.svelte';
@@ -40,8 +39,6 @@
 	let treeQuery = $state('');
 	let treeOpen = $state(false);
 	let loadingMore = $state(false);
-	let copiedId = $state('');
-	let copiedTimer: ReturnType<typeof setTimeout> | undefined;
 
 	let sessionKey = $derived(`${trace.id}:${revision}`);
 	let session = $derived(extraKey === sessionKey ? (extra ?? initial) : initial);
@@ -129,26 +126,6 @@
 		const href = resolve('/traces/[id]', { id: String(trace.id) });
 		history.replaceState(history.state, '', `${href}?${params}`);
 	}
-
-	async function copyLink(entryId: string) {
-		const url = new URL(page.url.href);
-		url.searchParams.set('leafId', leafId);
-		url.searchParams.set('targetId', entryId);
-		if (revision) url.searchParams.set('revision', revision);
-		else url.searchParams.delete('revision');
-		try {
-			await navigator.clipboard.writeText(url.toString());
-			copiedId = entryId;
-			clearTimeout(copiedTimer);
-			copiedTimer = setTimeout(() => {
-				if (copiedId === entryId) copiedId = '';
-			}, 1200);
-		} catch {
-			// Clipboard can be unavailable over plain HTTP.
-		}
-	}
-
-	onDestroy(() => clearTimeout(copiedTimer));
 
 	async function loadMore() {
 		if (!session || loadingMore) return;
@@ -265,15 +242,6 @@
 									<div class="who">
 										<span>{roleLabel(entry)}</span>
 										{#if entry.timestamp}<time datetime={entry.timestamp}>{entry.timestamp}</time>{/if}
-										<button
-											class={['copy', copiedId === entry.id && 'is-copied']}
-											type="button"
-											title="Copy link to this message"
-											aria-label={copiedId === entry.id ? 'Copied link' : 'Copy link to this message'}
-											onclick={() => copyLink(entry.id)}
-										>
-											{copiedId === entry.id ? 'Copied' : 'Copy link'}
-										</button>
 									</div>
 									{#if message.nativeDetails?.message_meta?.fromAutomation}
 										<p class="note">Automation message</p>
@@ -456,24 +424,6 @@
 		font-family: var(--font-mono);
 		font-size: 11px;
 		font-variant-numeric: tabular-nums;
-	}
-
-	.copy {
-		margin-left: auto;
-		border: 0;
-		background: transparent;
-		color: var(--muted-foreground);
-		font: inherit;
-		cursor: pointer;
-		opacity: 0;
-	}
-
-	.message:hover .copy,
-	.message:focus-within .copy,
-	.copy:focus-visible,
-	.copy.is-copied {
-		opacity: 1;
-		color: var(--primary);
 	}
 
 	.note,
