@@ -6,7 +6,7 @@ import { parseSkillBlock } from './skill';
 import { buildTranscriptSession } from './session';
 import { requestedEdit, resultText, toolChipLabel, toolChipParts, toolStatus, toolSummary } from './tools';
 import { defaultLeafId, findNewestLeaf, getPath, graphHasFork, graphLeaves } from './tree';
-import { displayModel, groupTurns, isToolOnlyMessage, pathSessionFacts, streamCounts, streamRows } from './turns';
+import { displayModel, groupTurns, isToolOnlyMessage, pathSessionFacts, piExtensionNote, streamCounts, streamRows } from './turns';
 import type { ToolCallBlock, TranscriptEntry } from './types';
 
 test('shared tools keep original names and display shell and file operations consistently', () => {
@@ -266,6 +266,9 @@ test('model and thinking facts leave the stream and keep the latest display name
 		},
 		{ id: 'later', parentId: 'u', type: 'thinking_level_change', thinkingLevel: 'high' }
 	] as TranscriptEntry[];
+	expect(piExtensionNote('pi-rename-titles')).toBe('(used pi-extension pi-rename-titles)');
+	expect(piExtensionNote('  plannotator  ')).toBe('(used pi-extension plannotator)');
+	expect(piExtensionNote('')).toBe('');
 	expect(displayModel('openai-codex', 'gpt-6-astra')).toBe('GPT 6 Astra');
 	expect(pathSessionFacts(path)).toEqual({ model: 'GPT 6 Astra', thinkingLevel: 'high' });
 	expect(streamRows(path).map((row) => row.id)).toEqual(['u']);

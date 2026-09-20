@@ -8,6 +8,7 @@
 		entryMatchesFilter,
 		isToolOnlyMessage,
 		pathSessionFacts,
+		piExtensionNote,
 		streamCounts,
 		streamRows,
 		toolResults,
@@ -269,8 +270,15 @@
 						Unsupported
 						<pre>{entry.content}</pre>
 					</section>
-				{:else}
-					<p class="note" id="entry-{entry.id}">{entry.customType}</p>
+				{:else if !(entry.content || '') && entry.customType !== 'custom_message'}
+					{@const note = piExtensionNote(entry.customType || '')}
+					{#if note}
+						<p class="note" id="entry-{entry.id}">{note}</p>
+					{/if}
+				{:else if entry.content}
+					<div class="note" id="entry-{entry.id}">
+						<Markdown text={entry.content} />
+					</div>
 				{/if}
 			{/if}
 		{/snippet}

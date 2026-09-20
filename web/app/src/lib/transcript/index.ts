@@ -12,6 +12,7 @@ export {
 	groupTurns,
 	isToolOnlyMessage,
 	pathSessionFacts,
+	piExtensionNote,
 	streamCounts,
 	streamRows,
 	toolResults,

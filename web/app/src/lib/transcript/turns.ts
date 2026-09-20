@@ -184,6 +184,11 @@ export function displayModel(provider?: string, modelId?: string) {
 		.replace(/\bGpt\b/g, 'GPT');
 }
 
+export function piExtensionNote(name: string) {
+	const extension = name.trim();
+	return extension ? `(used pi-extension ${extension})` : '';
+}
+
 export function pathSessionFacts(path: TranscriptEntry[]): SessionFacts {
 	let model = '';
 	let thinkingLevel = '';
