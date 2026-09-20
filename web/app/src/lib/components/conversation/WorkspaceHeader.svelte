@@ -9,6 +9,8 @@
 		revision = '',
 		tab,
 		recordCount = 0,
+		model = '',
+		thinkingLevel = '',
 		thinkingExpanded = false,
 		toolsExpanded = false,
 		onToggleThinking,
@@ -18,6 +20,8 @@
 		revision?: string;
 		tab: 'conversation' | 'details';
 		recordCount?: number;
+		model?: string;
+		thinkingLevel?: string;
 		thinkingExpanded?: boolean;
 		toolsExpanded?: boolean;
 		onToggleThinking?: () => void;
@@ -84,6 +88,22 @@
 			</div>
 		{/if}
 	</div>
+	{#if model || thinkingLevel}
+		<nav class="facts" aria-label="Session">
+			{#if model}
+				<div class="fact">
+					<span class="fact-label">Model</span>
+					<span class="fact-value">{model}</span>
+				</div>
+			{/if}
+			{#if thinkingLevel}
+				<div class="fact">
+					<span class="fact-label">Thinking</span>
+					<span class="fact-value">{thinkingLevel}</span>
+				</div>
+			{/if}
+		</nav>
+	{/if}
 	<nav class="tabs" aria-label="Trace views">
 		<a
 			class={['tab', tab === 'conversation' && 'is-current']}
@@ -192,6 +212,33 @@
 		border-color: var(--primary);
 	}
 
+	.facts {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 36px;
+	}
+
+	.fact {
+		display: flex;
+		flex-direction: column;
+		gap: 0.15rem;
+		min-width: 0;
+	}
+
+	.fact-label {
+		color: var(--muted-foreground);
+		font-size: 13px;
+		line-height: 14px;
+	}
+
+	.fact-value {
+		overflow: visible;
+		color: var(--foreground);
+		font-size: 13px;
+		line-height: 14px;
+		white-space: nowrap;
+	}
+
 	.tabs {
 		display: flex;
 		gap: 1rem;
@@ -217,6 +264,7 @@
 			padding: 0.85rem 1.5rem 0;
 		}
 
+		.facts,
 		.tabs {
 			grid-column: 1 / -1;
 		}

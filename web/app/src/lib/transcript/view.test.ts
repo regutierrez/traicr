@@ -6,7 +6,7 @@ import { parseSkillBlock } from './skill';
 import { buildTranscriptSession } from './session';
 import { requestedEdit, resultText, toolChipLabel, toolChipParts, toolStatus, toolSummary } from './tools';
 import { defaultLeafId, findNewestLeaf, getPath, graphHasFork, graphLeaves } from './tree';
-import { groupTurns, isToolOnlyMessage, streamCounts, streamRows } from './turns';
+import { displayModel, groupTurns, isToolOnlyMessage, pathSessionFacts, streamCounts, streamRows } from './turns';
 import type { ToolCallBlock, TranscriptEntry } from './types';
 
 test('shared tools keep original names and display shell and file operations consistently', () => {
@@ -246,6 +246,29 @@ test('streamRows keep the first path message first, not a window around the leaf
 	expect(rows[0].entries[0].id).toBe('1');
 	expect(rows.at(-1)).toMatchObject({ chrome: 'agent', id: '250' });
 	expect(rows).toHaveLength(250);
+});
+
+test('model and thinking facts leave the stream and keep the latest display name', () => {
+	const path = [
+		{
+			id: 'm',
+			parentId: null,
+			type: 'model_change',
+			provider: 'openai-codex',
+			modelId: 'gpt-6-astra'
+		},
+		{ id: 't', parentId: 'm', type: 'thinking_level_change', thinkingLevel: '' },
+		{
+			id: 'u',
+			parentId: 't',
+			type: 'message',
+			message: { role: 'user', content: [{ type: 'text', text: 'hello' }] }
+		},
+		{ id: 'later', parentId: 'u', type: 'thinking_level_change', thinkingLevel: 'high' }
+	] as TranscriptEntry[];
+	expect(displayModel('openai-codex', 'gpt-6-astra')).toBe('GPT 6 Astra');
+	expect(pathSessionFacts(path)).toEqual({ model: 'GPT 6 Astra', thinkingLevel: 'high' });
+	expect(streamRows(path).map((row) => row.id)).toEqual(['u']);
 });
 
 test('tool-only assistant messages stay quiet rows', () => {

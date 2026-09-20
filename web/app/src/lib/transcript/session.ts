@@ -205,6 +205,16 @@ export function buildTranscriptSession(events: TranscriptEvent[], metadata: Sess
 						type: event.kind,
 						timestamp: event.timestamp
 					});
+				} else if (event.kind === 'custom') {
+					entry = append({
+						id: String(event.id),
+						parentId: null,
+						type: 'custom_message',
+						timestamp: event.timestamp,
+						customType: text || 'custom',
+						display: true,
+						content: ''
+					});
 				} else {
 					entry = append({
 						id: String(event.id),

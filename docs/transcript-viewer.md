@@ -82,7 +82,13 @@ Pi / Claude parent-graph extras:
 
 - `branch_summary` is a Thought-style chip on the path that contains it.
   Switching paths is the Branches list in the index, not a sidebar tree.
-- `model_change` and `thinking_level_change` are one-line notes.
+- `model_change` and `thinking_level_change` sit in the workspace header
+  above Conversation / Details, not in the stream. Empty thinking levels
+  are omitted. The model label uses the traces.com display name
+  (`gpt-6-astra` → `GPT 6 Astra`).
+- Pi `custom` records are extension sidecars (`plannotator`,
+  `pi-rename-titles`, `context:skill_loaded`, `tps-stats`). They stay
+  quiet notes named after the extension, not chat turns.
 
 If a later harness adds Process, Cron, or another traces.com kind, map it
 onto the existing kind list rather than adding a per-harness pane.

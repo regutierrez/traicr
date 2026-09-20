@@ -7,15 +7,17 @@ export { parseSkillBlock } from './skill';
 export { defaultLeafId, findNewestLeaf, getPath, graphHasFork, graphLeaves, leafCount, treeLabel } from './tree';
 export {
 	chatRows,
+	displayModel,
 	entryMatchesFilter,
 	groupTurns,
 	isToolOnlyMessage,
+	pathSessionFacts,
 	streamCounts,
 	streamRows,
 	toolResults,
 	visibleToolCalls
 } from './turns';
-export type { StreamChrome, StreamCounts, StreamFilter, StreamRow } from './turns';
+export type { SessionFacts, StreamChrome, StreamCounts, StreamFilter, StreamRow } from './turns';
 export {
 	requestedEdit,
 	resultFiles,

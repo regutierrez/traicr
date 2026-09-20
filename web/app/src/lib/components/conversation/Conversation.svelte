@@ -7,6 +7,7 @@
 	import {
 		entryMatchesFilter,
 		isToolOnlyMessage,
+		pathSessionFacts,
 		streamCounts,
 		streamRows,
 		toolResults,
@@ -71,6 +72,7 @@
 	});
 
 	let path = $derived(session && leafId ? getPath(session.entries, leafId) : []);
+	let facts = $derived(pathSessionFacts(path));
 	let results = $derived(toolResults(path));
 	let filtered = $derived(path.filter((entry) => entryMatchesFilter(entry, filter)));
 	let rows = $derived(streamRows(filtered));
@@ -154,6 +156,8 @@
 		{revision}
 		tab="conversation"
 		recordCount={session?.events.length ?? session?.entries.length ?? 0}
+		model={facts.model ?? ''}
+		thinkingLevel={facts.thinkingLevel ?? ''}
 		{thinkingExpanded}
 		{toolsExpanded}
 		onToggleThinking={toggleThinking}
@@ -253,10 +257,6 @@
 						<p class="note error">Recorded response state: {message.stopReason}</p>
 					{/if}
 				</article>
-			{:else if entry.type === 'model_change'}
-				<p class="note" id="entry-{entry.id}">Model · {[entry.provider, entry.modelId].filter(Boolean).join('/')}</p>
-			{:else if entry.type === 'thinking_level_change'}
-				<p class="note" id="entry-{entry.id}">Thinking level · {entry.thinkingLevel}</p>
 			{:else if entry.type === 'compaction' || entry.type === 'branch_summary'}
 				<div id="entry-{entry.id}">
 					<ExpandChip icon={entry.type === 'compaction' ? 'compaction' : 'branch'} verb={entry.type === 'compaction' ? 'Compaction' : 'Branch summary'}>
@@ -264,14 +264,14 @@
 					</ExpandChip>
 				</div>
 			{:else if entry.type === 'custom_message'}
-				<section class="note" id="entry-{entry.id}">
-					<strong>{entry.customType === 'unknown' ? 'Unsupported · ' : ''}{entry.sources?.[0]?.details?.native_type || entry.customType}</strong>
-					{#if entry.customType === 'unknown'}
+				{#if entry.customType === 'unknown'}
+					<section class="note" id="entry-{entry.id}">
+						Unsupported
 						<pre>{entry.content}</pre>
-					{:else}
-						<Markdown text={entry.content || ''} />
-					{/if}
-				</section>
+					</section>
+				{:else}
+					<p class="note" id="entry-{entry.id}">{entry.customType}</p>
+				{/if}
 			{/if}
 		{/snippet}
 		<div class="body">

@@ -62,7 +62,14 @@ export function groupTurns(path: TranscriptEntry[]): Turn[] {
 	let current: Turn | null = null;
 
 	for (const entry of path) {
-		if (entry.type === 'session_info' || entry.type === 'label') continue;
+		if (
+			entry.type === 'session_info' ||
+			entry.type === 'label' ||
+			entry.type === 'model_change' ||
+			entry.type === 'thinking_level_change'
+		) {
+			continue;
+		}
 		const isUser = entry.message?.role === 'user';
 		if (isUser || !current) {
 			current = { id: entry.id, role: isUser ? 'user' : turnRole(entry), entries: [entry] };
@@ -158,6 +165,44 @@ export function entryMatchesFilter(entry: TranscriptEntry, filter: StreamFilter)
 	}
 	if (filter === 'compaction') return entry.type === 'compaction';
 	return true;
+}
+
+export type SessionFacts = {
+	model?: string;
+	thinkingLevel?: string;
+};
+
+export function displayModel(provider?: string, modelId?: string) {
+	const raw = (modelId || '').trim();
+	if (!raw) return '';
+	const name = raw.includes('/') ? raw.slice(raw.lastIndexOf('/') + 1) : raw;
+	return name
+		.replace(/^gpt-/i, 'GPT ')
+		.replace(/^claude-/i, 'Claude ')
+		.replace(/-/g, ' ')
+		.replace(/\b([a-z])/g, (letter) => letter.toUpperCase())
+		.replace(/\bGpt\b/g, 'GPT');
+}
+
+export function pathSessionFacts(path: TranscriptEntry[]): SessionFacts {
+	let model = '';
+	let thinkingLevel = '';
+	for (const entry of path) {
+		if (entry.type === 'model_change') {
+			model = displayModel(entry.provider, entry.modelId) || model;
+		}
+		if (entry.type === 'thinking_level_change') {
+			const level = entry.thinkingLevel?.trim();
+			if (level) thinkingLevel = level;
+		}
+		if (entry.message?.model) {
+			model = displayModel(entry.message.provider, entry.message.model) || model;
+		}
+	}
+	return {
+		...(model ? { model } : {}),
+		...(thinkingLevel ? { thinkingLevel } : {})
+	};
 }
 
 export function toolResults(path: TranscriptEntry[]) {

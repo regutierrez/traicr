@@ -235,6 +235,14 @@ test('cycles cannot trap the viewer parent traversal', () => {
 	expect(data.entries.some((entry) => entry.parentId === null)).toBe(true);
 });
 
+test('Pi custom sidecars keep the extension name instead of the custom kind', () => {
+	const data = buildTranscriptSession(
+		[{ id: 3, key: 'custom:sidecar', kind: 'custom', text: 'pi-rename-titles' }],
+		metadata
+	);
+	expect(data.entries[0]).toMatchObject({ type: 'custom_message', customType: 'pi-rename-titles', content: '' });
+});
+
 test('loads every page rather than rendering only the first 200 records', async () => {
 	let calls = 0;
 	globalThis.fetch = async (input) => {
