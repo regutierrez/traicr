@@ -218,6 +218,17 @@ test('stream rows keep the user bubble off the following agent turn and tools', 
 	]);
 	expect(streamRows(entries)[0].entries[0].id).toBe('u');
 	expect(streamRows(entries)[1].entries[0].message?.content[0]).toMatchObject({ type: 'text' });
+	expect(
+		streamRows([
+			...entries,
+			{
+				id: 'r',
+				parentId: 't',
+				type: 'message',
+				message: { role: 'toolResult', toolCallId: 'c', content: [{ type: 'text', text: 'ok' }] }
+			}
+		]).map((row) => row.id)
+	).toEqual(['u', 'a', 't', 'm']);
 });
 
 test('tool-only assistant messages stay quiet rows', () => {

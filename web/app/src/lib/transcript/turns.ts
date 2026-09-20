@@ -104,10 +104,18 @@ function entryChrome(entry: TranscriptEntry): StreamChrome {
 	return 'quiet';
 }
 
+function isPairedToolResult(entry: TranscriptEntry, calls: Set<string>) {
+	const id = entry.message?.toolCallId;
+	return entry.message?.role === 'toolResult' && Boolean(id && calls.has(id));
+}
+
 export function streamRows(path: TranscriptEntry[]): StreamRow[] {
+	const calls = visibleToolCalls(path);
 	return chatRows(groupTurns(path)).flatMap((turn) => {
 		if (turn.role === 'user') return [{ id: turn.id, chrome: 'user' as const, entries: turn.entries }];
-		return turn.entries.map((entry) => ({ id: entry.id, chrome: entryChrome(entry), entries: [entry] }));
+		return turn.entries
+			.filter((entry) => !isPairedToolResult(entry, calls))
+			.map((entry) => ({ id: entry.id, chrome: entryChrome(entry), entries: [entry] }));
 	});
 }
 
