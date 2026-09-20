@@ -10,8 +10,6 @@ export {
 	entryMatchesFilter,
 	groupTurns,
 	isToolOnlyMessage,
-	PAGE_SIZE,
-	pageWindow,
 	streamCounts,
 	streamRows,
 	toolResults,

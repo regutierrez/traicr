@@ -45,8 +45,8 @@ Display features depend on the available data, not the harness name. Archived
 images use local previews; external image references stay links and unavailable
 images have a readable notice. Source-specific collection, normalization, and
 attachment retrieval remain separate; the renderer does not recover missing
-bytes. Conversation renders at most 200 entries at once, with earlier/later
-navigation. Tool results are paired within the selected branch.
+bytes. Conversation shows the loaded path from the first message. Tool
+results are paired within the selected branch.
 
 This is a view of Traicr's merged normalized records, **not a new native source
 parser**. Details keeps all revisions, parsing warnings, related sessions,
@@ -66,9 +66,6 @@ Shared stream, when the Event has the data:
 - Child traces (`create_thread`, `fromExecutorThreadID`, leftover children)
   stay one quiet row that opens the child or says it was never collected.
 - Unknown native types and uncommon stop reasons stay a note plus JSON/text.
-- Incremental "Load next 200 records" appears only when the loaded Event page
-  says more remain (Amp today).
-
 Amp-only today:
 
 - Archive view (merged vs one revision) still sits on the workspace header.
@@ -143,11 +140,9 @@ oversized imported source is retained with a normalization diagnostic and can
 still be downloaded. Other normalizers retain their 64 MiB budget. JSON parsing
 uses memory proportional to export size, so near-limit exports need substantially
 more than 512 MiB of server memory. The browser loads 200 records per request and
-renders at most 200 conversation entries at once. Load-more and earlier/later
-controls retain access to the rest. The contents index and loaded-record counts cover
-loaded records; archive search covers all indexed records. Deep links load pages
-until their target is found. Other harnesses retain their existing all-pages
-loading.
+keeps requesting pages until the selected transcript is complete, then
+renders the path from the first message. The contents index and loaded-record
+counts cover loaded records; archive search covers all indexed records.
 If an import or rebuild changes history between pages, the viewer requests a
 reload rather than claiming that the incomplete history is fully loaded.
 Transcript cursors use the latest normalizer-run ID as their generation. Writes

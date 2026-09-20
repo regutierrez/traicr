@@ -4,11 +4,9 @@
 	import { parseSkillBlock } from '$lib/transcript/skill';
 	import { findNewestLeaf, getPath, graphLeaves, treeLabel } from '$lib/transcript/tree';
 	import { childCards, leftoverCards } from '$lib/transcript/children';
-	import { loadMoreSession } from '$lib/transcript/load';
 	import {
 		entryMatchesFilter,
 		isToolOnlyMessage,
-		pageWindow,
 		streamCounts,
 		streamRows,
 		toolResults,
@@ -37,22 +35,17 @@
 		loadError?: string;
 	} = $props();
 
-	let extra = $state.raw<LoadedSession | null>(null);
-	let extraKey = $state('');
-	let error = $state('');
 	let selection = $state.raw<{ key: string; leaf: string; target: string } | null>(null);
-	let pageStart = $state<number | undefined>(undefined);
 	let thinkingExpanded = $state(false);
 	let toolsExpanded = $state(false);
 	let thinkingOpen = $state<Record<string, boolean>>({});
 	let toolOpen = $state<Record<string, boolean>>({});
-	let loadingMore = $state(false);
 	let filter = $state<StreamFilter>('all');
 	let expandedUsers = $state<Record<string, boolean>>({});
 
 	let sessionKey = $derived(`${trace.id}:${revision}`);
-	let session = $derived(extraKey === sessionKey ? (extra ?? initial) : initial);
-	let displayError = $derived(error || loadError);
+	let session = $derived(initial);
+	let displayError = $derived(loadError);
 
 	function idsFromURL(data: LoadedSession) {
 		const params = page.url.searchParams;
@@ -63,7 +56,7 @@
 			data.eventEntries.get(params.get('event') || params.get('key') || '') ||
 			'';
 		const leaf = urlLeaf || data.leafId || data.entries.at(-1)?.id || '';
-		return { leaf, target: urlTarget || leaf };
+		return { leaf, target: urlTarget };
 	}
 
 	let leafId = $derived.by(() => {
@@ -78,13 +71,11 @@
 	});
 
 	let path = $derived(session && leafId ? getPath(session.entries, leafId) : []);
-	let windowed = $derived(pageWindow(path, targetId, pageStart));
-	let visible = $derived(path.slice(windowed.from, windowed.to));
 	let results = $derived(toolResults(path));
-	let filtered = $derived(visible.filter((entry) => entryMatchesFilter(entry, filter)));
+	let filtered = $derived(path.filter((entry) => entryMatchesFilter(entry, filter)));
 	let rows = $derived(streamRows(filtered));
 	let children = $derived(trace.children ?? []);
-	let leftover = $derived(leftoverCards(visible, results, children));
+	let leftover = $derived(leftoverCards(path, results, children));
 	let counts = $derived(session ? streamCounts(path, session.entries) : streamCounts([]));
 	let leaves = $derived(
 		session ? graphLeaves(session.entries).map((entry) => ({ id: entry.id, label: treeLabel(entry) })) : []
@@ -132,26 +123,11 @@
 		if (!session) return;
 		const leaf = findNewestLeaf(session.entries, entryId);
 		selection = { key: sessionKey, leaf, target: entryId };
-		pageStart = undefined;
 		const params = new URLSearchParams(page.url.searchParams);
 		params.set('leafId', leaf);
 		params.set('targetId', entryId);
 		const href = resolve('/traces/[id]', { id: String(trace.id) });
 		history.replaceState(history.state, '', `${href}?${params}`);
-	}
-
-	async function loadMore() {
-		if (!session || loadingMore) return;
-		loadingMore = true;
-		try {
-			extra = await loadMoreSession(session);
-			extraKey = sessionKey;
-			error = '';
-		} catch (err) {
-			error = err instanceof Error ? err.message : 'Could not load more records';
-		} finally {
-			loadingMore = false;
-		}
 	}
 
 	function incomingCards(entry: TranscriptEntry) {
@@ -166,7 +142,7 @@
 
 	function shouldRenderResult(entry: TranscriptEntry) {
 		const id = entry.message?.toolCallId;
-		return !id || !visible.some((item) => item.message?.content?.some((block) => block.type === 'toolCall' && block.id === id));
+		return !id || !path.some((item) => item.message?.content?.some((block) => block.type === 'toolCall' && block.id === id));
 	}
 </script>
 
@@ -191,8 +167,6 @@
 	{:else}
 		{#if displayError}
 			<p class="status error" role="alert">{displayError}</p>
-		{:else if session.hasMore}
-			<p class="status" role="status">{session.status}</p>
 		{/if}
 		{#snippet entryBlocks(entry: TranscriptEntry)}
 			{@const message = entry.message}
@@ -309,10 +283,8 @@
 				onFilter={(next) => (filter = next)}
 				onSelectLeaf={selectNode}
 			/>
-			<div class="stream">
-					{#if windowed.hasEarlier}
-						<button class="page" type="button" onclick={() => (pageStart = Math.max(0, windowed.from - 200))}>Earlier loaded messages</button>
-					{/if}
+			{#key sessionKey}
+				<div class="stream">
 					{#each rows as row (row.id)}
 						<section class={['row', `is-${row.chrome}`, row.entries.some((entry) => entry.id === targetId) && 'is-target']}>
 							{#if row.chrome !== 'quiet'}
@@ -335,16 +307,11 @@
 					{#each leftover as child (child.native_trace_id)}
 						<ChildCard child={{ id: child.native_trace_id, title: child.title || child.native_trace_id, collected: true, traceId: child.id, meta: 'Child trace' }} />
 					{/each}
-					{#if windowed.hasLater}
-						<button class="page" type="button" onclick={() => (pageStart = windowed.to)}>Later loaded messages</button>
-					{/if}
-					{#if session.hasMore}
-						<button class="page" type="button" onclick={loadMore} disabled={loadingMore}>{loadingMore ? 'Loading…' : 'Load next 200 records'}</button>
-					{/if}
 					{#if !session.entries.length}
 						<p class="empty">No normalized messages. Open Details to inspect the retained source files.</p>
 					{/if}
-			</div>
+				</div>
+			{/key}
 		</div>
 	{/if}
 </div>
@@ -501,18 +468,6 @@
 		font-family: var(--font-mono);
 		font-size: 12px;
 		white-space: pre-wrap;
-	}
-
-	.page {
-		display: inline-flex;
-		margin: 0.75rem 0;
-		border: 1px solid var(--border);
-		border-radius: var(--radius);
-		background: transparent;
-		color: var(--muted-foreground);
-		padding: 0.3rem 0.6rem;
-		font-size: 12px;
-		cursor: pointer;
 	}
 
 	@media (min-width: 900px) {

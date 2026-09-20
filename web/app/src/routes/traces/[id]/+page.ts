@@ -1,6 +1,6 @@
 import { redirect } from '@sveltejs/kit';
 import { readJSON } from '$lib/api';
-import { loadMoreSession, loadTranscriptSession } from '$lib/transcript/load';
+import { loadTranscriptSession } from '$lib/transcript/load';
 import type { LoadedSession } from '$lib/transcript/types';
 import type { Trace } from '$lib/types';
 import type { PageLoad } from './$types';
@@ -20,7 +20,7 @@ export const load: PageLoad = async ({ fetch, params, url }) => {
 		return { trace: null, revision, session: null, loadError: '', error: 'Revision not found for this Amp trace' };
 	}
 	try {
-		let session = await loadTranscriptSession(
+		const session = await loadTranscriptSession(
 			{
 				traceId: params.id,
 				nativeId: result.data.native_trace_id,
@@ -31,12 +31,6 @@ export const load: PageLoad = async ({ fetch, params, url }) => {
 			},
 			fetch
 		);
-		const requested = ['leafId', 'targetId', 'event', 'key']
-			.map((key) => url.searchParams.get(key))
-			.filter((value): value is string => Boolean(value));
-		while (session.hasMore && requested.some((value) => !session.eventEntries.has(value))) {
-			session = await loadMoreSession(session, fetch);
-		}
 		return { trace: result.data, revision, session, loadError: '', error: '' };
 	} catch (error) {
 		return {

@@ -1,6 +1,6 @@
 import { afterEach, test, expect } from 'vitest';
 import { buildTranscriptSession } from './session';
-import { loadMoreSession, loadTranscriptSession } from './load';
+import { loadTranscriptSession } from './load';
 import type { SessionMetadata, TranscriptEvent } from './types';
 
 const metadata: SessionMetadata = {
@@ -31,11 +31,7 @@ test('Amp asks for reload without declaring completion when history changes betw
 			headers: { 'content-type': 'application/json' }
 		});
 	};
-	const data = await loadTranscriptSession({ ...metadata, harness: 'amp' });
-	await expect(loadMoreSession(data)).rejects.toThrow(/Transcript changed.*Reload/);
-	expect(data.hasMore).toBe(true);
-	expect(data.entries[0].message?.content[0]).toMatchObject({ type: 'text', text: 'Before rebuild' });
-	expect(data.status.includes('All records loaded')).toBe(false);
+	await expect(loadTranscriptSession({ ...metadata, harness: 'amp' })).rejects.toThrow(/Transcript changed.*Reload/);
 });
 
 test('all harnesses preserve attachment fields for the shared renderer', () => {
@@ -91,7 +87,7 @@ test('Amp preserves completion reasons and gives cancellation and errors precede
 	}
 });
 
-test('Amp loads incrementally, keeps the revision and joins messages across pages', async () => {
+test('Amp loads every page, keeps the revision and joins messages across pages', async () => {
 	let calls = 0;
 	globalThis.fetch = async (input) => {
 		calls += 1;
@@ -117,13 +113,10 @@ test('Amp loads incrementally, keeps the revision and joins messages across page
 		} as Response;
 	};
 	const data = await loadTranscriptSession({ ...metadata, harness: 'amp', revision: '7' });
-	expect(calls).toBe(1);
-	expect(data.hasMore).toBe(true);
-	const next = await loadMoreSession(data);
-	expect(next.hasMore).toBe(false);
 	expect(calls).toBe(2);
-	expect(next.entries.length).toBe(1);
-	expect(next.entries[0].message?.content.length).toBe(2);
+	expect(data.hasMore).toBe(false);
+	expect(data.entries.length).toBe(1);
+	expect(data.entries[0].message?.content.length).toBe(2);
 });
 
 test('retains Amp details once per message, hidden context, attachments and execution states', () => {
