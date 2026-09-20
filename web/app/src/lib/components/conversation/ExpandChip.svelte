@@ -48,14 +48,14 @@
 
 <style>
 	.chip {
-		margin: 0.15rem 0;
+		margin: 0;
 	}
 
 	summary {
 		display: inline-flex;
 		max-width: 100%;
 		align-items: center;
-		gap: 0.3rem;
+		gap: 5px;
 		min-height: 1.5rem;
 		cursor: pointer;
 		color: var(--muted-foreground);
@@ -71,31 +71,33 @@
 
 	.kind {
 		display: inline-flex;
-		margin-right: 0.2rem;
-		color: #8a8a8a;
+		margin-right: 7px;
+		transform: translateY(-0.5px);
+		color: #808080;
 	}
 
 	.verb {
 		flex-shrink: 0;
-		color: var(--muted-foreground);
+		font-weight: 500;
 	}
 
 	.rest {
 		overflow: hidden;
-		color: var(--foreground);
+		min-width: 0;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
 
 	.chevron {
 		display: inline-flex;
-		margin-left: -0.1rem;
-		opacity: 0.45;
+		margin: 0 -0.125rem;
+		transform: translateY(-0.5px);
+		opacity: 0.4;
 		transition: transform 150ms ease, opacity 150ms ease;
 	}
 
 	.chip[open] .chevron {
-		transform: rotate(90deg);
+		transform: translateY(-0.5px) rotate(90deg);
 		opacity: 0.85;
 	}
 

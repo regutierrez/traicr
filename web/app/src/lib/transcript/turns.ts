@@ -74,6 +74,43 @@ export function groupTurns(path: TranscriptEntry[]): Turn[] {
 	return turns;
 }
 
+export function chatRows(grouped: Turn[]): Turn[] {
+	return grouped.flatMap((turn) => {
+		if (turn.role !== 'user') return [turn];
+		const split = turn.entries.findIndex((entry) => entry.message?.role !== 'user');
+		if (split <= 0) return [turn];
+		return [
+			{ id: turn.id, role: 'user', entries: turn.entries.slice(0, split) },
+			{ id: turn.entries[split].id, role: 'assistant', entries: turn.entries.slice(split) }
+		];
+	});
+}
+
+export type StreamChrome = 'user' | 'agent' | 'quiet';
+
+export type StreamRow = {
+	id: string;
+	chrome: StreamChrome;
+	entries: TranscriptEntry[];
+};
+
+function entryChrome(entry: TranscriptEntry): StreamChrome {
+	const message = entry.message;
+	if (message?.role === 'user') return 'user';
+	if (message?.role === 'assistant') {
+		const speech = (message.content ?? []).some((block) => block.type === 'text' || block.type === 'attachment');
+		return speech ? 'agent' : 'quiet';
+	}
+	return 'quiet';
+}
+
+export function streamRows(path: TranscriptEntry[]): StreamRow[] {
+	return chatRows(groupTurns(path)).flatMap((turn) => {
+		if (turn.role === 'user') return [{ id: turn.id, chrome: 'user' as const, entries: turn.entries }];
+		return turn.entries.map((entry) => ({ id: entry.id, chrome: entryChrome(entry), entries: [entry] }));
+	});
+}
+
 function turnRole(entry: TranscriptEntry): Turn['role'] {
 	if (entry.message?.role === 'user') return 'user';
 	if (entry.message?.role === 'assistant' || entry.message?.role === 'toolResult') return 'assistant';

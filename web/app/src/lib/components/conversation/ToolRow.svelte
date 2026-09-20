@@ -62,7 +62,7 @@
 		{onToggle}
 	>
 		{#if isShellTool(call.name) && command}
-			<pre class="command">$ {command}</pre>
+			<pre class="command">> {command}</pre>
 			{#if typeof args.workdir === 'string' && args.workdir}
 				<p class="field">Working directory · {args.workdir}</p>
 			{/if}
@@ -138,7 +138,7 @@
 
 <style>
 	.tool {
-		margin: 0.2rem 0;
+		margin: 0;
 	}
 
 	.tool :global(.status) {

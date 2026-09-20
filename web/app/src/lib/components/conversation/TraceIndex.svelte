@@ -94,15 +94,19 @@
 	.leaf {
 		display: flex;
 		width: 100%;
+		height: 1.75rem;
 		align-items: center;
 		justify-content: space-between;
 		gap: 0.75rem;
 		border: 0;
+		border-radius: 2px;
 		background: transparent;
 		color: var(--muted-foreground);
-		padding: 0.28rem 0.35rem;
+		padding: 0 0.35rem;
 		font: inherit;
-		font-size: 12px;
+		font-size: 13px;
+		font-weight: 500;
+		line-height: 20px;
 		text-align: left;
 		cursor: pointer;
 	}

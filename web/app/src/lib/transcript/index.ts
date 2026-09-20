@@ -6,16 +6,18 @@ export { buildTranscriptSession } from './session';
 export { parseSkillBlock } from './skill';
 export { defaultLeafId, findNewestLeaf, getPath, graphHasFork, graphLeaves, leafCount, treeLabel } from './tree';
 export {
+	chatRows,
 	entryMatchesFilter,
 	groupTurns,
 	isToolOnlyMessage,
 	PAGE_SIZE,
 	pageWindow,
 	streamCounts,
+	streamRows,
 	toolResults,
 	visibleToolCalls
 } from './turns';
-export type { StreamCounts, StreamFilter } from './turns';
+export type { StreamChrome, StreamCounts, StreamFilter, StreamRow } from './turns';
 export {
 	requestedEdit,
 	resultFiles,

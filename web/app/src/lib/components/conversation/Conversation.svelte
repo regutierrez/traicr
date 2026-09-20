@@ -7,10 +7,10 @@
 	import { loadMoreSession } from '$lib/transcript/load';
 	import {
 		entryMatchesFilter,
-		groupTurns,
 		isToolOnlyMessage,
 		pageWindow,
 		streamCounts,
+		streamRows,
 		toolResults,
 		type StreamFilter
 	} from '$lib/transcript/turns';
@@ -82,7 +82,7 @@
 	let visible = $derived(path.slice(windowed.from, windowed.to));
 	let results = $derived(toolResults(path));
 	let filtered = $derived(visible.filter((entry) => entryMatchesFilter(entry, filter)));
-	let turns = $derived(groupTurns(filtered));
+	let rows = $derived(streamRows(filtered));
 	let children = $derived(trace.children ?? []);
 	let leftover = $derived(leftoverCards(visible, results, children));
 	let counts = $derived(session ? streamCounts(path, session.entries) : streamCounts([]));
@@ -313,19 +313,21 @@
 					{#if windowed.hasEarlier}
 						<button class="page" type="button" onclick={() => (pageStart = Math.max(0, windowed.from - 200))}>Earlier loaded messages</button>
 					{/if}
-					{#each turns as turn (turn.id)}
-						<section class={['turn', `is-${turn.role}`, turn.entries.some((entry) => entry.id === targetId) && 'is-target']}>
-							<div class="avatar" aria-hidden="true">
-								<Icon name={turn.role === 'user' ? 'user' : 'agent'} size={12} />
-							</div>
-							<div class={['turn-body', turn.role === 'user' && 'bubble']}>
-								<div class={['clamp', turn.role === 'user' && userPromptLength(turn.entries) > 700 && !expandedUsers[turn.id] && 'is-clamped']}>
-									{#each turn.entries as entry (entry.id)}
+					{#each rows as row (row.id)}
+						<section class={['row', `is-${row.chrome}`, row.entries.some((entry) => entry.id === targetId) && 'is-target']}>
+							{#if row.chrome !== 'quiet'}
+								<div class="avatar" aria-hidden="true">
+									<Icon name={row.chrome === 'user' ? 'user' : 'agent'} size={12} />
+								</div>
+							{/if}
+							<div class={['turn-body', row.chrome === 'user' && 'bubble']}>
+								<div class={['clamp', row.chrome === 'user' && userPromptLength(row.entries) > 700 && !expandedUsers[row.id] && 'is-clamped']}>
+									{#each row.entries as entry (entry.id)}
 										{@render entryBlocks(entry)}
 									{/each}
 								</div>
-								{#if turn.role === 'user' && userPromptLength(turn.entries) > 700 && !expandedUsers[turn.id]}
-									<button class="more" type="button" onclick={() => (expandedUsers[turn.id] = true)}>Show more</button>
+								{#if row.chrome === 'user' && userPromptLength(row.entries) > 700 && !expandedUsers[row.id]}
+									<button class="more" type="button" onclick={() => (expandedUsers[row.id] = true)}>Show more</button>
 								{/if}
 							</div>
 						</section>
@@ -382,26 +384,35 @@
 		padding: 0.85rem 1.25rem 2.25rem;
 	}
 
-	.turn {
+	.row {
 		position: relative;
-		max-width: 76ch;
-		margin: 0 0 1.35rem;
-		padding: 0 0 0 2.15rem;
+		max-width: 54rem;
+		padding: 0 0 0 2.875rem;
+		font-size: 14px;
+		line-height: 20px;
 	}
 
-	.turn.is-assistant {
-		margin-bottom: 1.5rem;
+	.row.is-user {
+		margin: 0 0 1.5rem;
 	}
 
-	.turn.is-target .turn-body {
+	.row.is-agent {
+		margin: 1.5rem 0;
+	}
+
+	.row.is-quiet {
+		margin: 0;
+	}
+
+	.row.is-target .turn-body {
 		outline: 1px solid color-mix(in oklch, var(--primary) 45%, transparent);
 		outline-offset: 3px;
 	}
 
 	.avatar {
 		position: absolute;
-		top: 0.2rem;
-		left: 0;
+		top: 0.5rem;
+		left: 1px;
 		display: flex;
 		width: 18px;
 		height: 18px;
@@ -413,9 +424,15 @@
 		color: var(--muted-foreground);
 	}
 
-	.turn.is-user .avatar {
+	.row.is-user .avatar {
 		background: #2a2a2a;
 		color: #d4d4d4;
+	}
+
+	.row.is-agent .avatar {
+		top: 0.1rem;
+		background: #202020;
+		color: #9a9a9a;
 	}
 
 	.turn-body {
@@ -423,12 +440,14 @@
 	}
 
 	.bubble {
-		padding: 0.4rem 0.65rem;
+		margin-left: -0.625rem;
+		padding: 0.375rem 0.625rem;
 		border-radius: 10px;
 		background: #242424;
 		box-shadow:
-			0 0 0 1px rgb(255 255 255 / 7%),
-			0 1px 3px rgb(0 0 0 / 35%);
+			0 0 0 1px rgb(255 255 255 / 8%),
+			0 1px 3px rgb(0 0 0 / 32%),
+			0 1px 2px rgb(0 0 0 / 24%);
 	}
 
 	.clamp.is-clamped {
@@ -453,7 +472,11 @@
 	}
 
 	.block {
-		padding: 0.05rem 0;
+		padding: 0;
+	}
+
+	.row.is-quiet .block {
+		padding: 0;
 	}
 
 	.note {

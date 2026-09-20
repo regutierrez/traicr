@@ -12,7 +12,7 @@
 	.md {
 		overflow-wrap: anywhere;
 		font-size: 14px;
-		line-height: 1.6;
+		line-height: 20px;
 	}
 
 	.md :global(> :first-child) {

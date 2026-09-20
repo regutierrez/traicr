@@ -6,7 +6,7 @@ import { parseSkillBlock } from './skill';
 import { buildTranscriptSession } from './session';
 import { requestedEdit, resultText, toolChipLabel, toolChipParts, toolStatus, toolSummary } from './tools';
 import { defaultLeafId, findNewestLeaf, getPath, graphHasFork, graphLeaves } from './tree';
-import { groupTurns, isToolOnlyMessage, streamCounts } from './turns';
+import { groupTurns, isToolOnlyMessage, streamCounts, streamRows } from './turns';
 import type { ToolCallBlock, TranscriptEntry } from './types';
 
 test('shared tools keep original names and display shell and file operations consistently', () => {
@@ -171,6 +171,53 @@ test('default leaf prefers the conversation path over a later branch summary', (
 	expect(forked.leafId).toBe(defaultLeafId(forked.entries));
 	expect(forked.entries.find((entry) => entry.id === forked.leafId)?.type).toBe('compaction');
 	expect(findNewestLeaf(forked.entries, forked.entries[0].id)).toBe(forked.leafId);
+});
+
+test('stream rows keep the user bubble off the following agent turn and tools', () => {
+	const entries: TranscriptEntry[] = [
+		{
+			id: 'u',
+			parentId: null,
+			type: 'message',
+			message: { role: 'user', content: [{ type: 'text', text: 'Review the branch' }] }
+		},
+		{
+			id: 'a',
+			parentId: 'u',
+			type: 'message',
+			message: { role: 'assistant', content: [{ type: 'text', text: 'I will check the diff.' }] }
+		},
+		{
+			id: 't',
+			parentId: 'a',
+			type: 'message',
+			message: {
+				role: 'assistant',
+				content: [{ type: 'toolCall', id: 'c', name: 'bash', arguments: { command: 'git status' } }]
+			}
+		},
+		{
+			id: 'm',
+			parentId: 't',
+			type: 'message',
+			message: {
+				role: 'assistant',
+				content: [
+					{ type: 'text', text: 'Looks clean.' },
+					{ type: 'toolCall', id: 'c2', name: 'read', arguments: { path: 'README.md' } }
+				]
+			}
+		}
+	];
+	expect(groupTurns(entries)).toHaveLength(1);
+	expect(streamRows(entries).map((row) => [row.chrome, row.entries.length])).toEqual([
+		['user', 1],
+		['agent', 1],
+		['quiet', 1],
+		['agent', 1]
+	]);
+	expect(streamRows(entries)[0].entries[0].id).toBe('u');
+	expect(streamRows(entries)[1].entries[0].message?.content[0]).toMatchObject({ type: 'text' });
 });
 
 test('tool-only assistant messages stay quiet rows', () => {
