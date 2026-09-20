@@ -19,17 +19,25 @@ export DOM is gone. Adapter logic that groups normalized blocks into turns,
 pairs tool results with their calls, and guards parent cycles lives in
 `web/app/src/lib/transcript/`.
 
-A conversation tree appears only when the Event parent graph forks. Linear
-graphs stay a turn list. Existing event/key links resolve to their containing
-turn. `T` and `O` toggle thinking and tools. Amp's archive-view selector stays
-on the workspace header; native export download stays on Details.
+Every harness uses the same Conversation chrome: a contents index plus a
+linear stream. The index always lists Prompts, Agent Responses, Thinking, Tool
+Calls (with a kind breakdown when tools exist), Compaction, and Branches —
+including zeros. The stream is always the selected path. User messages are
+cards; assistant text is prose; thinking is a Thought chip; tools are quiet
+chips with canonical labels (`Read file`, `Used Exec`, `Edit file`). Clicking
+an index row filters that stream. It does not swap in a second layout.
 
-Every harness uses the same message and tool components. Tool arguments and
-output start collapsed. Shell tools (`bash`, `Bash`, `shell_command`) show
-commands directly while retaining their original names. File tools show paths,
-highlighted code, and requested edits. Skills, model changes, compactions,
-branch summaries, and custom records remain visible. Empty reasoning blocks
-explain that the export omitted their text.
+Forks do not grow a tree pane. Branches stay in the index: the count comes
+from the parent graph, and choosing Branches lists leaf paths so a different
+path can be selected without changing the page shape. Existing event/key links
+resolve to their containing turn. `T` and `O` toggle thinking and tools.
+
+Display features depend on the available data, not the harness name. Tool
+arguments and output start collapsed. Shell tools (`bash`, `Bash`,
+`shell_command`) keep their recorded names in the adapter and expand to the
+command; the chip says `Used Exec`. File tools show paths, highlighted code,
+and requested edits. Empty reasoning blocks explain that the export omitted
+their text.
 
 Display features depend on the available data, not the harness name. Archived
 images use local previews; external image references stay links and unavailable
@@ -42,6 +50,44 @@ This is a view of Traicr's merged normalized records, **not a new native source
 parser**. Details keeps all revisions, parsing warnings, related sessions,
 source inspection, and deletion.
 
+## Harness-only extras (flagged, not a second viewer)
+
+These records still render in the shared stream or header. They are not a
+reason to change the layout. Decide later whether any of them need a dedicated
+chip or should stay as a quiet note.
+
+Shared stream, when the Event has the data:
+
+- Compaction and hidden context expand in place as chips.
+- Skill blocks (`<skill>` in Pi user text, Amp `skill` tool) stay a chip plus
+  the user remainder.
+- Child traces (`create_thread`, `fromExecutorThreadID`, leftover children)
+  stay one quiet row that opens the child or says it was never collected.
+- Unknown native types and uncommon stop reasons stay a note plus JSON/text.
+- Incremental "Load next 200 records" appears only when the loaded Event page
+  says more remain (Amp today).
+
+Amp-only today:
+
+- Archive view (merged vs one revision) still sits on the workspace header.
+  Other harnesses have no equivalent control, so the header is not identical.
+- `openAIResponsePhase` (`commentary`, `final_answer`) is retained on the
+  Event and not drawn as its own chip.
+- `fromAutomation` is a quiet "Automation message" note.
+- `oracle`, `Task`, `create_thread`, and `apply_patch` use the shared chip
+  row (`Oracle`, `Task · …`, `Thread …`, `Edit file`). traces.com also has
+  Process and Cron chips; no current fixture emits those tool names.
+- Native JSON download stays on Details.
+
+Pi / Claude parent-graph extras:
+
+- `branch_summary` is a Thought-style chip on the path that contains it.
+  Switching paths is the Branches list in the index, not a sidebar tree.
+- `model_change` and `thinking_level_change` are one-line notes.
+
+If a later harness adds Process, Cron, or another traces.com kind, map it
+onto the existing kind list rather than adding a per-harness pane.
+
 ## Amp exports
 
 Amp normalizer version 4 retains numeric message identity, native block order,
@@ -53,7 +99,7 @@ Reasoning signatures are not interpreted as plaintext. Tool status describes the
 recorded export, not a process that Traicr is monitoring.
 
 The archive view selector separates merged history from an individual revision.
-Tree deep-links retain the selected revision.
+Path deep-links retain the selected revision.
 Native JSON downloads retain the exact exported bytes for that revision. Source
 inspection identifies the revision supplying each observation. Spawned
 threads, incoming messages, and references have distinct labels with local trace
@@ -96,7 +142,7 @@ still be downloaded. Other normalizers retain their 64 MiB budget. JSON parsing
 uses memory proportional to export size, so near-limit exports need substantially
 more than 512 MiB of server memory. The browser loads 200 records per request and
 renders at most 200 conversation entries at once. Load-more and earlier/later
-controls retain access to the rest. Sidebar search and loaded-record counts cover
+controls retain access to the rest. The contents index and loaded-record counts cover
 loaded records; archive search covers all indexed records. Deep links load pages
 until their target is found. Other harnesses retain their existing all-pages
 loading.

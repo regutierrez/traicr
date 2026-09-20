@@ -2,17 +2,25 @@
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { parseSkillBlock } from '$lib/transcript/skill';
-	import { findNewestLeaf, getPath, graphHasFork } from '$lib/transcript/tree';
+	import { findNewestLeaf, getPath, graphLeaves, treeLabel } from '$lib/transcript/tree';
 	import { childCards, leftoverCards } from '$lib/transcript/children';
 	import { loadMoreSession } from '$lib/transcript/load';
-	import { groupTurns, isToolOnlyMessage, pageWindow, toolResults } from '$lib/transcript/turns';
+	import {
+		entryMatchesFilter,
+		groupTurns,
+		isToolOnlyMessage,
+		pageWindow,
+		streamCounts,
+		toolResults,
+		type StreamFilter
+	} from '$lib/transcript/turns';
 	import type { LoadedSession, TranscriptEntry } from '$lib/transcript/types';
 	import type { Trace } from '$lib/types';
 	import AttachmentBlock from './AttachmentBlock.svelte';
-	import BranchTree from './BranchTree.svelte';
 	import ChildCard from './ChildCard.svelte';
 	import Markdown from './Markdown.svelte';
 	import ToolRow from './ToolRow.svelte';
+	import TraceIndex from './TraceIndex.svelte';
 	import WorkspaceHeader from './WorkspaceHeader.svelte';
 
 	let {
@@ -36,9 +44,8 @@
 	let toolsExpanded = $state(false);
 	let thinkingOpen = $state<Record<string, boolean>>({});
 	let toolOpen = $state<Record<string, boolean>>({});
-	let treeQuery = $state('');
-	let treeOpen = $state(false);
 	let loadingMore = $state(false);
+	let filter = $state<StreamFilter>('all');
 
 	let sessionKey = $derived(`${trace.id}:${revision}`);
 	let session = $derived(extraKey === sessionKey ? (extra ?? initial) : initial);
@@ -67,14 +74,18 @@
 		return idsFromURL(session).target;
 	});
 
-	let forked = $derived(session ? graphHasFork(session.entries) : false);
 	let path = $derived(session && leafId ? getPath(session.entries, leafId) : []);
 	let windowed = $derived(pageWindow(path, targetId, pageStart));
 	let visible = $derived(path.slice(windowed.from, windowed.to));
 	let results = $derived(toolResults(path));
-	let turns = $derived(groupTurns(visible));
+	let filtered = $derived(visible.filter((entry) => entryMatchesFilter(entry, filter)));
+	let turns = $derived(groupTurns(filtered));
 	let children = $derived(trace.children ?? []);
 	let leftover = $derived(leftoverCards(visible, results, children));
+	let counts = $derived(session ? streamCounts(path, session.entries) : streamCounts([]));
+	let leaves = $derived(
+		session ? graphLeaves(session.entries).map((entry) => ({ id: entry.id, label: treeLabel(entry) })) : []
+	);
 
 	function isEditable(element: EventTarget | null) {
 		if (!(element instanceof HTMLElement)) return false;
@@ -119,7 +130,6 @@
 		const leaf = findNewestLeaf(session.entries, entryId);
 		selection = { key: sessionKey, leaf, target: entryId };
 		pageStart = undefined;
-		treeOpen = false;
 		const params = new URLSearchParams(page.url.searchParams);
 		params.set('leafId', leaf);
 		params.set('targetId', entryId);
@@ -141,13 +151,6 @@
 		}
 	}
 
-	function originLine(entry: TranscriptEntry) {
-		const origin = entry.message?.nativeDetails?.message_meta;
-		if (!origin) return '';
-		if (origin.openAIResponsePhase === 'final_answer') return 'Final answer';
-		return origin.openAIResponsePhase || '';
-	}
-
 	function incomingCards(entry: TranscriptEntry) {
 		return childCards(entry, undefined, undefined, children);
 	}
@@ -155,12 +158,6 @@
 	function shouldRenderResult(entry: TranscriptEntry) {
 		const id = entry.message?.toolCallId;
 		return !id || !visible.some((item) => item.message?.content?.some((block) => block.type === 'toolCall' && block.id === id));
-	}
-
-	function roleLabel(entry: TranscriptEntry) {
-		const role = entry.message?.role || '';
-		const origin = originLine(entry);
-		return origin ? `${role} · ${origin}` : role;
 	}
 </script>
 
@@ -188,148 +185,142 @@
 		{:else if session.hasMore}
 			<p class="status" role="status">{session.status}</p>
 		{/if}
-		<div class={['body', forked && 'has-tree']}>
-			{#if forked}
-				<button class="tree-toggle" type="button" aria-expanded={treeOpen} onclick={() => (treeOpen = !treeOpen)}>
-					{treeOpen ? 'Hide branches' : 'Branches'}
-				</button>
-				<div class={['tree-slot', treeOpen && 'is-open']}>
-					<BranchTree entries={session.entries} {leafId} {targetId} bind:query={treeQuery} onSelect={selectNode} />
-				</div>
-			{/if}
+		<div class="body">
+			<TraceIndex
+				{counts}
+				{filter}
+				{leaves}
+				{leafId}
+				onFilter={(next) => (filter = next)}
+				onSelectLeaf={selectNode}
+			/>
 			<div class="stream">
-				{#if windowed.hasEarlier}
-					<button class="page" type="button" onclick={() => (pageStart = Math.max(0, windowed.from - 200))}>Earlier loaded messages</button>
-				{/if}
-				{#each turns as turn (turn.id)}
-					<section class="turn">
-						{#each turn.entries as entry (entry.id)}
-							{@const message = entry.message}
-							{#if message?.role === 'toolResult'}
-								{#if shouldRenderResult(entry)}
-									<ToolRow
-										call={{ type: 'toolCall', id: message.toolCallId || entry.id, name: message.toolName || 'Unpaired tool result', arguments: {} }}
-										result={entry}
-										{entry}
-										{children}
-										open={toolIsOpen(message.toolCallId || entry.id)}
-										onToggle={(open) => (toolOpen[message.toolCallId || entry.id] = open)}
-									/>
-								{/if}
-							{:else if message && isToolOnlyMessage(entry)}
-								<div class={['tools', entry.id === targetId && 'is-target']} id="entry-{entry.id}">
-									{#each incomingCards(entry) as child (child.id)}
-										<ChildCard {child} />
-									{/each}
-									{#each message.content as block, index (`${entry.id}:${index}:${block.type}`)}
-										{#if block.type === 'toolCall'}
-											<ToolRow
-												call={block}
-												result={results.get(block.id)}
-												{entry}
-												{children}
-												open={toolIsOpen(block.id)}
-												onToggle={(open) => (toolOpen[block.id] = open)}
-											/>
-										{/if}
-									{/each}
-									{#if message.stopReason && !['stop', 'toolUse', 'complete'].includes(message.stopReason)}
-										<p class="note error">Recorded response state: {message.stopReason}</p>
+					{#if windowed.hasEarlier}
+						<button class="page" type="button" onclick={() => (pageStart = Math.max(0, windowed.from - 200))}>Earlier loaded messages</button>
+					{/if}
+					{#each turns as turn (turn.id)}
+						<section class="turn">
+							{#each turn.entries as entry (entry.id)}
+								{@const message = entry.message}
+								{#if message?.role === 'toolResult'}
+									{#if shouldRenderResult(entry)}
+										<ToolRow
+											call={{ type: 'toolCall', id: message.toolCallId || entry.id, name: message.toolName || 'Unpaired tool result', arguments: {} }}
+											result={entry}
+											{entry}
+											{children}
+											open={toolIsOpen(message.toolCallId || entry.id)}
+											onToggle={(open) => (toolOpen[message.toolCallId || entry.id] = open)}
+										/>
 									{/if}
-								</div>
-							{:else if message}
-								<article class={['message', message.role === 'user' && 'is-user', entry.id === targetId && 'is-target']} id="entry-{entry.id}">
-									<div class="who">
-										<span>{roleLabel(entry)}</span>
-										{#if entry.timestamp}<time datetime={entry.timestamp}>{entry.timestamp}</time>{/if}
-									</div>
-									{#if message.nativeDetails?.message_meta?.fromAutomation}
-										<p class="note">Automation message</p>
-									{/if}
-									{#each incomingCards(entry) as child (child.id)}
-										<ChildCard {child} />
-									{/each}
-									{#each message.content as block, index (`${entry.id}:${index}:${block.type}`)}
-										{#if block.type === 'text'}
-											{@const skill = message.role === 'user' ? parseSkillBlock(block.text) : null}
-											{#if skill}
-												<details>
-													<summary>Skill: {skill.name}</summary>
-													<Markdown text={skill.content} />
-												</details>
-												{#if skill.userMessage}
-													<Markdown text={skill.userMessage} />
-												{/if}
-											{:else}
-												<Markdown text={block.text} />
+								{:else if message && isToolOnlyMessage(entry)}
+									<div class={['block', entry.id === targetId && 'is-target']} id="entry-{entry.id}">
+										{#each incomingCards(entry) as child (child.id)}
+											<ChildCard {child} />
+										{/each}
+										{#each message.content as block, index (`${entry.id}:${index}:${block.type}`)}
+											{#if block.type === 'toolCall'}
+												<ToolRow
+													call={block}
+													result={results.get(block.id)}
+													{entry}
+													{children}
+													open={toolIsOpen(block.id)}
+													onToggle={(open) => (toolOpen[block.id] = open)}
+												/>
 											{/if}
-										{:else if block.type === 'hidden'}
-											<details>
-												<summary>Hidden context</summary>
-												<pre>{block.text}</pre>
-											</details>
-										{:else if block.type === 'thinking'}
-											{@const thinkKey = `${entry.id}:${index}`}
-											<details
-												class="thinking"
-												bind:open={() => thinkingIsOpen(thinkKey), (next) => {
-													if (next !== thinkingIsOpen(thinkKey)) thinkingOpen[thinkKey] = next;
-												}}
-											>
-												<summary>Thinking</summary>
-												<div class="think">{block.thinking || 'Reasoning text not included in export.'}</div>
-											</details>
-										{:else if block.type === 'attachment'}
-											<AttachmentBlock attachment={block} />
-										{:else if block.type === 'toolCall'}
-											<ToolRow
-												call={block}
-												result={results.get(block.id)}
-												{entry}
-												{children}
-												open={toolIsOpen(block.id)}
-												onToggle={(open) => (toolOpen[block.id] = open)}
-											/>
+										{/each}
+									</div>
+								{:else if message}
+									<article class={['block', message.role === 'user' && 'is-user', entry.id === targetId && 'is-target']} id="entry-{entry.id}">
+										{#if message.nativeDetails?.message_meta?.fromAutomation}
+											<p class="note">Automation message</p>
 										{/if}
-									{/each}
-									{#if message.stopReason && !['stop', 'toolUse', 'complete'].includes(message.stopReason)}
-										<p class="note error">Recorded response state: {message.stopReason}</p>
-									{/if}
-								</article>
-							{:else if entry.type === 'model_change'}
-								<p class="note" id="entry-{entry.id}">Switched to model: {[entry.provider, entry.modelId].filter(Boolean).join('/')}</p>
-							{:else if entry.type === 'thinking_level_change'}
-								<p class="note" id="entry-{entry.id}">Thinking level: {entry.thinkingLevel}</p>
-							{:else if entry.type === 'compaction' || entry.type === 'branch_summary'}
-								<details class="note" id="entry-{entry.id}">
-									<summary>{entry.type === 'compaction' ? 'Compaction summary' : 'Branch summary'}</summary>
-									<Markdown text={entry.summary || ''} />
-								</details>
-							{:else if entry.type === 'custom_message'}
-								<section class="note" id="entry-{entry.id}">
-									<strong>{entry.customType === 'unknown' ? 'Unsupported content · ' : ''}{entry.sources?.[0]?.details?.native_type || entry.customType}</strong>
-									{#if entry.customType === 'unknown'}
-										<pre>{entry.content}</pre>
-									{:else}
-										<Markdown text={entry.content || ''} />
-									{/if}
-								</section>
-							{/if}
-						{/each}
-					</section>
-				{/each}
-				{#each leftover as child (child.native_trace_id)}
-					<ChildCard child={{ id: child.native_trace_id, title: child.title || child.native_trace_id, collected: true, traceId: child.id, meta: 'Child trace' }} />
-				{/each}
-				{#if windowed.hasLater}
-					<button class="page" type="button" onclick={() => (pageStart = windowed.to)}>Later loaded messages</button>
-				{/if}
-				{#if session.hasMore}
-					<button class="page" type="button" onclick={loadMore} disabled={loadingMore}>{loadingMore ? 'Loading…' : 'Load next 200 records'}</button>
-				{/if}
-				{#if !session.entries.length}
-					<p class="empty">No normalized messages. Open Details to inspect the retained source files.</p>
-				{/if}
+										{#each incomingCards(entry) as child (child.id)}
+											<ChildCard {child} />
+										{/each}
+										{#each message.content as block, index (`${entry.id}:${index}:${block.type}`)}
+											{#if block.type === 'text'}
+												{@const skill = message.role === 'user' ? parseSkillBlock(block.text) : null}
+												{#if skill}
+													<details>
+														<summary>Skill: {skill.name}</summary>
+														<Markdown text={skill.content} />
+													</details>
+													{#if skill.userMessage}
+														<Markdown text={skill.userMessage} />
+													{/if}
+												{:else}
+													<Markdown text={block.text} />
+												{/if}
+											{:else if block.type === 'hidden'}
+												<details>
+													<summary>Hidden context</summary>
+													<pre>{block.text}</pre>
+												</details>
+											{:else if block.type === 'thinking'}
+												{@const thinkKey = `${entry.id}:${index}`}
+												<details
+													class="thought"
+													bind:open={() => thinkingIsOpen(thinkKey),
+														(next) => {
+															if (next !== thinkingIsOpen(thinkKey)) thinkingOpen[thinkKey] = next;
+														}}
+												>
+													<summary>Thought</summary>
+													<div class="think">{block.thinking || 'Reasoning text not included in export.'}</div>
+												</details>
+											{:else if block.type === 'attachment'}
+												<AttachmentBlock attachment={block} />
+											{:else if block.type === 'toolCall'}
+												<ToolRow
+													call={block}
+													result={results.get(block.id)}
+													{entry}
+													{children}
+													open={toolIsOpen(block.id)}
+													onToggle={(open) => (toolOpen[block.id] = open)}
+												/>
+											{/if}
+										{/each}
+										{#if message.stopReason && !['stop', 'toolUse', 'complete'].includes(message.stopReason)}
+											<p class="note error">Recorded response state: {message.stopReason}</p>
+										{/if}
+									</article>
+								{:else if entry.type === 'model_change'}
+									<p class="note" id="entry-{entry.id}">Model · {[entry.provider, entry.modelId].filter(Boolean).join('/')}</p>
+								{:else if entry.type === 'thinking_level_change'}
+									<p class="note" id="entry-{entry.id}">Thinking level · {entry.thinkingLevel}</p>
+								{:else if entry.type === 'compaction' || entry.type === 'branch_summary'}
+									<details class="thought" id="entry-{entry.id}">
+										<summary>{entry.type === 'compaction' ? 'Compaction' : 'Branch summary'}</summary>
+										<Markdown text={entry.summary || ''} />
+									</details>
+								{:else if entry.type === 'custom_message'}
+									<section class="note" id="entry-{entry.id}">
+										<strong>{entry.customType === 'unknown' ? 'Unsupported · ' : ''}{entry.sources?.[0]?.details?.native_type || entry.customType}</strong>
+										{#if entry.customType === 'unknown'}
+											<pre>{entry.content}</pre>
+										{:else}
+											<Markdown text={entry.content || ''} />
+										{/if}
+									</section>
+								{/if}
+							{/each}
+						</section>
+					{/each}
+					{#each leftover as child (child.native_trace_id)}
+						<ChildCard child={{ id: child.native_trace_id, title: child.title || child.native_trace_id, collected: true, traceId: child.id, meta: 'Child trace' }} />
+					{/each}
+					{#if windowed.hasLater}
+						<button class="page" type="button" onclick={() => (pageStart = windowed.to)}>Later loaded messages</button>
+					{/if}
+					{#if session.hasMore}
+						<button class="page" type="button" onclick={loadMore} disabled={loadingMore}>{loadingMore ? 'Loading…' : 'Load next 200 records'}</button>
+					{/if}
+					{#if !session.entries.length}
+						<p class="empty">No normalized messages. Open Details to inspect the retained source files.</p>
+					{/if}
 			</div>
 		</div>
 	{/if}
@@ -363,74 +354,51 @@
 		flex-direction: column;
 	}
 
-	.tree-toggle {
-		display: inline-flex;
-		align-self: flex-start;
-		margin: 0.55rem 1.25rem 0;
-		border: 1px solid var(--border);
-		border-radius: var(--radius);
-		background: transparent;
-		color: var(--muted-foreground);
-		padding: 0.25rem 0.55rem;
-		font-size: 11px;
-		cursor: pointer;
-	}
-
-	.tree-slot {
-		display: none;
-		max-height: 40vh;
-		overflow: auto;
-	}
-
-	.tree-slot.is-open {
-		display: block;
-	}
-
 	.stream {
 		min-width: 0;
 		flex: 1;
 		overflow: auto;
-		padding: 0.65rem 1.25rem 2.25rem;
+		padding: 0.85rem 1.25rem 2.25rem;
 	}
 
 	.turn {
 		max-width: 76ch;
-		padding: 0.35rem 0 0.55rem;
+		padding: 0.25rem 0 0.45rem;
 	}
 
 	.turn + .turn {
-		margin-top: 0.35rem;
-		border-top: 1px solid var(--border);
-		padding-top: 0.75rem;
+		margin-top: 0.55rem;
 	}
 
-	.message,
-	.tools {
-		padding: 0.2rem 0 0.35rem;
+	.block {
+		padding: 0.15rem 0 0.25rem;
 	}
 
-	.message.is-target,
-	.tools.is-target {
-		background: color-mix(in oklch, var(--primary) 8%, transparent);
+	.block.is-user {
+		margin: 0.35rem 0 0.75rem;
+		padding: 0.85rem 1rem;
+		border: 1px solid var(--border);
+		border-radius: calc(var(--radius) + 2px);
+		background: color-mix(in oklch, var(--card) 92%, white);
 	}
 
-	.who {
-		display: flex;
-		flex-wrap: wrap;
-		align-items: baseline;
-		gap: 0.55rem;
-		margin-bottom: 0.2rem;
-		color: var(--muted-foreground);
-		font-family: var(--font-mono);
-		font-size: 11px;
-		font-variant-numeric: tabular-nums;
+	.block.is-target {
+		outline: 1px solid color-mix(in oklch, var(--primary) 45%, transparent);
 	}
 
 	.note,
-	.thinking,
+	.thought,
 	details {
-		margin: 0.35rem 0;
+		margin: 0.3rem 0;
 		color: var(--muted-foreground);
+		font-size: 12px;
+	}
+
+	.thought summary,
+	details > summary {
+		cursor: pointer;
+		color: var(--muted-foreground);
+		font-family: var(--font-mono);
 		font-size: 12px;
 	}
 
@@ -465,26 +433,14 @@
 	}
 
 	@media (min-width: 900px) {
-		.body.has-tree {
+		.body {
 			flex-direction: row;
 			align-items: stretch;
 			overflow: hidden;
 		}
 
-		.tree-toggle {
-			display: none;
-		}
-
-		.has-tree .tree-slot {
-			display: block;
-			width: 16.5rem;
-			max-height: none;
-			min-height: 0;
-			flex-shrink: 0;
-		}
-
 		.stream {
-			padding: 0.85rem 1.75rem 2.5rem;
+			padding: 1rem 1.75rem 2.5rem;
 		}
 	}
 </style>

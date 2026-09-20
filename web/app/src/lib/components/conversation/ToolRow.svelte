@@ -10,10 +10,10 @@
 		requestedEdit,
 		resultFiles,
 		resultText,
+		toolChipLabel,
 		toolCommand,
 		toolPath,
-		toolStatus,
-		toolSummary
+		toolStatus
 	} from '$lib/transcript/tools';
 	import type { ToolCallBlock, TranscriptEntry } from '$lib/transcript/types';
 	import type { TraceRef } from '$lib/types';
@@ -35,7 +35,7 @@
 	} = $props();
 
 	let status = $derived(toolStatus(call, result));
-	let summary = $derived(toolSummary(call));
+	let summary = $derived(toolChipLabel(call));
 	let args = $derived(call.arguments || {});
 	let command = $derived(toolCommand(args));
 	let path = $derived(toolPath(args));
@@ -58,7 +58,7 @@
 	>
 		<summary>
 			<span class="name">{summary}</span>
-			{#if status !== 'unknown'}
+			{#if status !== 'unknown' && status !== 'done'}
 				<span class="status">{status}</span>
 			{/if}
 		</summary>

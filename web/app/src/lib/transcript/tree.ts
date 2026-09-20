@@ -86,14 +86,23 @@ function preferredLeaf(entries: TranscriptEntry[], leaves: TranscriptEntry[]) {
 	})[0];
 }
 
-export function defaultLeafId(entries: TranscriptEntry[]) {
+export function graphLeaves(entries: TranscriptEntry[]) {
 	const leaves: TranscriptEntry[] = [];
 	for (const root of buildTree(entries)) {
 		const nodes: TreeNode[] = [];
 		collectLeaves(root, nodes);
 		for (const node of nodes) leaves.push(node.entry);
 	}
-	return preferredLeaf(entries, leaves)?.id || entries.at(-1)?.id || '';
+	return leaves;
+}
+
+export function leafCount(entries: TranscriptEntry[]) {
+	const leaves = graphLeaves(entries);
+	return leaves.length || (entries.length ? 1 : 0);
+}
+
+export function defaultLeafId(entries: TranscriptEntry[]) {
+	return preferredLeaf(entries, graphLeaves(entries))?.id || entries.at(-1)?.id || '';
 }
 
 export function findNewestLeaf(entries: TranscriptEntry[], nodeId: string) {

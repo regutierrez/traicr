@@ -4,8 +4,18 @@ export { loadTranscriptSession } from './load';
 export { escapeHtml, highlightCode, languageForPath, renderMarkdown } from './markdown';
 export { buildTranscriptSession } from './session';
 export { parseSkillBlock } from './skill';
-export { defaultLeafId, findNewestLeaf, getPath, graphHasFork, treeLabel } from './tree';
-export { groupTurns, isToolOnlyMessage, PAGE_SIZE, pageWindow, toolResults, visibleToolCalls } from './turns';
-export { requestedEdit, resultFiles, resultText, toolStatus, toolSummary } from './tools';
+export { defaultLeafId, findNewestLeaf, getPath, graphHasFork, graphLeaves, leafCount, treeLabel } from './tree';
+export {
+	entryMatchesFilter,
+	groupTurns,
+	isToolOnlyMessage,
+	PAGE_SIZE,
+	pageWindow,
+	streamCounts,
+	toolResults,
+	visibleToolCalls
+} from './turns';
+export type { StreamCounts, StreamFilter } from './turns';
+export { requestedEdit, resultFiles, resultText, toolChipLabel, toolKind, toolStatus, toolSummary } from './tools';
 export type { ChildCard } from './children';
 export type { LoadedSession, TranscriptEntry, TranscriptSession, Turn } from './types';

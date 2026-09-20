@@ -30,12 +30,10 @@
 		grid-template-columns: auto minmax(0, 1fr) auto auto;
 		align-items: center;
 		gap: 0.55rem;
-		margin: 0.35rem 0;
-		padding: 0.4rem 0.15rem;
+		margin: 0.2rem 0;
+		padding: 0.22rem 0;
 		color: inherit;
 		text-decoration: none;
-		border-top: 1px solid var(--border);
-		border-bottom: 1px solid var(--border);
 	}
 
 	.row:hover,

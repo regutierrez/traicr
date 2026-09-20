@@ -4,9 +4,9 @@ import { renderMarkdown, sanitizeMarkdownUrl } from './markdown';
 import { leftoverCards } from './children';
 import { parseSkillBlock } from './skill';
 import { buildTranscriptSession } from './session';
-import { requestedEdit, resultText, toolStatus, toolSummary } from './tools';
-import { defaultLeafId, findNewestLeaf, graphHasFork } from './tree';
-import { groupTurns, isToolOnlyMessage } from './turns';
+import { requestedEdit, resultText, toolChipLabel, toolStatus, toolSummary } from './tools';
+import { defaultLeafId, findNewestLeaf, getPath, graphHasFork, graphLeaves } from './tree';
+import { groupTurns, isToolOnlyMessage, streamCounts } from './turns';
 import type { ToolCallBlock, TranscriptEntry } from './types';
 
 test('shared tools keep original names and display shell and file operations consistently', () => {
@@ -17,6 +17,15 @@ test('shared tools keep original names and display shell and file operations con
 	}
 	expect(toolSummary({ type: 'toolCall', id: 'r', name: 'read', arguments: { file_path: 'src/main.js' } })).toBe('read · src/main.js');
 	expect(toolSummary({ type: 'toolCall', id: 'w', name: 'write', arguments: { path: 'index.html' } })).toBe('write · index.html');
+	expect(toolChipLabel({ type: 'toolCall', id: 'r', name: 'read', arguments: { file_path: 'src/main.js' } })).toBe('Read main.js');
+	expect(toolChipLabel({ type: 'toolCall', id: 's', name: 'shell_command', arguments: { command: 'go test' } })).toBe('Used Exec');
+	expect(toolChipLabel({ type: 'toolCall', id: 'p', name: 'apply_patch', arguments: { path: 'range.go' } })).toBe('Edit range.go');
+	expect(toolChipLabel({ type: 'toolCall', id: 't', name: 'create_thread', arguments: { title: 'Review boundary documentation' } })).toBe(
+		'Thread Review boundary documentation'
+	);
+	expect(toolChipLabel({ type: 'toolCall', id: 'o', name: 'oracle', arguments: { task: 'Explain the failing assertion' } })).toBe(
+		'Oracle · Explain the failing assertion'
+	);
 	const edit = requestedEdit({ oldText: 'old <tag>', newText: 'new & value' });
 	expect(edit[0]).toEqual({ kind: 'removed', text: '-old <tag>' });
 	expect(edit[1]).toEqual({ kind: 'added', text: '+new & value' });
@@ -116,6 +125,12 @@ test('linear graphs do not grow a tree and forks do', () => {
 	expect(graphHasFork(forked.entries)).toBe(true);
 	expect(groupTurns(linear.entries).length).toBe(1);
 	expect(groupTurns(linear.entries)[0].entries.length).toBe(2);
+	expect(streamCounts(linear.entries)).toMatchObject({ prompts: 1, responses: 1, branches: 1 });
+	expect(streamCounts(forked.entries).branches).toBe(2);
+	expect(graphLeaves(forked.entries)).toHaveLength(2);
+	expect(forked.leafId).toBeTruthy();
+	const selected = getPath(forked.entries, forked.leafId ?? '');
+	expect(streamCounts(selected, forked.entries)).toMatchObject({ prompts: 1, responses: 1, branches: 2 });
 });
 
 test('default leaf prefers the conversation path over a later branch summary', () => {

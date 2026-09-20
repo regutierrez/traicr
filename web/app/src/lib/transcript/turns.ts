@@ -1,4 +1,54 @@
+import { leafCount } from './tree';
+import { toolKind, toolKindLabel, type ToolKind } from './tools';
 import type { TranscriptEntry, Turn } from './types';
+
+export type StreamFilter = 'all' | 'prompts' | 'responses' | 'thinking' | 'tools' | 'compaction' | 'branches';
+
+export type StreamCounts = {
+	prompts: number;
+	responses: number;
+	thinking: number;
+	tools: number;
+	compaction: number;
+	branches: number;
+	toolKinds: { kind: ToolKind; label: string; count: number }[];
+};
+
+export function streamCounts(entries: TranscriptEntry[], graph: TranscriptEntry[] = entries): StreamCounts {
+	let prompts = 0;
+	let responses = 0;
+	let thinking = 0;
+	let tools = 0;
+	let compaction = 0;
+	const kinds = new Map<ToolKind, number>();
+	for (const entry of entries) {
+		if (entry.message?.role === 'user') prompts += 1;
+		if (entry.message?.role === 'assistant') {
+			const content = entry.message.content ?? [];
+			if (content.some((block) => block.type === 'text')) responses += 1;
+			for (const block of content) {
+				if (block.type === 'thinking') thinking += 1;
+				if (block.type === 'toolCall') {
+					tools += 1;
+					const kind = toolKind(block.name);
+					kinds.set(kind, (kinds.get(kind) ?? 0) + 1);
+				}
+			}
+		}
+		if (entry.type === 'compaction') compaction += 1;
+	}
+	return {
+		prompts,
+		responses,
+		thinking,
+		tools,
+		compaction,
+		branches: leafCount(graph),
+		toolKinds: [...kinds.entries()]
+			.map(([kind, count]) => ({ kind, label: toolKindLabel[kind], count }))
+			.sort((a, b) => a.label.localeCompare(b.label))
+	};
+}
 
 export function isToolOnlyMessage(entry: TranscriptEntry) {
 	const message = entry.message;
@@ -56,6 +106,22 @@ export function visibleToolCalls(path: TranscriptEntry[]) {
 		}
 	}
 	return ids;
+}
+
+export function entryMatchesFilter(entry: TranscriptEntry, filter: StreamFilter) {
+	if (filter === 'all' || filter === 'branches') return true;
+	if (filter === 'prompts') return entry.message?.role === 'user';
+	if (filter === 'responses') {
+		return Boolean(entry.message?.role === 'assistant' && entry.message.content.some((block) => block.type === 'text'));
+	}
+	if (filter === 'thinking') return Boolean(entry.message?.content.some((block) => block.type === 'thinking'));
+	if (filter === 'tools') {
+		return Boolean(
+			entry.message?.role === 'toolResult' || entry.message?.content.some((block) => block.type === 'toolCall')
+		);
+	}
+	if (filter === 'compaction') return entry.type === 'compaction';
+	return true;
 }
 
 export function toolResults(path: TranscriptEntry[]) {
