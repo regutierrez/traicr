@@ -81,6 +81,17 @@ function basename(path: string) {
 	return path.split(/[\\/]/).filter(Boolean).pop() || path;
 }
 
+function chipText(text: string, max = 72) {
+	const flat = text.replace(/[\n\t]/g, ' ').replace(/\s+/g, ' ').trim();
+	return flat.length > max ? `${flat.slice(0, max - 1)}…` : flat;
+}
+
+function usedToolName(name: string) {
+	return name
+		.replace(/[_-]+/g, ' ')
+		.replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
 export function toolChipLabel(call: ToolCallBlock) {
 	const kind = toolKind(call.name);
 	const args = call.arguments || {};
@@ -88,7 +99,10 @@ export function toolChipLabel(call: ToolCallBlock) {
 	if (kind === 'read') return path ? `Read ${basename(path)}` : 'Read';
 	if (kind === 'edit') return path ? `Edit ${basename(path)}` : 'Edit';
 	if (kind === 'write') return path ? `Write ${basename(path)}` : 'Write';
-	if (kind === 'exec') return 'Used Exec';
+	if (kind === 'exec') {
+		const command = toolCommand(args);
+		return command ? `Ran ${chipText(command)}` : 'Ran';
+	}
 	if (kind === 'web') return 'Read Website';
 	if (kind === 'browser') return 'Browser';
 	const name = call.name.toLowerCase();
@@ -102,7 +116,7 @@ export function toolChipLabel(call: ToolCallBlock) {
 		return task ? `Oracle · ${task}` : 'Oracle';
 	}
 	if (typeof args.description === 'string') return `${call.name} · ${args.description}`;
-	return call.name;
+	return `Used ${usedToolName(call.name)}`;
 }
 
 export function requestedEdit(args: Record<string, unknown>): DiffLine[] {

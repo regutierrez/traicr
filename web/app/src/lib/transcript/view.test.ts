@@ -18,7 +18,11 @@ test('shared tools keep original names and display shell and file operations con
 	expect(toolSummary({ type: 'toolCall', id: 'r', name: 'read', arguments: { file_path: 'src/main.js' } })).toBe('read · src/main.js');
 	expect(toolSummary({ type: 'toolCall', id: 'w', name: 'write', arguments: { path: 'index.html' } })).toBe('write · index.html');
 	expect(toolChipLabel({ type: 'toolCall', id: 'r', name: 'read', arguments: { file_path: 'src/main.js' } })).toBe('Read main.js');
-	expect(toolChipLabel({ type: 'toolCall', id: 's', name: 'shell_command', arguments: { command: 'go test' } })).toBe('Used Exec');
+	expect(toolChipLabel({ type: 'toolCall', id: 's', name: 'shell_command', arguments: { command: 'go test' } })).toBe('Ran go test');
+	expect(toolChipLabel({ type: 'toolCall', id: 'b', name: 'bash', arguments: { command: 'git status --short; git branch --show-current' } })).toBe(
+		'Ran git status --short; git branch --show-current'
+	);
+	expect(toolChipLabel({ type: 'toolCall', id: 'w', name: 'write_stdin', arguments: {} })).toBe('Used Write Stdin');
 	expect(toolChipLabel({ type: 'toolCall', id: 'p', name: 'apply_patch', arguments: { path: 'range.go' } })).toBe('Edit range.go');
 	expect(toolChipLabel({ type: 'toolCall', id: 't', name: 'create_thread', arguments: { title: 'Review boundary documentation' } })).toBe(
 		'Thread Review boundary documentation'

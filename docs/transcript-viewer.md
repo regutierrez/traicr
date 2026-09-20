@@ -24,7 +24,7 @@ linear stream. The index always lists Prompts, Agent Responses, Thinking, Tool
 Calls (with a kind breakdown when tools exist), Compaction, and Branches —
 including zeros. The stream is always the selected path. User messages are
 cards; assistant text is prose; thinking is a Thought chip; tools are quiet
-chips with canonical labels (`Read file`, `Used Exec`, `Edit file`). Clicking
+chips with traces.com labels (`Read file`, `Ran command`, `Edit file`). Clicking
 an index row filters that stream. It does not swap in a second layout.
 
 Forks do not grow a tree pane. Branches stay in the index: the count comes
@@ -35,7 +35,7 @@ resolve to their containing turn. `T` and `O` toggle thinking and tools.
 Display features depend on the available data, not the harness name. Tool
 arguments and output start collapsed. Shell tools (`bash`, `Bash`,
 `shell_command`) keep their recorded names in the adapter and expand to the
-command; the chip says `Used Exec`. File tools show paths, highlighted code,
+command; the chip says `Ran` plus that command. File tools show paths, highlighted code,
 and requested edits. Empty reasoning blocks explain that the export omitted
 their text.
 
