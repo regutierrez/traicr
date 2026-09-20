@@ -3,11 +3,11 @@ package server
 import (
 	"crypto/sha256"
 	"encoding/base64"
+	"fmt"
+	"io/fs"
 	"net/http"
 	"regexp"
 	"strings"
-
-	assets "github.com/regutierrez/traicr/web"
 )
 
 // spaDocument is the built SvelteKit shell with the Content-Security-Policy it needs.
@@ -21,12 +21,23 @@ const fallbackSPA = `<!doctype html><html lang="en"><head><meta charset="utf-8">
 
 var inlineScriptPattern = regexp.MustCompile(`(?s)<script\b([^>]*)>(.*?)</script>`)
 
-func loadSPA() spaDocument {
-	html, err := assets.Files.ReadFile("static/ui/index.html")
+func loadSPA(files fs.FS) (spaDocument, error) {
+	html, err := fs.ReadFile(files, "static/ui/index.html")
 	if err != nil {
-		html = []byte(fallbackSPA)
+		return spaDocument{html: []byte(fallbackSPA), policy: spaPolicy(fallbackSPA)}, fmt.Errorf("embedded UI missing: %w", err)
 	}
-	return spaDocument{html: html, policy: spaPolicy(string(html))}
+	return spaDocument{html: html, policy: spaPolicy(string(html))}, nil
+}
+
+func uiAssets(files fs.FS) (fs.FS, error) {
+	ui, err := fs.Sub(files, "static/ui")
+	if err != nil {
+		return nil, fmt.Errorf("embedded /_app/ assets: %w", err)
+	}
+	if _, err := fs.Stat(ui, "index.html"); err != nil {
+		return nil, fmt.Errorf("static/ui/index.html: %w", err)
+	}
+	return ui, nil
 }
 
 func (app *application) spa(w http.ResponseWriter, _ *http.Request) {

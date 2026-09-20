@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/fs"
 	"log/slog"
 	"net/http"
 	"os"
@@ -39,12 +38,18 @@ func NewHTTPHandler(configuration config.ServerConfig, database *store.Store, lo
 	if configuration.ArchiveLimits.ArchiveBytes == 0 {
 		configuration.ArchiveLimits = archive.DefaultLimits()
 	}
-	app := &application{config: configuration, store: database, logger: logger, uploads: make(chan struct{}, 1), ui: loadSPA()}
+	ui, err := loadSPA(assets.Files)
+	if err != nil {
+		logger.Error("embedded Svelte UI is missing; browser pages will not work until web/app is built", "error", err)
+	}
+	app := &application{config: configuration, store: database, logger: logger, uploads: make(chan struct{}, 1), ui: ui}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", serveProcessHealth)
 	mux.Handle("GET /static/", http.FileServerFS(assets.Files))
-	if ui, err := fs.Sub(assets.Files, "static/ui"); err == nil {
-		mux.Handle("GET /_app/", immutableAssets(http.FileServer(http.FS(ui))))
+	if files, err := uiAssets(assets.Files); err != nil {
+		logger.Error("embedded Svelte /_app/ assets are missing", "error", err)
+	} else {
+		mux.Handle("GET /_app/", immutableAssets(http.FileServer(http.FS(files))))
 	}
 	mux.HandleFunc("GET /login", app.loginPage)
 	mux.HandleFunc("POST /login", app.login)
