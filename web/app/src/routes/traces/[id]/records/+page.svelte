@@ -6,7 +6,8 @@
 	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
 	import { Input } from '$lib/components/ui/input';
 	import { submitGoForm } from '$lib/forms';
-	import { recordsHref, revisionSourcesHref, transcriptHref } from '$lib/links';
+	import WorkspaceHeader from '$lib/components/conversation/WorkspaceHeader.svelte';
+	import { recordsHref, revisionSourcesHref, sourceFileHref, transcriptHref } from '$lib/links';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -39,18 +40,10 @@
 <svelte:head><title>{trace?.title || 'Trace'} · Traicr</title></svelte:head>
 
 {#if data.error || !trace}
-	<p class="text-destructive" role="alert">{data.error || 'Trace not found'}</p>
+	<p class="text-destructive p-6" role="alert">{data.error || 'Trace not found'}</p>
 {:else}
-	<Button class="mb-4" variant="ghost" href={transcriptHref(trace.id)}>Back to transcript</Button>
-	<div class="mb-8 flex flex-wrap items-end justify-between gap-4">
-		<div>
-			<p class="text-primary mb-2 font-mono text-[11px] tracking-widest">{trace.harness} / TRACE</p>
-			<h1 class="text-3xl font-semibold tracking-tight">{trace.title || 'Untitled trace'}</h1>
-			<p class="text-muted-foreground mt-2 font-mono text-xs break-all">{trace.native_trace_id}</p>
-		</div>
-		<Button variant="outline" href="#retained">Retained revisions</Button>
-	</div>
-	<div class="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+	<WorkspaceHeader {trace} tab="details" />
+	<div class="details-grid grid items-start gap-6 px-5 py-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
 		<section class="flex flex-col gap-4" aria-label="Trace events">
 			{#each data.events as event (event.id)}
 				<Card id="event-{event.id}">
@@ -86,6 +79,19 @@
 					<dt class="text-muted-foreground">Directory</dt><dd class="break-all">{trace.working_directory}</dd>
 					<dt class="text-muted-foreground">Repository</dt><dd class="break-all">{trace.repository}</dd>
 				</dl>
+				{#if trace.harness === 'amp'}
+					<div>
+						<h2 class="mb-2 font-medium">Native Amp export</h2>
+						<p class="text-muted-foreground mb-2 text-xs">Lossless source JSON for an individual revision, not the merged viewer data.</p>
+						{#each trace.revisions ?? [] as revision (revision.id)}
+							<p class="mb-1 text-sm">
+								<a href={sourceFileHref(revision.id, 'source/export.json', { download: true })} data-sveltekit-reload>
+									Revision {revision.id} · {revision.native_updated_at} · Native JSON
+								</a>
+							</p>
+						{/each}
+					</div>
+				{/if}
 				<div>
 					<h2 class="mb-2 font-medium">Related traces</h2>
 					{#each trace.parents ?? [] as parent (parent.id)}

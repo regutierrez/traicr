@@ -85,10 +85,24 @@ export type TraceEvent = {
 	kind: string;
 	role?: string;
 	model?: string;
+	provider?: string;
 	tool?: string;
 	call_id?: string;
 	timestamp?: string;
 	text: string;
+	revision_id?: number;
+	aliases?: string[];
+	attachments?: {
+		name?: string;
+		media_type?: string;
+		path?: string;
+		url?: string;
+		source_pointer?: string;
+		inline?: boolean;
+		archived_path?: string;
+		size?: number;
+	}[];
+	metadata?: Record<string, unknown>;
 };
 
 export type EventPage = {

@@ -1,48 +1,97 @@
-# Transcript browsing and Pi viewer
+# Transcript browsing and Conversation
 
-The browser homepage lists sessions, not individual events. Each card opens the
-whole transcript. Text search still searches event observations, but returns one
-card per matching session, with a matching excerpt. Cards sort by session update
-time, then ID. Session-level cursors prevent repeated matches from appearing on
-separate pages. Sessions without normalized events remain visible when browsing.
+The browser homepage lists sessions, not individual events. Each row opens the
+whole transcript in the Svelte Conversation view. Text search still searches
+event observations, but returns one card per matching session, with a matching
+excerpt. Cards sort by session update time, then ID. Session-level cursors
+prevent repeated matches from appearing on separate pages. Sessions without
+normalized events remain visible when browsing.
 
 The existing `/api/v1/search` contract still returns event results. The browser
 uses a separate session-card query; API clients do not need to change.
 
 ## Viewer
 
-`web/static/pi-transcript/` adapts the HTML export viewer from Pi coding agent
-0.85.1. The viewer uses Traicr's shared light palette, green accents, and body
-typography, with monospace text reserved for code and the tree. A harness badge
-appears beside the session heading. The Pi layout, searchable branch tree,
-filters, Markdown/code rendering, expandable
-tool output, copy links, sidebar resizing, mobile navigation, and T/O controls
-are retained.
+Conversation is native Svelte. It uses the same dark, Cursor-like tokens as the
+rest of the embedded app: a left-aligned turn column, collapsed thinking and
+tools, and client-side navigation through the existing rail. The vendored Pi
+export DOM is gone. Adapter logic that groups normalized blocks into turns,
+pairs tool results with their calls, and guards parent cycles lives in
+`web/app/src/lib/transcript/`.
 
-The adapter groups normalized message blocks into turns and connects tool results
-to their calls. The viewer preserves known parent branches and guards against
-cycles. Existing event/key links resolve to their containing turn.
+Every harness uses the same Conversation chrome: a contents index plus a
+linear stream. The index always lists Prompts, Agent Responses, Thinking, Tool
+Calls (with a kind breakdown when tools exist), Compaction, and Branches —
+including zeros. The stream is always the selected path. User messages are
+chat cards with a small avatar; agent replies use the same avatar column and
+unfilled prose; tool and thought rows stay quiet — no avatar — with traces.com
+icons and labels (`Ran command`, `Read file`, `Thought`, `Used` leftovers).
+Clicking an index row filters that stream. It does not swap in a
+second layout.
 
-Every harness uses the same message and tool renderer in `transcript-render.js`.
-Tool arguments and output start collapsed in separate dropdowns. Shell tools
-(`bash`, `Bash`, `shell_command`) show commands directly while retaining their
-original names. File tools show paths, highlighted code, and requested edits.
-Skills, model changes, compactions, branch summaries, and custom records remain
-visible. Empty reasoning blocks explain that the export omitted their text.
-Deep branch indentation is capped so sidebar labels remain visible. Per-message
-source panels are omitted from the conversation.
+Forks do not grow a tree pane. Branches stay in the index: the count comes
+from the parent graph, and choosing Branches lists leaf paths so a different
+path can be selected without changing the page shape. Existing event/key links
+resolve to their containing turn. `T` and `O` toggle thinking and tools.
+
+Display features depend on the available data, not the harness name. Tool
+arguments and output start collapsed. Shell tools (`bash`, `Bash`,
+`shell_command`) keep their recorded names in the adapter and expand to the
+command; the chip says `Ran` plus that command. File tools show paths, highlighted code,
+and requested edits. Empty reasoning blocks explain that the export omitted
+their text.
 
 Display features depend on the available data, not the harness name. Archived
 images use local previews; external image references stay links and unavailable
 images have a readable notice. Source-specific collection, normalization, and
-attachment retrieval remain separate; the renderer does not recover missing bytes.
-Every harness renders at most 200 entries at once, with earlier/later navigation.
-Tool results are paired within the selected branch.
+attachment retrieval remain separate; the renderer does not recover missing
+bytes. Conversation shows the loaded path from the first message. Tool
+results are paired within the selected branch.
 
 This is a view of Traicr's merged normalized records, **not a new native source
-parser**. Session details keeps all revisions, parsing warnings, related sessions,
-source inspection, and deletion. “Viewer JSONL” downloads the adapted, loaded
-viewer data, not a lossless native export.
+parser**. Details keeps all revisions, parsing warnings, related sessions,
+source inspection, and deletion.
+
+## Harness-only extras (flagged, not a second viewer)
+
+These records still render in the shared stream or header. They are not a
+reason to change the layout. Decide later whether any of them need a dedicated
+chip or should stay as a quiet note.
+
+Shared stream, when the Event has the data:
+
+- Compaction and hidden context expand in place as chips.
+- Skill blocks (`<skill>` in Pi user text, Amp `skill` tool) stay a chip plus
+  the user remainder.
+- Child traces (`create_thread`, `fromExecutorThreadID`, leftover children)
+  stay one quiet row that opens the child or says it was never collected.
+- Unknown native types and uncommon stop reasons stay a note plus JSON/text.
+Amp-only today:
+
+- Archive view (merged vs one revision) still sits on the workspace header.
+  Other harnesses have no equivalent control, so the header is not identical.
+- `openAIResponsePhase` (`commentary`, `final_answer`) is retained on the
+  Event and not drawn as its own chip.
+- `fromAutomation` is a quiet "Automation message" note.
+- `oracle`, `Task`, `create_thread`, and `apply_patch` use the shared chip
+  row (`Oracle`, `Task · …`, `Thread …`, `Edit file`). traces.com also has
+  Process and Cron chips; no current fixture emits those tool names.
+- Native JSON download stays on Details.
+
+Pi / Claude parent-graph extras:
+
+- `branch_summary` is a Thought-style chip on the path that contains it.
+  Switching paths is the Branches list in the index, not a sidebar tree.
+- `model_change` and `thinking_level_change` sit in the workspace header
+  above Conversation / Details, not in the stream. Empty thinking levels
+  are omitted. The model label uses the traces.com display name
+  (`gpt-6-astra` → `GPT 6 Astra`).
+- Pi `custom` records are extension sidecars (`plannotator`,
+  `pi-rename-titles`, `context:skill_loaded`, `tps-stats`). They stay
+  quiet notes: `(used pi-extension <name>)`. They are not Turns.
+
+If a later harness adds Process, Cron, or another traces.com kind, map it
+onto the existing kind list rather than adding a per-harness pane.
 
 ## Amp exports
 
@@ -50,24 +99,18 @@ Amp normalizer version 4 retains numeric message identity, native block order,
 tool answers and errors, summary blocks, image references, usage, timing, execution
 state, origin, phase, and environment metadata. Unknown content has a visible
 JSON fallback. Hidden context, summaries, tool answers, diffs, and arguments
-can be expanded independently. Source inspection remains in Session details.
+can be expanded independently. Source inspection remains in Details.
 Reasoning signatures are not interpreted as plaintext. Tool status describes the
 recorded export, not a process that Traicr is monitoring.
 
-Usage totals count each loaded assistant message once across its content blocks,
-using the preferred observation in merged history or only the selected revision.
-Missing counts are unknown or partial, never invented zeros or prices. Original
-usage and block timing fields remain available through source inspection. Timestamp
-precedence is message `timestamp`/`createdAt`, `meta.sentAt`, block
-`startTime`/`finalTime`, then usage timestamp.
-
 The archive view selector separates merged history from an individual revision.
-Copied message links retain the selected revision.
+Path deep-links retain the selected revision.
 Native JSON downloads retain the exact exported bytes for that revision. Source
 inspection identifies the revision supplying each observation. Spawned
 threads, incoming messages, and references have distinct labels with local trace
-lookup and original Amp links. A missing local trace produces an explicit 404;
-it does not create a child trace or imply the full subagent transcript is present.
+lookup and original Amp links. A missing local trace produces an explicit empty
+state; it does not create a child trace or imply the full subagent transcript is
+present.
 
 The Amp collector downloads hosted images with `amp files get`, using the source
 machine's existing Amp login. User image blocks and tool-result images, including
@@ -78,7 +121,7 @@ fragments share one download within a trace. Only HTTPS attachments under
 and local paths are never fetched. Failed downloads produce collection and
 revision warnings, preserve the transcript, and are retried on later collection.
 Reprocessing derives missing-image warnings from the export and retained files,
-so Session details also explains images missing from older archives.
+so Details also explains images missing from older archives.
 Older Amp CLIs without `files get` need an update to collect hosted images.
 
 Downloaded images have a separate 512 MiB total budget per trace and the existing
@@ -103,10 +146,9 @@ oversized imported source is retained with a normalization diagnostic and can
 still be downloaded. Other normalizers retain their 64 MiB budget. JSON parsing
 uses memory proportional to export size, so near-limit exports need substantially
 more than 512 MiB of server memory. The browser loads 200 records per request and
-renders at most 200 conversation entries at once. Load-more and earlier/later
-controls retain access to the rest. Sidebar search and usage totals cover loaded
-records; archive search covers all indexed records. Deep links load pages until
-their target is found. Other harnesses retain their existing all-pages loading.
+keeps requesting pages until the selected transcript is complete, then
+renders the path from the first message. The contents index and loaded-record
+counts cover loaded records; archive search covers all indexed records.
 If an import or rebuild changes history between pages, the viewer requests a
 reload rather than claiming that the incomplete history is fully loaded.
 Transcript cursors use the latest normalizer-run ID as their generation. Writes
@@ -125,33 +167,18 @@ environment details.
 
 ## Security and attribution
 
-Pi viewer sources: <https://github.com/earendil-works/pi-mono>, package
-`@earendil-works/pi-coding-agent`, `dist/core/export-html/`.
-
-Vendored dependencies:
-
-- Pi viewer 0.85.1: MIT, see `web/static/pi-transcript/pi-LICENSE.txt`.
-- Marked 18.0.5: MIT and Markdown attribution, see
-  `web/static/pi-transcript/marked-LICENSE.txt`.
-- Highlight.js 11.9.0: BSD-3-Clause, see
-  `web/static/pi-transcript/highlight-LICENSE.txt`.
-
-All assets are served locally. No npm runtime or Node build is needed for the
-server image. Inline click handlers were replaced with delegated event handlers
-so Traicr's existing Content Security Policy remains unchanged. Markdown images
-become explicit links rather than automatic network requests. Tool arguments
-and source text are escaped. Authentication still protects transcript data.
+Markdown and syntax highlighting use Marked and Highlight.js from the Svelte app
+dependencies. All assets are served from the embedded UI. Markdown images become
+explicit links rather than automatic network requests. Tool arguments and source
+text are escaped. Authentication still protects transcript data.
 
 ## Checks
 
 ```sh
 GOTOOLCHAIN=auto go test ./internal/store ./internal/server
-node --test web/static/pi-transcript/*.test.mjs
-node --check web/static/pi-transcript/pi-transcript.js
+cd web/app && npm test
 ```
 
-The Node commands are manual checks. They are not part of `make all` or CI.
-
-Browser checks should cover session cards, search grouping, Amp, Claude Code, and Pi
+Browser checks should cover session rows, search grouping, Amp, Claude Code, and Pi
 transcripts, multiple event pages, branch navigation, tool expansion, T/O keys,
-deep links, malicious Markdown, and mobile sidebar controls.
+deep links, malicious Markdown, and client-side navigation in and out of a trace.
