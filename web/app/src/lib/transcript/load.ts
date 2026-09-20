@@ -61,10 +61,8 @@ export async function loadTranscriptSession(
 	cursor = first.cursor;
 	seen = first.seen;
 	let data = assemble(events, metadata, cursor, seen);
-	if (metadata.harness !== 'amp') {
-		while (data.hasMore) {
-			data = await loadMoreSession(data, fetcher);
-		}
+	while (data.hasMore) {
+		data = await loadMoreSession(data, fetcher);
 	}
 	return data;
 }

@@ -134,15 +134,6 @@ function turnRole(entry: TranscriptEntry): Turn['role'] {
 	return 'assistant';
 }
 
-export const PAGE_SIZE = 200;
-
-export function pageWindow(path: TranscriptEntry[], targetId: string, start?: number) {
-	const targetIndex = Math.max(0, path.findIndex((entry) => entry.id === targetId));
-	const from = start ?? Math.max(0, targetIndex - 100);
-	const to = Math.min(path.length, from + PAGE_SIZE);
-	return { from, to, hasEarlier: from > 0, hasLater: to < path.length };
-}
-
 export function visibleToolCalls(path: TranscriptEntry[]) {
 	const ids = new Set<string>();
 	for (const entry of path) {
