@@ -53,7 +53,7 @@ Reasoning signatures are not interpreted as plaintext. Tool status describes the
 recorded export, not a process that Traicr is monitoring.
 
 The archive view selector separates merged history from an individual revision.
-Copied message links retain the selected revision.
+Tree deep-links retain the selected revision.
 Native JSON downloads retain the exact exported bytes for that revision. Source
 inspection identifies the revision supplying each observation. Spawned
 threads, incoming messages, and references have distinct labels with local trace
