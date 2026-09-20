@@ -1,11 +1,12 @@
 import { expect, test } from 'vitest';
 import { attachmentView } from './attachments';
 import { renderMarkdown, sanitizeMarkdownUrl } from './markdown';
+import { leftoverCards } from './children';
 import { parseSkillBlock } from './skill';
 import { buildTranscriptSession } from './session';
 import { requestedEdit, resultText, toolStatus, toolSummary } from './tools';
-import { graphHasFork } from './tree';
-import { groupTurns } from './turns';
+import { defaultLeafId, findNewestLeaf, graphHasFork } from './tree';
+import { groupTurns, isToolOnlyMessage } from './turns';
 import type { ToolCallBlock, TranscriptEntry } from './types';
 
 test('shared tools keep original names and display shell and file operations consistently', () => {
@@ -115,4 +116,71 @@ test('linear graphs do not grow a tree and forks do', () => {
 	expect(graphHasFork(forked.entries)).toBe(true);
 	expect(groupTurns(linear.entries).length).toBe(1);
 	expect(groupTurns(linear.entries)[0].entries.length).toBe(2);
+});
+
+test('default leaf prefers the conversation path over a later branch summary', () => {
+	const forked = buildTranscriptSession(
+		[
+			{ id: 1, key: 'message:u:0', kind: 'message', role: 'user', text: 'Read the fixture.', timestamp: '2026-01-01T00:00:01Z' },
+			{
+				id: 2,
+				key: 'message:a:0',
+				parent_key: 'message:u:0',
+				kind: 'tool_call',
+				role: 'assistant',
+				call_id: 'call-1',
+				tool: 'read',
+				text: '{"path":"fixture.txt"}',
+				timestamp: '2026-01-01T00:00:02Z'
+			},
+			{ id: 3, key: 'tool_result:r:0', parent_key: 'message:a:0', kind: 'tool_result', call_id: 'call-1', tool: 'read', text: 'ok', timestamp: '2026-01-01T00:00:03Z' },
+			{ id: 4, key: 'compaction:c:0', parent_key: 'tool_result:r:0', kind: 'compaction', text: 'Earlier fixture activity summarized.', timestamp: '2026-01-01T00:00:05Z' },
+			{ id: 5, key: 'branch:b:0', parent_key: 'message:u:0', kind: 'branch_summary', text: 'Alternate fixture branch.', timestamp: '2026-01-01T00:00:06Z' }
+		],
+		{ harness: 'pi', nativeId: 's', traceId: '1' }
+	);
+	expect(forked.leafId).toBe(defaultLeafId(forked.entries));
+	expect(forked.entries.find((entry) => entry.id === forked.leafId)?.type).toBe('compaction');
+	expect(findNewestLeaf(forked.entries, forked.entries[0].id)).toBe(forked.leafId);
+});
+
+test('tool-only assistant messages stay quiet rows', () => {
+	expect(
+		isToolOnlyMessage({
+			id: '2',
+			parentId: '1',
+			type: 'message',
+			message: { role: 'assistant', content: [{ type: 'toolCall', id: 'c', name: 'read', arguments: {} }] }
+		})
+	).toBe(true);
+	expect(
+		isToolOnlyMessage({
+			id: '2',
+			parentId: '1',
+			type: 'message',
+			message: { role: 'assistant', content: [{ type: 'text', text: 'I will inspect it' }] }
+		})
+	).toBe(false);
+});
+
+test('leftover child traces stay unplaced when no visible card consumes them', () => {
+	const kids = [{ id: 9, native_trace_id: 'T-1', title: 'Child' }];
+	expect(leftoverCards([], new Map(), kids)).toEqual(kids);
+	expect(
+		leftoverCards(
+			[
+				{
+					id: '1',
+					parentId: null,
+					type: 'message',
+					message: {
+						role: 'assistant',
+						content: [{ type: 'toolCall', id: 'c', name: 'create_thread', arguments: { threadID: 'T-1' } }]
+					}
+				}
+			],
+			new Map(),
+			kids
+		)
+	).toEqual([]);
 });

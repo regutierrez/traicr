@@ -25,11 +25,6 @@
 	} = $props();
 
 	let title = $derived(trace.title || trace.native_trace_id);
-	let conversationHref = $derived.by(() => {
-		const href = resolve('/traces/[id]', { id: String(trace.id) });
-		return revision ? `${href}?revision=${encodeURIComponent(revision)}` : href;
-	});
-	let detailsHref = $derived(resolve('/traces/[id]/records', { id: String(trace.id) }));
 
 	async function changeRevision(event: Event) {
 		const select = event.currentTarget;
@@ -38,8 +33,7 @@
 		if (select.value) params.set('revision', select.value);
 		else params.delete('revision');
 		const query = params.toString();
-		const href = resolve('/traces/[id]', { id: String(trace.id) });
-		await goto(query ? `${href}?${query}` : href, {
+		await goto(resolve(query ? `/traces/[id]?${query}` : '/traces/[id]', { id: String(trace.id) }), {
 			keepFocus: true,
 			noScroll: true
 		});
@@ -69,18 +63,41 @@
 		{/if}
 		{#if tab === 'conversation'}
 			<div class="toggles">
-				<button type="button" class={['toggle', thinkingExpanded && 'is-on']} onclick={onToggleThinking} title="Toggle thinking (T)">
+				<button
+					type="button"
+					class={['toggle', thinkingExpanded && 'is-on']}
+					aria-pressed={thinkingExpanded}
+					onclick={onToggleThinking}
+					title="Toggle thinking (T)"
+				>
 					Thinking
 				</button>
-				<button type="button" class={['toggle', toolsExpanded && 'is-on']} onclick={onToggleTools} title="Toggle tools (O)">
+				<button
+					type="button"
+					class={['toggle', toolsExpanded && 'is-on']}
+					aria-pressed={toolsExpanded}
+					onclick={onToggleTools}
+					title="Toggle tools (O)"
+				>
 					Tools
 				</button>
 			</div>
 		{/if}
 	</div>
 	<nav class="tabs" aria-label="Trace views">
-		<a class={['tab', tab === 'conversation' && 'is-current']} href={conversationHref} aria-current={tab === 'conversation' ? 'page' : undefined}>Conversation</a>
-		<a class={['tab', tab === 'details' && 'is-current']} href={detailsHref} aria-current={tab === 'details' ? 'page' : undefined}>Details</a>
+		<a
+			class={['tab', tab === 'conversation' && 'is-current']}
+			href={resolve(
+				revision ? `/traces/[id]?revision=${encodeURIComponent(revision)}` : '/traces/[id]',
+				{ id: String(trace.id) }
+			)}
+			aria-current={tab === 'conversation' ? 'page' : undefined}
+		>Conversation</a>
+		<a
+			class={['tab', tab === 'details' && 'is-current']}
+			href={resolve('/traces/[id]/records', { id: String(trace.id) })}
+			aria-current={tab === 'details' ? 'page' : undefined}
+		>Details</a>
 	</nav>
 </header>
 

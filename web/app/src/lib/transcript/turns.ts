@@ -1,5 +1,12 @@
 import type { TranscriptEntry, Turn } from './types';
 
+export function isToolOnlyMessage(entry: TranscriptEntry) {
+	const message = entry.message;
+	if (!message || message.role !== 'assistant') return false;
+	const content = message.content ?? [];
+	return content.length > 0 && content.every((block) => block.type === 'toolCall');
+}
+
 export function groupTurns(path: TranscriptEntry[]): Turn[] {
 	const turns: Turn[] = [];
 	let current: Turn | null = null;

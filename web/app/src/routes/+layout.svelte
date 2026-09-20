@@ -137,7 +137,9 @@
 
 	.app-shell {
 		display: flex;
+		height: 100vh;
 		min-height: 100vh;
+		overflow: hidden;
 		background: var(--background);
 	}
 
@@ -155,8 +157,10 @@
 	.workspace {
 		display: flex;
 		min-width: 0;
+		min-height: 0;
 		flex: 1;
 		flex-direction: column;
+		overflow: hidden;
 		background: var(--background);
 	}
 
@@ -173,7 +177,9 @@
 		flex: 1;
 		width: 100%;
 		max-width: 72rem;
+		min-height: 0;
 		margin: 0 auto;
+		overflow: auto;
 		padding: 1rem 1.25rem 2rem;
 	}
 
@@ -183,7 +189,7 @@
 		padding: 0;
 		display: flex;
 		flex-direction: column;
-		min-height: 0;
+		overflow: hidden;
 	}
 
 	.rail-brand {

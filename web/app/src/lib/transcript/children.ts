@@ -54,3 +54,19 @@ export function childCards(
 export function unplacedChildren(children: TraceRef[], placed: Set<string>) {
 	return children.filter((child) => !placed.has(child.native_trace_id));
 }
+
+export function leftoverCards(
+	visibleEntries: TranscriptEntry[],
+	resultMap: Map<string, TranscriptEntry>,
+	kids: TraceRef[]
+) {
+	const ids = new Set<string>();
+	for (const entry of visibleEntries) {
+		for (const block of entry.message?.content ?? []) {
+			if (block.type !== 'toolCall') continue;
+			for (const card of childCards(entry, block, resultMap.get(block.id), kids)) ids.add(card.id);
+		}
+		for (const card of childCards(entry, undefined, undefined, kids)) ids.add(card.id);
+	}
+	return unplacedChildren(kids, ids);
+}

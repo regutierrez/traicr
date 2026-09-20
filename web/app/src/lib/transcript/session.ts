@@ -1,3 +1,4 @@
+import { defaultLeafId } from './tree';
 import type {
 	ContentBlock,
 	EventMetadata,
@@ -273,7 +274,7 @@ export function buildTranscriptSession(events: TranscriptEvent[], metadata: Sess
 			native
 		},
 		entries,
-		leafId: entries.at(-1)?.id,
+		leafId: defaultLeafId(entries),
 		eventEntries
 	};
 }

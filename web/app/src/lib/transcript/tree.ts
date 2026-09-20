@@ -65,6 +65,37 @@ export function getPath(entries: TranscriptEntry[], targetId: string) {
 	return path.reverse();
 }
 
+function collectLeaves(node: TreeNode, leaves: TreeNode[]) {
+	if (!node.children.length) {
+		leaves.push(node);
+		return;
+	}
+	for (const child of node.children) collectLeaves(child, leaves);
+}
+
+function preferredLeaf(entries: TranscriptEntry[], leaves: TranscriptEntry[]) {
+	if (!leaves.length) return undefined;
+	return leaves.slice().sort((a, b) => {
+		const rank = Number(b.type !== 'branch_summary') - Number(a.type !== 'branch_summary');
+		if (rank) return rank;
+		const time = (b.timestamp || '').localeCompare(a.timestamp || '');
+		if (time) return time;
+		const depth = getPath(entries, b.id).length - getPath(entries, a.id).length;
+		if (depth) return depth;
+		return a.id.localeCompare(b.id);
+	})[0];
+}
+
+export function defaultLeafId(entries: TranscriptEntry[]) {
+	const leaves: TranscriptEntry[] = [];
+	for (const root of buildTree(entries)) {
+		const nodes: TreeNode[] = [];
+		collectLeaves(root, nodes);
+		for (const node of nodes) leaves.push(node.entry);
+	}
+	return preferredLeaf(entries, leaves)?.id || entries.at(-1)?.id || '';
+}
+
 export function findNewestLeaf(entries: TranscriptEntry[], nodeId: string) {
 	const tree = buildTree(entries);
 	const nodeMap = new Map<string, TreeNode>();
@@ -75,12 +106,14 @@ export function findNewestLeaf(entries: TranscriptEntry[], nodeId: string) {
 		nodeMap.set(node.entry.id, node);
 		pending.push(...node.children);
 	}
-	let current = nodeMap.get(nodeId);
-	if (!current) return nodeId;
-	while (current.children.length > 0) {
-		current = current.children[current.children.length - 1];
-	}
-	return current.entry.id;
+	const start = nodeMap.get(nodeId);
+	if (!start) return nodeId;
+	const nodes: TreeNode[] = [];
+	collectLeaves(start, nodes);
+	return preferredLeaf(
+		entries,
+		nodes.map((node) => node.entry)
+	)?.id || nodeId;
 }
 
 export function flattenTree(roots: TreeNode[], activePathIds: Set<string>) {

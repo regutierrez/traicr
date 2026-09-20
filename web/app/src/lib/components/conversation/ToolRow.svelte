@@ -45,22 +45,22 @@
 	let cards = $derived(childCards(entry, call, result, children));
 	let payload = $derived(result?.message?.run?.result);
 	let attachments = $derived((result?.message?.content ?? []).filter((block) => block.type === 'attachment'));
-
-	function language() {
-		return isFileTool(call.name) && call.name.toLowerCase() === 'read' ? languageForPath(path) : '';
-	}
+	let highlightLanguage = $derived(
+		isFileTool(call.name) && call.name.toLowerCase() === 'read' ? languageForPath(path) : ''
+	);
 </script>
 
 <div class={['tool', result?.message?.isError && 'is-error']} id="tool-call-{call.id}">
 	<details
-		{open}
-		ontoggle={(event) => {
-			if (event.currentTarget.open !== open) onToggle?.(event.currentTarget.open);
+		bind:open={() => open, (value) => {
+			if (value !== open) onToggle?.(value);
 		}}
 	>
 		<summary>
 			<span class="name">{summary}</span>
-			<span class="status">{status}</span>
+			{#if status !== 'unknown'}
+				<span class="status">{status}</span>
+			{/if}
 		</summary>
 		{#if isShellTool(call.name) && command}
 			<pre class="command">$ {command}</pre>
@@ -87,7 +87,7 @@
 		{#if edit.length}
 			<details>
 				<summary>Requested edit</summary>
-				<pre class="diff">{#each edit as line, index (`${index}:${line.text}`)}<span class={line.kind}>{line.text}{'\n'}</span>{/each}</pre>
+				<pre class="diff">{#each edit as line, index (`${index}:${line.text}`)}<span class={line.kind}>{line.text + '\n'}</span>{/each}</pre>
 			</details>
 		{/if}
 		<details>
@@ -105,7 +105,7 @@
 				<details>
 					<summary>Tool output</summary>
 					{#if isShellTool(call.name) || isFileTool(call.name)}
-						<pre class="code"><code class="hljs">{@html highlightCode(output, language())}</code></pre>
+						<pre class="code"><code class="hljs">{@html highlightCode(output, highlightLanguage)}</code></pre>
 					{:else}
 						<Markdown text={output} />
 					{/if}
@@ -117,7 +117,7 @@
 				<details>
 					<summary>{file.label}{#if file.additions != null || file.deletions != null} · +{file.additions ?? '?'} −{file.deletions ?? '?'}{/if}</summary>
 					{#if file.diff.length}
-						<pre class="diff">{#each file.diff as line, lineIndex (`${lineIndex}:${line.text}`)}<span class={line.kind}>{line.text}{'\n'}</span>{/each}</pre>
+						<pre class="diff">{#each file.diff as line, lineIndex (`${lineIndex}:${line.text}`)}<span class={line.kind}>{line.text + '\n'}</span>{/each}</pre>
 					{/if}
 				</details>
 			{/each}
