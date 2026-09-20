@@ -123,7 +123,8 @@ npm ci
 npm run build
 ```
 
-`npm run dev` serves the UI on port 5173 and proxies `/api`, login, and the transcript viewer to `http://127.0.0.1:8080`. The Docker image builds the UI itself.
+`npm run dev` serves the UI on port 5173 and proxies `/api`, login, and Go
+transcript JSON to `http://127.0.0.1:8080`. The Docker image builds the UI itself.
 
 ### Git hooks
 
@@ -170,6 +171,6 @@ The Compose service uses one persistent `/data` volume and a read-only container
 
 - [Domain language](./CONTEXT.md)
 - [System design](./docs/design.md)
-- [Transcript browsing and Pi viewer](./docs/transcript-viewer.md)
+- [Transcript browsing and Conversation](./docs/transcript-viewer.md)
 - [Implementation plan](./docs/implementation-plan.md)
 - [Architecture decisions](./docs/adr/)

@@ -1,6 +1,6 @@
 import tailwindcss from '@tailwindcss/vite';
 import { sveltekit } from '@sveltejs/kit/vite';
-import { defineConfig } from 'vite';
+import { defineConfig } from 'vitest/config';
 
 const server = 'http://127.0.0.1:8080';
 
@@ -20,6 +20,9 @@ const pathOf = (request: Request) => new URL(request.url ?? '/', server);
 
 export default defineConfig({
 	plugins: [tailwindcss(), sveltekit()],
+	test: {
+		include: ['src/**/*.test.ts']
+	},
 	server: {
 		host: '127.0.0.1',
 		port: 5173,

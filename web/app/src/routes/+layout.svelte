@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { beforeNavigate } from '$app/navigation';
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
 	import { submitGoForm } from '$lib/forms';
@@ -9,7 +8,7 @@
 	let { data, children }: LayoutProps = $props();
 	let path = $derived(page.url.pathname);
 	let login = $derived(path === '/login');
-	let viewer = $derived(isViewer(path));
+	let workspace = $derived(path.startsWith('/traces/'));
 	let loggingOut = $state(false);
 
 	type AppPath = '/' | '/imports' | '/machines';
@@ -19,23 +18,6 @@
 		{ href: '/imports', label: 'Archive', icon: 'archive' },
 		{ href: '/machines', label: 'Machines', icon: 'machines' }
 	];
-
-	const viewerPath = /^\/traces\/[^/]+$/;
-
-	function isViewer(pathname: string) {
-		return viewerPath.test(pathname);
-	}
-
-	// The Pi viewer is a vendored module script that renders once per document and attaches
-	// document-wide listeners. Give it a fresh document on the way in and on the way out instead
-	// of letting SvelteKit swap components under it.
-	beforeNavigate(({ from, to, type, cancel }) => {
-		if (type === 'leave' || !from || !to) return;
-		const samePage = from.url.pathname === to.url.pathname && from.url.search === to.url.search;
-		if (samePage || (!isViewer(from.url.pathname) && !isViewer(to.url.pathname))) return;
-		cancel();
-		location.assign(to.url.href);
-	});
 
 	function current(href: string) {
 		if (href === '/') return path === '/' ? 'page' : undefined;
@@ -100,7 +82,7 @@
 	</a>
 {/snippet}
 
-{#if !viewer}
+{#if !login}
 	<a class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50" href="#main">Skip to content</a>
 {/if}
 
@@ -108,8 +90,6 @@
 	<main id="main" class="login-shell">
 		{@render children()}
 	</main>
-{:else if viewer}
-	{@render children()}
 {:else}
 	<div class="app-shell">
 		<aside class="rail" aria-label="Main navigation">
@@ -139,7 +119,7 @@
 					</button>
 				</form>
 			</nav>
-			<main id="main" class="workspace-main">
+			<main id="main" class={['workspace-main', workspace && 'is-workspace']}>
 				{@render children()}
 			</main>
 		</div>
@@ -195,6 +175,15 @@
 		max-width: 72rem;
 		margin: 0 auto;
 		padding: 1rem 1.25rem 2rem;
+	}
+
+	.workspace-main.is-workspace {
+		max-width: none;
+		margin: 0;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		min-height: 0;
 	}
 
 	.rail-brand {
