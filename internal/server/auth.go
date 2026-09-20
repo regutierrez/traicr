@@ -133,10 +133,10 @@ func (app *application) loginPage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *application) csrfAPI(w http.ResponseWriter, r *http.Request) {
-	// If the browser already has a session cookie, sign that value. Minting a
-	// second cookie here desyncs the form token when the Set-Cookie is dropped
-	// (SvelteKit's load fetch) or arrives after the page has rendered.
-	if _, err := r.Cookie(sessionCookie); err != nil && app.session(r, "session") == "" && app.session(r, "login") == "" {
+	// Sign the cookie the browser already has. Cookie() failing is enough to
+	// know there is nothing to sign; do not mint a second cookie when a value
+	// is present but fails session() (expired or wrong purpose).
+	if _, err := r.Cookie(sessionCookie); err != nil {
 		value := app.setSession(w, "login")
 		r.AddCookie(&http.Cookie{Name: sessionCookie, Value: value})
 		r.Header.Set("Cookie", sessionCookie+"="+value)

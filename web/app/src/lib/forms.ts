@@ -1,4 +1,4 @@
-type Failure = { error?: { csrf?: string; message?: string } };
+type Failure = { error?: { message?: string } };
 
 // Go mutation handlers return JSON on failure and 303 + HTML on success.
 // Native form navigation would replace the Svelte document with that JSON.
@@ -27,11 +27,16 @@ export async function submitGoForm(form: HTMLFormElement): Promise<{ ok: true; u
 		credentials: 'same-origin',
 		headers: { accept: 'application/json' }
 	});
-	const type = response.headers.get('content-type') ?? '';
-	if (response.redirected || type.includes('text/html')) {
+	// fetch follows the 303; redirected is the success signal. An unredirected
+	// HTML body is not success — that used to hide JSON errors rendered as a document.
+	if (response.redirected) {
 		return { ok: true, url: response.url || '/' };
 	}
 
-	const payload = (await response.json().catch(() => ({}))) as Failure;
-	return { ok: false, message: payload.error?.message ?? 'request failed' };
+	const type = response.headers.get('content-type') ?? '';
+	if (type.includes('application/json')) {
+		const payload = (await response.json().catch(() => ({}))) as Failure;
+		return { ok: false, message: payload.error?.message ?? 'request failed' };
+	}
+	return { ok: false, message: 'request failed' };
 }

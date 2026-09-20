@@ -26,7 +26,8 @@ export default defineConfig({
 		strictPort: true,
 		proxy: {
 			'/api': server,
-			'/logout': server,
+			// Keep the browser Host so Go's Origin check matches Vite, same as /login.
+			'/logout': { target: server },
 			'/static': server,
 			'/login': pageUnless(isMutation),
 			'/traces': pageUnless((request) => isMutation(request) || /\/(events|transcript|resolve)$/.test(pathOf(request).pathname)),

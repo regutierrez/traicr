@@ -152,6 +152,29 @@ func TestCSRFAPISignsExistingCookieInsteadOfMintingAnother(t *testing.T) {
 	}
 }
 
+func TestCSRFAPISignsPresentCookieEvenWhenSessionIsInvalid(t *testing.T) {
+	handler := testHandler(t, false)
+	expired := signedCookie("login", time.Now().Unix()-1)
+	want := csrfFor(expired)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/csrf", nil)
+	req.AddCookie(expired)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, req)
+	if response.Code != http.StatusOK {
+		t.Fatalf("csrf: %d %s", response.Code, response.Body)
+	}
+	if got := response.Result().Cookies(); len(got) != 0 {
+		t.Fatalf("csrf reminted over an existing cookie: %#v", got)
+	}
+	var body struct {
+		CSRF string `json:"csrf"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil || body.CSRF != want {
+		t.Fatalf("csrf token: %s want %s err=%v", response.Body, want, err)
+	}
+}
+
 func freshLoginForm(t *testing.T, handler http.Handler) (*http.Cookie, string) {
 	t.Helper()
 	response := request(handler, http.MethodGet, "/login", nil, "")
