@@ -1,0 +1,110 @@
+@import 'tailwindcss';
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Dark-only Cursor-like tokens. There is no light theme and no prefers-color-scheme
+ * flip. Tune the default shadcn-svelte dark palette toward a near-black canvas.
+ */
+:root {
+	color-scheme: dark;
+	--radius: 0.25rem;
+	--background: #1e1e1e;
+	--foreground: #cccccc;
+	--card: #1e1e1e;
+	--card-foreground: #cccccc;
+	--popover: #252526;
+	--popover-foreground: #cccccc;
+	--primary: #3794ff;
+	--primary-foreground: #f3f3f3;
+	--secondary: #252526;
+	--secondary-foreground: #cccccc;
+	--muted: #252526;
+	--muted-foreground: #8b8b8b;
+	--accent: #2a2d2e;
+	--accent-foreground: #d4d4d4;
+	--destructive: #f14c4c;
+	--border: rgb(255 255 255 / 11%);
+	--input: rgb(255 255 255 / 11%);
+	--ring: #3794ff;
+	--sidebar: #141414;
+	--sidebar-foreground: #cccccc;
+	--sidebar-primary: #3794ff;
+	--sidebar-primary-foreground: #f3f3f3;
+	--sidebar-accent: #1c1c1c;
+	--sidebar-accent-foreground: #d4d4d4;
+	--sidebar-border: rgb(255 255 255 / 11%);
+	--sidebar-ring: #3794ff;
+	--font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+	--font-mono: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Consolas, monospace;
+}
+
+@theme inline {
+	--radius-sm: calc(var(--radius) - 2px);
+	--radius-md: var(--radius);
+	--radius-lg: var(--radius);
+	--radius-xl: calc(var(--radius) + 2px);
+	--color-background: var(--background);
+	--color-foreground: var(--foreground);
+	--color-card: var(--card);
+	--color-card-foreground: var(--card-foreground);
+	--color-popover: var(--popover);
+	--color-popover-foreground: var(--popover-foreground);
+	--color-primary: var(--primary);
+	--color-primary-foreground: var(--primary-foreground);
+	--color-secondary: var(--secondary);
+	--color-secondary-foreground: var(--secondary-foreground);
+	--color-muted: var(--muted);
+	--color-muted-foreground: var(--muted-foreground);
+	--color-accent: var(--accent);
+	--color-accent-foreground: var(--accent-foreground);
+	--color-destructive: var(--destructive);
+	--color-border: var(--border);
+	--color-input: var(--input);
+	--color-ring: var(--ring);
+	--color-sidebar: var(--sidebar);
+	--color-sidebar-foreground: var(--sidebar-foreground);
+	--color-sidebar-primary: var(--sidebar-primary);
+	--color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+	--color-sidebar-accent: var(--sidebar-accent);
+	--color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+	--color-sidebar-border: var(--sidebar-border);
+	--color-sidebar-ring: var(--sidebar-ring);
+	--font-sans: var(--font-sans);
+	--font-mono: var(--font-mono);
+}
+
+@layer base {
+	* {
+		@apply border-border outline-ring/50;
+	}
+
+	html,
+	body {
+		@apply bg-background text-foreground;
+		font-family: var(--font-sans);
+		font-size: 13px;
+		line-height: 1.45;
+		min-height: 100%;
+	}
+
+	body {
+		margin: 0;
+	}
+
+	mark {
+		background: color-mix(in oklch, var(--primary) 28%, transparent);
+		color: inherit;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+		scroll-behavior: auto !important;
+	}
+}

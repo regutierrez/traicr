@@ -82,7 +82,7 @@ invoking entry. This sheet serves both desktop concepts on narrow screens.
   collecting, while degrading gracefully to a parent-level group when only
   `parent_native_trace_id` is known.
 - It layers naturally on the existing viewer: the pane is a sibling of
-  `#content` in `transcript.html`, reusing the sidebar/resizer pattern that
+  `#content` in the viewer page (`web/app/src/routes/traces/[id]/+page.svelte`), reusing the sidebar/resizer pattern that
   already exists.
 
 If sessions with many children (5+) become common, adopt Concept B's rail as

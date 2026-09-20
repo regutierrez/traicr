@@ -1,5 +1,14 @@
 # syntax=docker/dockerfile:1
 
+FROM node:22-bookworm AS ui
+
+WORKDIR /src
+COPY web/app/package.json web/app/package-lock.json web/app/
+WORKDIR /src/web/app
+RUN npm ci
+COPY web/app/ ./
+RUN npm run build
+
 FROM golang:1.27-bookworm AS build
 
 WORKDIR /src
@@ -8,6 +17,7 @@ COPY cmd ./cmd
 COPY internal ./internal
 COPY migrations ./migrations
 COPY web ./web
+COPY --from=ui /src/web/static/ui ./web/static/ui
 
 ARG VERSION=development
 ARG COMMIT=unknown

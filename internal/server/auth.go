@@ -30,12 +30,17 @@ func (app *application) validToken(token string) bool {
 func (app *application) api(next http.HandlerFunc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		token, present := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
-		if !present || !app.validToken(token) {
-			w.Header().Set("WWW-Authenticate", "Bearer")
-			writeError(w, http.StatusUnauthorized, "unauthorized", "a valid bearer token is required")
+		if present && app.validToken(token) {
+			next(w, r)
 			return
 		}
-		next(w, r)
+		// The browser UI sends the session cookie. Mutations stay bearer-only so a page cannot be driven into an import.
+		if (r.Method == http.MethodGet || r.Method == http.MethodHead) && app.session(r, "session") != "" {
+			next(w, r)
+			return
+		}
+		w.Header().Set("WWW-Authenticate", "Bearer")
+		writeError(w, http.StatusUnauthorized, "unauthorized", "a valid bearer token is required")
 	})
 }
 
@@ -117,11 +122,26 @@ func (app *application) loginPage(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
 	}
-	value := app.setSession(w, "login")
-	r.AddCookie(&http.Cookie{Name: sessionCookie, Value: value})
-	// Replace a stale cookie rather than allowing it to select the form token.
-	r.Header.Set("Cookie", sessionCookie+"="+value)
-	app.render(w, r, "login", map[string]any{"Title": "Your private trace archive", "Login": true})
+	// Reuse a live login cookie so a second GET /login cannot invalidate the
+	// CSRF token already rendered in the Svelte form.
+	if app.session(r, "login") == "" {
+		value := app.setSession(w, "login")
+		r.AddCookie(&http.Cookie{Name: sessionCookie, Value: value})
+		r.Header.Set("Cookie", sessionCookie+"="+value)
+	}
+	app.spa(w, r)
+}
+
+func (app *application) csrfAPI(w http.ResponseWriter, r *http.Request) {
+	// Sign the cookie the browser already has. Cookie() failing is enough to
+	// know there is nothing to sign; do not mint a second cookie when a value
+	// is present but fails session() (expired or wrong purpose).
+	if _, err := r.Cookie(sessionCookie); err != nil {
+		value := app.setSession(w, "login")
+		r.AddCookie(&http.Cookie{Name: sessionCookie, Value: value})
+		r.Header.Set("Cookie", sessionCookie+"="+value)
+	}
+	writeJSON(w, map[string]string{"csrf": app.csrf(r)})
 }
 
 func (app *application) login(w http.ResponseWriter, r *http.Request) {

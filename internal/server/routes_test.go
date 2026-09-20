@@ -21,9 +21,38 @@ import (
 	"github.com/regutierrez/traicr/internal/domain"
 	"github.com/regutierrez/traicr/internal/server"
 	"github.com/regutierrez/traicr/internal/store"
+	assets "github.com/regutierrez/traicr/web"
 )
 
 const adminToken = "synthetic-test-token"
+
+// TestBuiltUIAssetsAreServed only runs after `npm run build`: every script the shell references
+// must be embedded and cacheable. A directory embed pattern silently drops SvelteKit's _app folder.
+func TestBuiltUIAssetsAreServed(t *testing.T) {
+	shell, err := assets.Files.ReadFile("static/ui/index.html")
+	if err != nil {
+		t.Skip("web/app is not built")
+	}
+	handler := testHandler(t, false)
+	scripts := regexp.MustCompile(`/_app/immutable/[^"]+\.js`).FindAllString(string(shell), -1)
+	if len(scripts) == 0 {
+		t.Fatalf("shell references no scripts: %s", shell)
+	}
+	for _, path := range scripts {
+		response := request(handler, "GET", path, nil, "")
+		if response.Code != http.StatusOK || response.Header().Get("Cache-Control") != "public, max-age=31536000, immutable" {
+			t.Fatalf("%s: %d %q", path, response.Code, response.Header().Get("Cache-Control"))
+		}
+	}
+	login := request(handler, "GET", "/login", nil, "")
+	html := login.Body.String()
+	if login.Code != http.StatusOK || !strings.HasPrefix(login.Header().Get("Content-Type"), "text/html") {
+		t.Fatalf("login document: %d %s", login.Code, html)
+	}
+	if !strings.Contains(html, "data-sveltekit") && !strings.Contains(html, "/_app/immutable/") {
+		t.Fatalf("login is not the Svelte document: %s", html)
+	}
+}
 
 func testHandler(t *testing.T, secure bool) http.Handler {
 	t.Helper()
@@ -80,6 +109,7 @@ func TestHTTPAuthenticationAndValidation(t *testing.T) {
 		"/api/v1/search?q=test&cursor=bad":   http.StatusBadRequest,
 		"/api/v1/traces/not-a-number":        http.StatusBadRequest,
 		"/api/v1/traces/999":                 http.StatusNotFound,
+		"/api/v1/unknown":                    http.StatusNotFound,
 	} {
 		got := request(handler, "GET", path, nil, adminToken)
 		if got.Code != status {
@@ -97,11 +127,26 @@ func TestHTTPAuthenticationAndValidation(t *testing.T) {
 	}
 }
 
+// csrfToken fetches the form token the way the browser app does: from the JSON endpoint, using the cookie.
+func csrfToken(t *testing.T, handler http.Handler, cookie *http.Cookie) string {
+	t.Helper()
+	req := httptest.NewRequest("GET", "/api/v1/csrf", nil)
+	req.AddCookie(cookie)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, req)
+	var body struct {
+		CSRF string `json:"csrf"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil || response.Code != http.StatusOK || body.CSRF == "" {
+		t.Fatalf("csrf token: %d %s %v", response.Code, response.Body, err)
+	}
+	return body.CSRF
+}
+
 func login(t *testing.T, handler http.Handler, secure bool) (*http.Cookie, string) {
 	t.Helper()
 	page := request(handler, "GET", "/login", nil, "")
-	csrf := regexp.MustCompile(`name="csrf" value="([^"]+)"`).FindStringSubmatch(page.Body.String())
-	if page.Code != http.StatusOK || len(csrf) != 2 || len(page.Result().Cookies()) != 1 {
+	if page.Code != http.StatusOK || len(page.Result().Cookies()) != 1 {
 		t.Fatalf("login page: %d %s", page.Code, page.Body)
 	}
 	cookie := page.Result().Cookies()[0]
@@ -112,7 +157,7 @@ func login(t *testing.T, handler http.Handler, secure bool) (*http.Cookie, strin
 	if secure {
 		origin = "https://example.com"
 	}
-	form := url.Values{"csrf": {csrf[1]}, "token": {adminToken}}
+	form := url.Values{"csrf": {csrfToken(t, handler, cookie)}, "token": {adminToken}}
 	for _, badOrigin := range []string{"https://attacker.invalid", ""} {
 		response := submit(handler, "/login", form, cookie, badOrigin)
 		if response.Code != http.StatusForbidden {
@@ -128,11 +173,10 @@ func login(t *testing.T, handler http.Handler, secure bool) (*http.Cookie, strin
 	req.AddCookie(cookie)
 	response = httptest.NewRecorder()
 	handler.ServeHTTP(response, req)
-	csrf = regexp.MustCompile(`name="csrf" value="([^"]+)"`).FindStringSubmatch(response.Body.String())
-	if response.Code != http.StatusOK || len(csrf) != 2 {
+	if response.Code != http.StatusOK {
 		t.Fatalf("authenticated page: %d %s", response.Code, response.Body)
 	}
-	return cookie, csrf[1]
+	return cookie, csrfToken(t, handler, cookie)
 }
 
 func submit(handler http.Handler, path string, form url.Values, cookie *http.Cookie, origin string) *httptest.ResponseRecorder {
@@ -237,9 +281,14 @@ func TestImportSearchInspectRetryAndDelete(t *testing.T) {
 		if response.Code != http.StatusOK || strings.Contains(response.Body.String(), "<script>alert") || strings.Contains(response.Body.String(), "<script>title") {
 			t.Fatalf("unsafe or failed page %s: %d %s", path, response.Code, response.Body)
 		}
-		if strings.HasPrefix(path, "/?q=") && !strings.Contains(response.Body.String(), "<mark>") {
-			t.Fatalf("search match is not highlighted: %s", path)
-		}
+	}
+	cards := request(handler, "GET", "/api/v1/cards?q=needle", nil, adminToken)
+	if cards.Code != 200 || !strings.Contains(cards.Body.String(), "needle") || strings.Contains(cards.Body.String(), "<script>") {
+		t.Fatalf("cards: %d %s", cards.Code, cards.Body)
+	}
+	scripted := request(handler, "GET", "/api/v1/cards?q=%3Cscript%3E&mode=exact", nil, adminToken)
+	if scripted.Code != 200 || strings.Contains(scripted.Body.String(), "<script>") {
+		t.Fatalf("cards reflected markup: %d %s", scripted.Code, scripted.Body)
 	}
 	response := request(handler, "GET", fmt.Sprintf("/api/v1/events/%d/sources", result.EventID), nil, adminToken)
 	var sources []store.Source
