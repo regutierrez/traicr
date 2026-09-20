@@ -94,7 +94,7 @@
 	.leaf {
 		display: flex;
 		width: 100%;
-		height: 1.75rem;
+		height: 28px;
 		align-items: center;
 		justify-content: space-between;
 		gap: 0.75rem;

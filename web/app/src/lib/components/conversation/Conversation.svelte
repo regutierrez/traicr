@@ -440,8 +440,8 @@
 	}
 
 	.bubble {
-		margin-left: -0.625rem;
-		padding: 0.375rem 0.625rem;
+		margin-left: -10px;
+		padding: 6px 10px;
 		border-radius: 10px;
 		background: #242424;
 		box-shadow:
