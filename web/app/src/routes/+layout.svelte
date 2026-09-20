@@ -2,6 +2,7 @@
 	import { beforeNavigate } from '$app/navigation';
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
+	import { submitGoForm } from '$lib/forms';
 	import type { LayoutProps } from './$types';
 	import './layout.css';
 
@@ -9,6 +10,7 @@
 	let path = $derived(page.url.pathname);
 	let login = $derived(path === '/login');
 	let viewer = $derived(isViewer(path));
+	let loggingOut = $state(false);
 
 	type AppPath = '/' | '/imports' | '/machines';
 
@@ -38,6 +40,23 @@
 	function current(href: string) {
 		if (href === '/') return path === '/' ? 'page' : undefined;
 		return path === href || path.startsWith(href + '/') ? 'page' : undefined;
+	}
+
+	async function signOut(event: SubmitEvent) {
+		event.preventDefault();
+		if (!(event.currentTarget instanceof HTMLFormElement)) return;
+		loggingOut = true;
+		try {
+			const result = await submitGoForm(event.currentTarget);
+			if (result.ok) {
+				location.assign(result.url);
+				return;
+			}
+		} catch {
+			// Stay on the page: a failed or unreachable logout must not send them to /login.
+		} finally {
+			loggingOut = false;
+		}
 	}
 </script>
 
@@ -100,9 +119,9 @@
 					{@render railLink(item.href, item.label, item.icon)}
 				{/each}
 			</nav>
-			<form class="rail-logout" action="/logout" method="post" data-sveltekit-reload>
+			<form class="rail-logout" action="/logout" method="post" onsubmit={signOut}>
 				<input type="hidden" name="csrf" value={data.csrf} />
-				<button class="rail-link" type="submit" title="Log out" aria-label="Log out">
+				<button class="rail-link" type="submit" title="Log out" aria-label="Log out" disabled={loggingOut}>
 					{@render icon('logout')}
 				</button>
 			</form>
@@ -113,9 +132,9 @@
 				{#each navigation as item (item.href)}
 					{@render railLink(item.href, item.label, item.icon)}
 				{/each}
-				<form class="ml-auto" action="/logout" method="post" data-sveltekit-reload>
+				<form class="ml-auto" action="/logout" method="post" onsubmit={signOut}>
 					<input type="hidden" name="csrf" value={data.csrf} />
-					<button class="rail-link" type="submit" title="Log out" aria-label="Log out">
+					<button class="rail-link" type="submit" title="Log out" aria-label="Log out" disabled={loggingOut}>
 						{@render icon('logout')}
 					</button>
 				</form>
