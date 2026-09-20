@@ -4,7 +4,7 @@ import { renderMarkdown, sanitizeMarkdownUrl } from './markdown';
 import { leftoverCards } from './children';
 import { parseSkillBlock } from './skill';
 import { buildTranscriptSession } from './session';
-import { requestedEdit, resultText, toolChipLabel, toolStatus, toolSummary } from './tools';
+import { requestedEdit, resultText, toolChipLabel, toolChipParts, toolStatus, toolSummary } from './tools';
 import { defaultLeafId, findNewestLeaf, getPath, graphHasFork, graphLeaves } from './tree';
 import { groupTurns, isToolOnlyMessage, streamCounts } from './turns';
 import type { ToolCallBlock, TranscriptEntry } from './types';
@@ -30,6 +30,16 @@ test('shared tools keep original names and display shell and file operations con
 	expect(toolChipLabel({ type: 'toolCall', id: 'o', name: 'oracle', arguments: { task: 'Explain the failing assertion' } })).toBe(
 		'Oracle · Explain the failing assertion'
 	);
+	expect(toolChipParts({ type: 'toolCall', id: 's', name: 'shell_command', arguments: { command: 'go test' } })).toEqual({
+		verb: 'Ran',
+		rest: 'go test',
+		icon: 'terminal'
+	});
+	expect(toolChipParts({ type: 'toolCall', id: 'w', name: 'write_stdin', arguments: {} })).toEqual({
+		verb: 'Used',
+		rest: 'Write Stdin',
+		icon: 'wrench'
+	});
 	const edit = requestedEdit({ oldText: 'old <tag>', newText: 'new & value' });
 	expect(edit[0]).toEqual({ kind: 'removed', text: '-old <tag>' });
 	expect(edit[1]).toEqual({ kind: 'added', text: '+new & value' });

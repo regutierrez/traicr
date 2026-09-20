@@ -18,6 +18,8 @@
 	import type { Trace } from '$lib/types';
 	import AttachmentBlock from './AttachmentBlock.svelte';
 	import ChildCard from './ChildCard.svelte';
+	import ExpandChip from './ExpandChip.svelte';
+	import Icon from './Icon.svelte';
 	import Markdown from './Markdown.svelte';
 	import ToolRow from './ToolRow.svelte';
 	import TraceIndex from './TraceIndex.svelte';
@@ -46,6 +48,7 @@
 	let toolOpen = $state<Record<string, boolean>>({});
 	let loadingMore = $state(false);
 	let filter = $state<StreamFilter>('all');
+	let expandedUsers = $state<Record<string, boolean>>({});
 
 	let sessionKey = $derived(`${trace.id}:${revision}`);
 	let session = $derived(extraKey === sessionKey ? (extra ?? initial) : initial);
@@ -155,6 +158,12 @@
 		return childCards(entry, undefined, undefined, children);
 	}
 
+	function userPromptLength(entries: TranscriptEntry[]) {
+		return entries
+			.flatMap((entry) => entry.message?.content ?? [])
+			.reduce((total, block) => total + (block.type === 'text' ? block.text.length : 0), 0);
+	}
+
 	function shouldRenderResult(entry: TranscriptEntry) {
 		const id = entry.message?.toolCallId;
 		return !id || !visible.some((item) => item.message?.content?.some((block) => block.type === 'toolCall' && block.id === id));
@@ -185,6 +194,112 @@
 		{:else if session.hasMore}
 			<p class="status" role="status">{session.status}</p>
 		{/if}
+		{#snippet entryBlocks(entry: TranscriptEntry)}
+			{@const message = entry.message}
+			{#if message?.role === 'toolResult'}
+				{#if shouldRenderResult(entry)}
+					<ToolRow
+						call={{ type: 'toolCall', id: message.toolCallId || entry.id, name: message.toolName || 'Unpaired tool result', arguments: {} }}
+						result={entry}
+						{entry}
+						{children}
+						open={toolIsOpen(message.toolCallId || entry.id)}
+						onToggle={(open) => (toolOpen[message.toolCallId || entry.id] = open)}
+					/>
+				{/if}
+			{:else if message && isToolOnlyMessage(entry)}
+				<div class="block" id="entry-{entry.id}">
+					{#each incomingCards(entry) as child (child.id)}
+						<ChildCard {child} />
+					{/each}
+					{#each message.content as block, index (`${entry.id}:${index}:${block.type}`)}
+						{#if block.type === 'toolCall'}
+							<ToolRow
+								call={block}
+								result={results.get(block.id)}
+								{entry}
+								{children}
+								open={toolIsOpen(block.id)}
+								onToggle={(open) => (toolOpen[block.id] = open)}
+							/>
+						{/if}
+					{/each}
+				</div>
+			{:else if message}
+				<article class="block" id="entry-{entry.id}">
+					{#if message.nativeDetails?.message_meta?.fromAutomation}
+						<p class="note">Automation message</p>
+					{/if}
+					{#each incomingCards(entry) as child (child.id)}
+						<ChildCard {child} />
+					{/each}
+					{#each message.content as block, index (`${entry.id}:${index}:${block.type}`)}
+						{#if block.type === 'text'}
+							{@const skill = message.role === 'user' ? parseSkillBlock(block.text) : null}
+							{#if skill}
+								<ExpandChip icon="sparkles" verb="Skill" rest={skill.name}>
+									<Markdown text={skill.content} />
+								</ExpandChip>
+								{#if skill.userMessage}
+									<Markdown text={skill.userMessage} />
+								{/if}
+							{:else}
+								<Markdown text={block.text} />
+							{/if}
+						{:else if block.type === 'hidden'}
+							<ExpandChip icon="compaction" verb="Hidden context">
+								<pre>{block.text}</pre>
+							</ExpandChip>
+						{:else if block.type === 'thinking'}
+							{@const thinkKey = `${entry.id}:${index}`}
+							<ExpandChip
+								icon="brain"
+								verb="Thought"
+								open={thinkingIsOpen(thinkKey)}
+								onToggle={(next) => {
+									if (next !== thinkingIsOpen(thinkKey)) thinkingOpen[thinkKey] = next;
+								}}
+							>
+								<div class="think">{block.thinking || 'Reasoning text not included in export.'}</div>
+							</ExpandChip>
+						{:else if block.type === 'attachment'}
+							<AttachmentBlock attachment={block} />
+						{:else if block.type === 'toolCall'}
+							<ToolRow
+								call={block}
+								result={results.get(block.id)}
+								{entry}
+								{children}
+								open={toolIsOpen(block.id)}
+								onToggle={(open) => (toolOpen[block.id] = open)}
+							/>
+						{/if}
+					{/each}
+					{#if message.stopReason && !['stop', 'toolUse', 'complete'].includes(message.stopReason)}
+						<p class="note error">Recorded response state: {message.stopReason}</p>
+					{/if}
+				</article>
+			{:else if entry.type === 'model_change'}
+				<p class="note" id="entry-{entry.id}">Model · {[entry.provider, entry.modelId].filter(Boolean).join('/')}</p>
+			{:else if entry.type === 'thinking_level_change'}
+				<p class="note" id="entry-{entry.id}">Thinking level · {entry.thinkingLevel}</p>
+			{:else if entry.type === 'compaction' || entry.type === 'branch_summary'}
+				<div id="entry-{entry.id}">
+					<ExpandChip icon={entry.type === 'compaction' ? 'compaction' : 'branch'} verb={entry.type === 'compaction' ? 'Compaction' : 'Branch summary'}>
+						<Markdown text={entry.summary || ''} />
+					</ExpandChip>
+				</div>
+			{:else if entry.type === 'custom_message'}
+				<section class="note" id="entry-{entry.id}">
+					<strong>{entry.customType === 'unknown' ? 'Unsupported · ' : ''}{entry.sources?.[0]?.details?.native_type || entry.customType}</strong>
+					{#if entry.customType === 'unknown'}
+						<pre>{entry.content}</pre>
+					{:else}
+						<Markdown text={entry.content || ''} />
+					{/if}
+				</section>
+			{/if}
+		{/snippet}
 		<div class="body">
 			<TraceIndex
 				{counts}
@@ -199,114 +314,20 @@
 						<button class="page" type="button" onclick={() => (pageStart = Math.max(0, windowed.from - 200))}>Earlier loaded messages</button>
 					{/if}
 					{#each turns as turn (turn.id)}
-						<section class="turn">
-							{#each turn.entries as entry (entry.id)}
-								{@const message = entry.message}
-								{#if message?.role === 'toolResult'}
-									{#if shouldRenderResult(entry)}
-										<ToolRow
-											call={{ type: 'toolCall', id: message.toolCallId || entry.id, name: message.toolName || 'Unpaired tool result', arguments: {} }}
-											result={entry}
-											{entry}
-											{children}
-											open={toolIsOpen(message.toolCallId || entry.id)}
-											onToggle={(open) => (toolOpen[message.toolCallId || entry.id] = open)}
-										/>
-									{/if}
-								{:else if message && isToolOnlyMessage(entry)}
-									<div class={['block', entry.id === targetId && 'is-target']} id="entry-{entry.id}">
-										{#each incomingCards(entry) as child (child.id)}
-											<ChildCard {child} />
-										{/each}
-										{#each message.content as block, index (`${entry.id}:${index}:${block.type}`)}
-											{#if block.type === 'toolCall'}
-												<ToolRow
-													call={block}
-													result={results.get(block.id)}
-													{entry}
-													{children}
-													open={toolIsOpen(block.id)}
-													onToggle={(open) => (toolOpen[block.id] = open)}
-												/>
-											{/if}
-										{/each}
-									</div>
-								{:else if message}
-									<article class={['block', message.role === 'user' && 'is-user', entry.id === targetId && 'is-target']} id="entry-{entry.id}">
-										{#if message.nativeDetails?.message_meta?.fromAutomation}
-											<p class="note">Automation message</p>
-										{/if}
-										{#each incomingCards(entry) as child (child.id)}
-											<ChildCard {child} />
-										{/each}
-										{#each message.content as block, index (`${entry.id}:${index}:${block.type}`)}
-											{#if block.type === 'text'}
-												{@const skill = message.role === 'user' ? parseSkillBlock(block.text) : null}
-												{#if skill}
-													<details>
-														<summary>Skill: {skill.name}</summary>
-														<Markdown text={skill.content} />
-													</details>
-													{#if skill.userMessage}
-														<Markdown text={skill.userMessage} />
-													{/if}
-												{:else}
-													<Markdown text={block.text} />
-												{/if}
-											{:else if block.type === 'hidden'}
-												<details>
-													<summary>Hidden context</summary>
-													<pre>{block.text}</pre>
-												</details>
-											{:else if block.type === 'thinking'}
-												{@const thinkKey = `${entry.id}:${index}`}
-												<details
-													class="thought"
-													bind:open={() => thinkingIsOpen(thinkKey),
-														(next) => {
-															if (next !== thinkingIsOpen(thinkKey)) thinkingOpen[thinkKey] = next;
-														}}
-												>
-													<summary>Thought</summary>
-													<div class="think">{block.thinking || 'Reasoning text not included in export.'}</div>
-												</details>
-											{:else if block.type === 'attachment'}
-												<AttachmentBlock attachment={block} />
-											{:else if block.type === 'toolCall'}
-												<ToolRow
-													call={block}
-													result={results.get(block.id)}
-													{entry}
-													{children}
-													open={toolIsOpen(block.id)}
-													onToggle={(open) => (toolOpen[block.id] = open)}
-												/>
-											{/if}
-										{/each}
-										{#if message.stopReason && !['stop', 'toolUse', 'complete'].includes(message.stopReason)}
-											<p class="note error">Recorded response state: {message.stopReason}</p>
-										{/if}
-									</article>
-								{:else if entry.type === 'model_change'}
-									<p class="note" id="entry-{entry.id}">Model · {[entry.provider, entry.modelId].filter(Boolean).join('/')}</p>
-								{:else if entry.type === 'thinking_level_change'}
-									<p class="note" id="entry-{entry.id}">Thinking level · {entry.thinkingLevel}</p>
-								{:else if entry.type === 'compaction' || entry.type === 'branch_summary'}
-									<details class="thought" id="entry-{entry.id}">
-										<summary>{entry.type === 'compaction' ? 'Compaction' : 'Branch summary'}</summary>
-										<Markdown text={entry.summary || ''} />
-									</details>
-								{:else if entry.type === 'custom_message'}
-									<section class="note" id="entry-{entry.id}">
-										<strong>{entry.customType === 'unknown' ? 'Unsupported · ' : ''}{entry.sources?.[0]?.details?.native_type || entry.customType}</strong>
-										{#if entry.customType === 'unknown'}
-											<pre>{entry.content}</pre>
-										{:else}
-											<Markdown text={entry.content || ''} />
-										{/if}
-									</section>
+						<section class={['turn', `is-${turn.role}`, turn.entries.some((entry) => entry.id === targetId) && 'is-target']}>
+							<div class="avatar" aria-hidden="true">
+								<Icon name={turn.role === 'user' ? 'user' : 'agent'} size={12} />
+							</div>
+							<div class={['turn-body', turn.role === 'user' && 'bubble']}>
+								<div class={['clamp', turn.role === 'user' && userPromptLength(turn.entries) > 700 && !expandedUsers[turn.id] && 'is-clamped']}>
+									{#each turn.entries as entry (entry.id)}
+										{@render entryBlocks(entry)}
+									{/each}
+								</div>
+								{#if turn.role === 'user' && userPromptLength(turn.entries) > 700 && !expandedUsers[turn.id]}
+									<button class="more" type="button" onclick={() => (expandedUsers[turn.id] = true)}>Show more</button>
 								{/if}
-							{/each}
+							</div>
 						</section>
 					{/each}
 					{#each leftover as child (child.native_trace_id)}
@@ -362,43 +383,82 @@
 	}
 
 	.turn {
+		position: relative;
 		max-width: 76ch;
-		padding: 0.25rem 0 0.45rem;
+		margin: 0 0 1.35rem;
+		padding: 0 0 0 2.15rem;
 	}
 
-	.turn + .turn {
-		margin-top: 0.55rem;
+	.turn.is-assistant {
+		margin-bottom: 1.5rem;
+	}
+
+	.turn.is-target .turn-body {
+		outline: 1px solid color-mix(in oklch, var(--primary) 45%, transparent);
+		outline-offset: 3px;
+	}
+
+	.avatar {
+		position: absolute;
+		top: 0.2rem;
+		left: 0;
+		display: flex;
+		width: 18px;
+		height: 18px;
+		align-items: center;
+		justify-content: center;
+		border-radius: 999px;
+		background: #1c1c1c;
+		box-shadow: inset 0 0 0 1px rgb(255 255 255 / 14%);
+		color: var(--muted-foreground);
+	}
+
+	.turn.is-user .avatar {
+		background: #2a2a2a;
+		color: #d4d4d4;
+	}
+
+	.turn-body {
+		min-width: 0;
+	}
+
+	.bubble {
+		padding: 0.4rem 0.65rem;
+		border-radius: 10px;
+		background: #242424;
+		box-shadow:
+			0 0 0 1px rgb(255 255 255 / 7%),
+			0 1px 3px rgb(0 0 0 / 35%);
+	}
+
+	.clamp.is-clamped {
+		max-height: 15rem;
+		overflow: hidden;
+		mask-image: linear-gradient(to bottom, #000 70%, transparent);
+	}
+
+	.more {
+		margin: 0.35rem 0 0.1rem;
+		border: 0;
+		background: transparent;
+		color: var(--muted-foreground);
+		padding: 0;
+		font-size: 12px;
+		cursor: pointer;
+	}
+
+	.more:hover,
+	.more:focus-visible {
+		color: var(--foreground);
 	}
 
 	.block {
-		padding: 0.15rem 0 0.25rem;
+		padding: 0.05rem 0;
 	}
 
-	.block.is-user {
-		margin: 0.35rem 0 0.75rem;
-		padding: 0.85rem 1rem;
-		border: 1px solid var(--border);
-		border-radius: calc(var(--radius) + 2px);
-		background: color-mix(in oklch, var(--card) 92%, white);
-	}
-
-	.block.is-target {
-		outline: 1px solid color-mix(in oklch, var(--primary) 45%, transparent);
-	}
-
-	.note,
-	.thought,
-	details {
+	.note {
 		margin: 0.3rem 0;
 		color: var(--muted-foreground);
-		font-size: 12px;
-	}
-
-	.thought summary,
-	details > summary {
-		cursor: pointer;
-		color: var(--muted-foreground);
-		font-family: var(--font-mono);
 		font-size: 12px;
 	}
 

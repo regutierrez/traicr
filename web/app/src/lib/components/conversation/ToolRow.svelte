@@ -10,11 +10,12 @@
 		requestedEdit,
 		resultFiles,
 		resultText,
-		toolChipLabel,
+		toolChipParts,
 		toolCommand,
 		toolPath,
 		toolStatus
 	} from '$lib/transcript/tools';
+	import ExpandChip from './ExpandChip.svelte';
 	import type { ToolCallBlock, TranscriptEntry } from '$lib/transcript/types';
 	import type { TraceRef } from '$lib/types';
 
@@ -35,7 +36,8 @@
 	} = $props();
 
 	let status = $derived(toolStatus(call, result));
-	let summary = $derived(toolChipLabel(call));
+	let chip = $derived(toolChipParts(call));
+	let statusLabel = $derived(status !== 'unknown' && status !== 'done' ? status : '');
 	let args = $derived(call.arguments || {});
 	let command = $derived(toolCommand(args));
 	let path = $derived(toolPath(args));
@@ -51,17 +53,14 @@
 </script>
 
 <div class={['tool', result?.message?.isError && 'is-error']} id="tool-call-{call.id}">
-	<details
-		bind:open={() => open, (value) => {
-			if (value !== open) onToggle?.(value);
-		}}
+	<ExpandChip
+		icon={chip.icon}
+		verb={chip.verb}
+		rest={chip.rest}
+		status={statusLabel}
+		{open}
+		{onToggle}
 	>
-		<summary>
-			<span class="name">{summary}</span>
-			{#if status !== 'unknown' && status !== 'done'}
-				<span class="status">{status}</span>
-			{/if}
-		</summary>
 		{#if isShellTool(call.name) && command}
 			<pre class="command">$ {command}</pre>
 			{#if typeof args.workdir === 'string' && args.workdir}
@@ -131,7 +130,7 @@
 				</details>
 			{/if}
 		{/if}
-	</details>
+	</ExpandChip>
 	{#each cards as child (child.id)}
 		<ChildCard {child} />
 	{/each}
@@ -139,39 +138,14 @@
 
 <style>
 	.tool {
-		margin: 0.35rem 0;
+		margin: 0.2rem 0;
 	}
 
-	summary {
-		display: flex;
-		align-items: baseline;
-		justify-content: space-between;
-		gap: 0.75rem;
-		cursor: pointer;
-		padding: 0.28rem 0;
-		color: var(--muted-foreground);
-		font-family: var(--font-mono);
-		font-size: 12px;
-		list-style: none;
-	}
-
-	summary::-webkit-details-marker {
-		display: none;
-	}
-
-	.name {
-		overflow: hidden;
-		color: var(--foreground);
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-
-	.status {
-		flex-shrink: 0;
+	.tool :global(.status) {
 		font-size: 11px;
 	}
 
-	.is-error .status {
+	.is-error :global(.status) {
 		color: var(--destructive);
 	}
 

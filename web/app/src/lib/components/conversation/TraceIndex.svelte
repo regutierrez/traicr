@@ -1,5 +1,8 @@
 <script lang="ts">
 	import type { StreamCounts, StreamFilter } from '$lib/transcript/turns';
+	import type { ChipIcon } from '$lib/transcript/tools';
+	import { toolKindIcon } from '$lib/transcript/tools';
+	import Icon from './Icon.svelte';
 
 	let {
 		counts,
@@ -17,13 +20,13 @@
 		onSelectLeaf?: (id: string) => void;
 	} = $props();
 
-	const rows: { id: StreamFilter; label: string; count: () => number }[] = [
-		{ id: 'prompts', label: 'Prompts', count: () => counts.prompts },
-		{ id: 'responses', label: 'Agent Responses', count: () => counts.responses },
-		{ id: 'thinking', label: 'Thinking', count: () => counts.thinking },
-		{ id: 'tools', label: 'Tool Calls', count: () => counts.tools },
-		{ id: 'compaction', label: 'Compaction', count: () => counts.compaction },
-		{ id: 'branches', label: 'Branches', count: () => counts.branches }
+	const rows: { id: StreamFilter; label: string; icon: ChipIcon; flip?: boolean; count: () => number }[] = [
+		{ id: 'prompts', label: 'Prompts', icon: 'prompt', flip: true, count: () => counts.prompts },
+		{ id: 'responses', label: 'Agent Responses', icon: 'response', count: () => counts.responses },
+		{ id: 'thinking', label: 'Thinking', icon: 'brain', count: () => counts.thinking },
+		{ id: 'tools', label: 'Tool Calls', icon: 'wrench', count: () => counts.tools },
+		{ id: 'compaction', label: 'Compaction', icon: 'compaction', count: () => counts.compaction },
+		{ id: 'branches', label: 'Branches', icon: 'branch', count: () => counts.branches }
 	];
 </script>
 
@@ -32,14 +35,20 @@
 		{#each rows as row (row.id)}
 			<li>
 				<button type="button" class={['row', filter === row.id && 'is-current']} onclick={() => onFilter(filter === row.id ? 'all' : row.id)}>
-					<span>{row.label}</span>
+					<span class="label">
+						<Icon name={row.icon} size={14} flip={row.flip} />
+						<span>{row.label}</span>
+					</span>
 					<span class="count">{row.count()}</span>
 				</button>
 				{#if row.id === 'tools' && counts.toolKinds.length}
 					<ul class="kinds">
 						{#each counts.toolKinds as kind (kind.kind)}
 							<li>
-								<span>{kind.label}</span>
+								<span class="label">
+									<Icon name={toolKindIcon[kind.kind]} size={14} />
+									<span>{kind.label}</span>
+								</span>
 								<span class="count">{kind.count}</span>
 							</li>
 						{/each}
@@ -67,7 +76,7 @@
 
 <style>
 	.index {
-		width: 13.5rem;
+		width: 14.5rem;
 		flex-shrink: 0;
 		overflow: auto;
 		padding: 0.85rem 0.75rem 1.5rem;
@@ -98,6 +107,13 @@
 		cursor: pointer;
 	}
 
+	.label {
+		display: inline-flex;
+		min-width: 0;
+		align-items: center;
+		gap: 0.45rem;
+	}
+
 	.row:hover,
 	.row:focus-visible,
 	.row.is-current,
@@ -115,7 +131,7 @@
 	}
 
 	.kinds {
-		padding: 0.1rem 0 0.35rem 0.85rem;
+		padding: 0.1rem 0 0.35rem 1.65rem;
 		color: var(--muted-foreground);
 		font-size: 11px;
 	}

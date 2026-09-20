@@ -16,6 +16,17 @@ export {
 	visibleToolCalls
 } from './turns';
 export type { StreamCounts, StreamFilter } from './turns';
-export { requestedEdit, resultFiles, resultText, toolChipLabel, toolKind, toolStatus, toolSummary } from './tools';
+export {
+	requestedEdit,
+	resultFiles,
+	resultText,
+	toolChipIcon,
+	toolChipLabel,
+	toolChipParts,
+	toolKind,
+	toolKindIcon,
+	toolStatus,
+	toolSummary
+} from './tools';
 export type { ChildCard } from './children';
 export type { LoadedSession, TranscriptEntry, TranscriptSession, Turn } from './types';

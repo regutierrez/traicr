@@ -119,6 +119,49 @@ export function toolChipLabel(call: ToolCallBlock) {
 	return `Used ${usedToolName(call.name)}`;
 }
 
+export type ChipIcon =
+	| 'terminal'
+	| 'book'
+	| 'pen'
+	| 'file-plus'
+	| 'globe'
+	| 'wrench'
+	| 'brain'
+	| 'sparkles'
+	| 'thread'
+	| 'user'
+	| 'agent'
+	| 'prompt'
+	| 'response'
+	| 'compaction'
+	| 'branch'
+	| 'chevron';
+
+export const toolKindIcon: Record<ToolKind, ChipIcon> = {
+	read: 'book',
+	edit: 'pen',
+	write: 'file-plus',
+	exec: 'terminal',
+	web: 'book',
+	browser: 'wrench',
+	other: 'wrench'
+};
+
+export function toolChipIcon(call: ToolCallBlock): ChipIcon {
+	const name = call.name.toLowerCase();
+	if (name === 'skill') return 'sparkles';
+	if (name === 'create_thread' || name === 'send_message_to_thread') return 'thread';
+	return toolKindIcon[toolKind(call.name)];
+}
+
+export function toolChipParts(call: ToolCallBlock) {
+	const label = toolChipLabel(call);
+	const icon = toolChipIcon(call);
+	const match = label.match(/^(Ran|Read|Edit|Write|Used|Skill|Thread|Oracle|Browser)(?:\s+| · )?(.*)$/);
+	if (!match) return { verb: label, rest: '', icon };
+	return { verb: match[1], rest: match[2] ?? '', icon };
+}
+
 export function requestedEdit(args: Record<string, unknown>): DiffLine[] {
 	const before = args.oldText ?? args.old_string;
 	const after = args.newText ?? args.new_string;

@@ -23,9 +23,11 @@ Every harness uses the same Conversation chrome: a contents index plus a
 linear stream. The index always lists Prompts, Agent Responses, Thinking, Tool
 Calls (with a kind breakdown when tools exist), Compaction, and Branches —
 including zeros. The stream is always the selected path. User messages are
-cards; assistant text is prose; thinking is a Thought chip; tools are quiet
-chips with traces.com labels (`Read file`, `Ran command`, `Edit file`). Clicking
-an index row filters that stream. It does not swap in a second layout.
+cards with a small avatar; assistant turns use the same avatar column and
+unfilled prose; thinking is a Thought chip with a brain icon; tools are quiet
+chips with traces.com labels and icons (`Ran command`, `Read file`, `Used`
+leftovers). Clicking an index row filters that stream. It does not swap in a
+second layout.
 
 Forks do not grow a tree pane. Branches stay in the index: the count comes
 from the parent graph, and choosing Branches lists leaf paths so a different
