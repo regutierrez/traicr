@@ -1,8 +1,57 @@
 @import 'tailwindcss';
-@import '@fontsource/inter/latin-400.css';
-@import '@fontsource/inter/latin-500.css';
-@import '@fontsource/inter/latin-600.css';
-@import '@fontsource/ibm-plex-mono/latin-400.css';
+
+/*
+ * Iosevka 34.8.1 (https://typeof.net/Iosevka/), SIL OFL.
+ * Aile is the quasi-proportional face for the UI. Iosevka is the monospace face for code.
+ * Files in src/fonts are a Latin subset so the page does not download the full family.
+ */
+@font-face {
+	font-family: 'Iosevka Aile';
+	font-style: normal;
+	font-weight: 400;
+	font-display: swap;
+	src: url('../fonts/iosevka-aile-400.woff2') format('woff2');
+}
+
+@font-face {
+	font-family: 'Iosevka Aile';
+	font-style: normal;
+	font-weight: 500;
+	font-display: swap;
+	src: url('../fonts/iosevka-aile-500.woff2') format('woff2');
+}
+
+@font-face {
+	font-family: 'Iosevka Aile';
+	font-style: normal;
+	font-weight: 600;
+	font-display: swap;
+	src: url('../fonts/iosevka-aile-600.woff2') format('woff2');
+}
+
+@font-face {
+	font-family: Iosevka;
+	font-style: normal;
+	font-weight: 400;
+	font-display: swap;
+	src: url('../fonts/iosevka-400.woff2') format('woff2');
+}
+
+@font-face {
+	font-family: Iosevka;
+	font-style: normal;
+	font-weight: 500;
+	font-display: swap;
+	src: url('../fonts/iosevka-500.woff2') format('woff2');
+}
+
+@font-face {
+	font-family: Iosevka;
+	font-style: normal;
+	font-weight: 600;
+	font-display: swap;
+	src: url('../fonts/iosevka-600.woff2') format('woff2');
+}
 
 @custom-variant dark (&:is(.dark *));
 
@@ -40,8 +89,8 @@
 	--sidebar-border: #e3e3e3;
 	--sidebar-ring: #171717;
 	--contour: 0 0 0 1px rgb(0 0 0 / 10%), 0 1px 3px rgb(0 0 0 / 10%), 0 1px 2px -1px rgb(0 0 0 / 10%);
-	--font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
-	--font-mono: 'IBM Plex Mono', ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Consolas, monospace;
+	--font-sans: 'Iosevka Aile', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+	--font-mono: 'Iosevka', ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Consolas, monospace;
 }
 
 @theme inline {
