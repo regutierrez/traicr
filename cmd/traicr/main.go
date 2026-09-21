@@ -118,7 +118,7 @@ func runCollect(ctx context.Context, args []string, stdout, stderr io.Writer) er
 	if flags.NArg() != 0 || output == "" {
 		return errors.New(collectUsage)
 	}
-	cfg, _, err := config.LoadCollector()
+	cfg, configPath, err := config.LoadCollector()
 	if err != nil {
 		return err
 	}
@@ -137,6 +137,7 @@ func runCollect(ctx context.Context, args []string, stdout, stderr io.Writer) er
 		All:       all,
 		Version:   version.CurrentBuildInfo().Version,
 		Progress:  printer.report,
+		ConfigDir: filepath.Dir(configPath),
 	})
 	printer.finish()
 	if err != nil {

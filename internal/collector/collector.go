@@ -22,6 +22,8 @@ type CollectOptions struct {
 	All       bool
 	Version   string
 	Progress  CollectProgress
+	// ConfigDir holds source stamps next to collector.json. Empty disables stamp skip.
+	ConfigDir string
 }
 
 // Progress describes one step of a collection. Phases per harness are
@@ -94,6 +96,21 @@ func Collect(ctx context.Context, cfg config.Collector, options CollectOptions) 
 	}
 	found := map[string]bool{}
 	collected := map[string]bool{}
+	stamps, err := config.LoadSourceStamps(options.ConfigDir)
+	if err != nil {
+		return Collection{}, err
+	}
+	skip := func(source, stamp string) bool {
+		if options.All || options.ConfigDir == "" {
+			return false
+		}
+		record, ok := stamps[source]
+		if !ok || record.Stamp != stamp || record.Digest == "" {
+			return false
+		}
+		acknowledged := cfg.State[StateKey(record.Harness, record.NativeID)]
+		return acknowledged.MachineID == cfg.MachineID && acknowledged.Digest == record.Digest
+	}
 	for _, adapter := range adapters.All() {
 		if !selected[adapter.Name()] {
 			continue
@@ -103,7 +120,7 @@ func Collect(ctx context.Context, cfg config.Collector, options CollectOptions) 
 		progress(Progress{Phase: "collecting", Harness: harness})
 		result, err := adapter.Collect(ctx, configured[harness], func(completed, total int) {
 			progress(Progress{Phase: "collecting", Harness: harness, Completed: completed, Total: total})
-		})
+		}, skip)
 		if err != nil {
 			return Collection{}, fmt.Errorf("collect %s: %w", adapter.Name(), err)
 		}
@@ -118,6 +135,9 @@ func Collect(ctx context.Context, cfg config.Collector, options CollectOptions) 
 			if err != nil {
 				warnings = append(warnings, domain.Warning{Code: "snapshot_failed", Message: adapter.Name() + " " + input.Descriptor.NativeTraceID + ": " + err.Error()})
 				continue
+			}
+			if input.Source != "" && input.Stamp != "" && options.ConfigDir != "" {
+				stamps[input.Source] = config.SourceStamp{Stamp: input.Stamp, Digest: descriptor.RevisionDigest, Harness: descriptor.Harness, NativeID: descriptor.NativeTraceID}
 			}
 			key := StateKey(descriptor.Harness, descriptor.NativeTraceID)
 			// Archives with two descriptors for one trace fail validation, so keep the first.
@@ -134,7 +154,13 @@ func Collect(ctx context.Context, cfg config.Collector, options CollectOptions) 
 			inputs = append(inputs, input)
 			kept++
 		}
-		progress(Progress{Phase: "collected", Harness: harness, Completed: kept, Total: len(result.Inputs)})
+		if options.ConfigDir != "" {
+			if err := config.SaveSourceStamps(options.ConfigDir, stamps); err != nil {
+				warnings = append(warnings, domain.Warning{Code: "stamp_persist_failed", Message: err.Error()})
+			}
+		}
+		gathered := len(result.Inputs) + result.Skipped
+		progress(Progress{Phase: "collected", Harness: harness, Completed: kept, Total: gathered})
 	}
 	for harness := range selected {
 		if !found[harness] {

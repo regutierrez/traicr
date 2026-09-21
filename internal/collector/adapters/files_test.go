@@ -10,6 +10,49 @@ import (
 	"time"
 )
 
+func TestSourceStampIncludesCompanionJSON(t *testing.T) {
+	dir := t.TempDir()
+	session := filepath.Join(dir, "session.jsonl")
+	companion := filepath.Join(dir, "session.json")
+	writeTestFile(t, session, "{\"id\":\"session\"}\n")
+	writeTestFile(t, companion, "{\"title\":\"old\"}")
+	adapter := jsonlAdapter{name: "cursor-agent", companionJSON: true}
+	before, err := sourceStamp(jsonlSourceFiles(adapter, session))
+	if err != nil || before == "" {
+		t.Fatalf("stamp: %q %v", before, err)
+	}
+	writeTestFile(t, companion, "{\"title\":\"new\"}")
+	after, err := sourceStamp(jsonlSourceFiles(adapter, session))
+	if err != nil || after == before {
+		t.Fatalf("companion change was invisible: %q %q %v", before, after, err)
+	}
+}
+
+func TestJSONLCollectHonorsSkipWithoutOpeningSource(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "session.jsonl")
+	writeTestFile(t, path, "{\"type\":\"session\",\"version\":3,\"id\":\"stable-id\"}\n")
+	if err := os.Chmod(path, 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(path, 0o600) })
+	adapter := jsonlAdapter{name: "pi", format: "pi-jsonl", defaultRoots: func() []string { return nil }}
+	result, err := adapter.Collect(context.Background(), []string{path}, nil, func(source, stamp string) bool {
+		if source == "" || stamp == "" {
+			t.Fatalf("skip missing source identity: %q %q", source, stamp)
+		}
+		return true
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Cleanup != nil {
+		defer result.Cleanup()
+	}
+	if len(result.Inputs) != 0 || result.Skipped != 1 || len(result.Warnings) != 0 {
+		t.Fatalf("skip re-opened the source: %+v", result)
+	}
+}
+
 func TestJSONLMetadataUsesHarnessIdentityAndExplicitParents(t *testing.T) {
 	dir := t.TempDir()
 	claude := filepath.Join(dir, "claude-fallback.jsonl")
@@ -73,7 +116,7 @@ func TestClaudeCodeCollectUsesLatestTitleAndLaterWorkingDirectory(t *testing.T) 
 				`{"type":"assistant","uuid":"a1","sessionId":"claude-session","cwd":"/home/pael/project","message":{"role":"assistant","content":[{"type":"text","text":"done"}]}}` + "\n"
 			writeTestFile(t, path, content)
 			adapter := jsonlAdapter{name: "claude-code", format: "claude-code-jsonl", defaultRoots: func() []string { return nil }}
-			result, err := adapter.Collect(context.Background(), []string{path}, nil)
+			result, err := adapter.Collect(context.Background(), []string{path}, nil, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -111,7 +154,7 @@ func TestPiCollectUsesLatestSessionName(t *testing.T) {
 			content := "{\"type\":\"session\",\"version\":3,\"id\":\"stable-id\"}\n" + test.records
 			writeTestFile(t, path, content)
 			adapter := jsonlAdapter{name: "pi", format: "pi-jsonl", defaultRoots: func() []string { return nil }}
-			result, err := adapter.Collect(context.Background(), []string{path}, nil)
+			result, err := adapter.Collect(context.Background(), []string{path}, nil, nil)
 			if err != nil {
 				t.Fatal(err)
 			}

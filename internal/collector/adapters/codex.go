@@ -39,7 +39,7 @@ func (codexAdapter) Discover(ctx context.Context, configured []string) Source {
 	return Source{Harness: "codex", Location: strings.Join(chooseRoots(configured, codexRoots()), string(os.PathListSeparator)), Traces: len(files), Warnings: warnings}
 }
 
-func (codexAdapter) Collect(ctx context.Context, configured []string, progress Progress) (Result, error) {
+func (codexAdapter) Collect(ctx context.Context, configured []string, progress Progress, skip SkipUnchanged) (Result, error) {
 	if len(configured) == 0 {
 		client, err := startCodex(ctx)
 		if err == nil {
@@ -51,7 +51,7 @@ func (codexAdapter) Collect(ctx context.Context, configured []string, progress P
 		}
 	}
 	fallback := jsonlAdapter{name: "codex", format: "codex-rollout-jsonl", defaultRoots: codexRoots}
-	result, err := fallback.Collect(ctx, configured, progress)
+	result, err := fallback.Collect(ctx, configured, progress, skip)
 	result.Warnings = append(result.Warnings, warning("compatibility_fallback", "preserved raw Codex rollout files because the read-only app-server protocol was unavailable"))
 	return result, err
 }

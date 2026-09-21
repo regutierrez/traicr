@@ -13,6 +13,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/regutierrez/traicr/internal/archive"
@@ -20,10 +22,11 @@ import (
 )
 
 const (
-	commandTimeout = 30 * time.Second
-	listLimit      = 500
-	maxListBytes   = 32 << 20
-	maxExportBytes = 512 << 20
+	commandTimeout     = 30 * time.Second
+	commandConcurrency = 8
+	listLimit          = 500
+	maxListBytes       = 32 << 20
+	maxExportBytes     = 512 << 20
 )
 
 type commandAdapter struct {
@@ -48,75 +51,151 @@ func (a commandAdapter) Discover(ctx context.Context, _ []string) Source {
 	return Source{Harness: a.name, Location: a.executable + " CLI", Traces: len(traces), Warnings: warnings}
 }
 
-func (a commandAdapter) Collect(ctx context.Context, _ []string, progress Progress) (Result, error) {
+func (a commandAdapter) Collect(ctx context.Context, _ []string, progress Progress, _ SkipUnchanged) (Result, error) {
 	traces, warnings := a.list(ctx)
 	base, err := os.MkdirTemp("", "traicr-"+a.name+"-*")
 	if err != nil {
 		return Result{}, err
 	}
 	result := Result{Warnings: warnings, Cleanup: func() { os.RemoveAll(base) }}
+	if len(traces) == 0 {
+		return result, nil
+	}
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	slots := make(chan struct{}, commandConcurrency)
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	var fatal error
+	inputs := make([]archive.Input, len(traces))
+	kept := make([]bool, len(traces))
+	var done atomic.Int64
+	var progressMu sync.Mutex
+	report := func() {
+		n := int(done.Add(1))
+		progressMu.Lock()
+		progress.report(n, len(traces))
+		progressMu.Unlock()
+	}
+loop:
 	for index, trace := range traces {
-		progress.report(index+1, len(traces))
-		dir := filepath.Join(base, fmt.Sprintf("%06d", index+1))
-		if err := os.MkdirAll(filepath.Join(dir, "source"), 0o700); err != nil {
-			result.Cleanup()
-			return Result{}, err
-		}
-		path := filepath.Join(dir, "source", "export.json")
-		args := []string{"export", trace.ID}
-		if a.name == "amp" {
-			args = []string{"threads", "export", trace.ID}
-		}
-		if err := runToFile(ctx, a.executable, args, path, maxExportBytes); err != nil {
-			result.Warnings = append(result.Warnings, warning("export_failed", fmt.Sprintf("%s %s: %v", a.name, trace.ID, err)))
-			os.RemoveAll(dir)
-			continue
-		}
-		exported, inspectErr := inspectCommandExport(a.name, path, trace.ID)
-		if inspectErr != nil {
-			result.Warnings = append(result.Warnings, warning("unknown_schema", fmt.Sprintf("%s %s export has an unsupported schema; bytes were preserved: %v", a.name, trace.ID, inspectErr)))
-		} else {
-			if exported.Title != "" {
-				trace.Title = exported.Title
-			}
-			if exported.UpdatedAt != "" {
-				// Amp's list index lags the thread's own updatedAt by hours, so a mismatch
-				// there reflects server indexing, not an edit during collection.
-				if a.name != "amp" && trace.UpdatedAt != "" && trace.UpdatedAt != exported.UpdatedAt {
-					result.Warnings = append(result.Warnings, warning("live_source_changed", fmt.Sprintf("%s %s changed between listing and export", a.name, trace.ID)))
-				}
-				trace.UpdatedAt = exported.UpdatedAt
-			}
-			trace.ParentID = exported.ParentID
-			trace.CWD = exported.CWD
-			trace.Repository = exported.Repository
-		}
-		descriptor := domain.Descriptor{
-			Harness:             a.name,
-			Adapter:             a.format,
-			NativeTraceID:       trace.ID,
-			NativeUpdatedAt:     trace.UpdatedAt,
-			ParentNativeTraceID: trace.ParentID,
-			Title:               trace.Title,
-			WorkingDirectory:    trace.CWD,
-		}
-		if trace.Repository != (domain.Repository{}) {
-			descriptor.Repository = trace.Repository
-		} else if trace.CWD != "" {
-			root, remote := gitRepository(trace.CWD)
-			descriptor.Repository = domain.Repository{Root: root, Remote: remote}
-		}
-		if a.name == "amp" {
-			descriptor.Warnings = collectAmpImages(ctx, a.executable, dir)
-			result.Warnings = append(result.Warnings, descriptor.Warnings...)
-		}
 		if err := ctx.Err(); err != nil {
-			result.Cleanup()
-			return Result{}, err
+			mu.Lock()
+			if fatal == nil {
+				fatal = err
+			}
+			mu.Unlock()
+			break
 		}
-		result.Inputs = append(result.Inputs, archive.Input{Descriptor: descriptor, Directory: dir})
+		mu.Lock()
+		failed := fatal
+		mu.Unlock()
+		if failed != nil {
+			break
+		}
+		select {
+		case slots <- struct{}{}:
+		case <-ctx.Done():
+			mu.Lock()
+			if fatal == nil {
+				fatal = ctx.Err()
+			}
+			mu.Unlock()
+			break loop
+		}
+		wg.Add(1)
+		go func(index int, trace commandTrace) {
+			defer wg.Done()
+			defer func() { <-slots }()
+			input, extra, err := a.collectTrace(ctx, base, index, trace)
+			mu.Lock()
+			if err != nil {
+				if fatal == nil {
+					fatal = err
+					cancel()
+				}
+				mu.Unlock()
+				return
+			}
+			result.Warnings = append(result.Warnings, extra...)
+			if input != nil {
+				inputs[index] = *input
+				kept[index] = true
+			}
+			mu.Unlock()
+			report()
+		}(index, trace)
+	}
+	wg.Wait()
+	if fatal != nil {
+		result.Cleanup()
+		return Result{}, fatal
+	}
+	for index, keep := range kept {
+		if keep {
+			result.Inputs = append(result.Inputs, inputs[index])
+		}
 	}
 	return result, nil
+}
+
+func (a commandAdapter) collectTrace(ctx context.Context, base string, index int, trace commandTrace) (*archive.Input, []domain.Warning, error) {
+	dir := filepath.Join(base, fmt.Sprintf("%06d", index+1))
+	if err := os.MkdirAll(filepath.Join(dir, "source"), 0o700); err != nil {
+		return nil, nil, err
+	}
+	path := filepath.Join(dir, "source", "export.json")
+	args := []string{"export", trace.ID}
+	if a.name == "amp" {
+		args = []string{"threads", "export", trace.ID}
+	}
+	if err := runToFile(ctx, a.executable, args, path, maxExportBytes); err != nil {
+		os.RemoveAll(dir)
+		return nil, []domain.Warning{warning("export_failed", fmt.Sprintf("%s %s: %v", a.name, trace.ID, err))}, nil
+	}
+	var warnings []domain.Warning
+	exported, inspectErr := inspectCommandExport(a.name, path, trace.ID)
+	if inspectErr != nil {
+		warnings = append(warnings, warning("unknown_schema", fmt.Sprintf("%s %s export has an unsupported schema; bytes were preserved: %v", a.name, trace.ID, inspectErr)))
+	} else {
+		if exported.Title != "" {
+			trace.Title = exported.Title
+		}
+		if exported.UpdatedAt != "" {
+			// Amp's list index lags the thread's own updatedAt by hours, so a mismatch
+			// there reflects server indexing, not an edit during collection.
+			if a.name != "amp" && trace.UpdatedAt != "" && trace.UpdatedAt != exported.UpdatedAt {
+				warnings = append(warnings, warning("live_source_changed", fmt.Sprintf("%s %s changed between listing and export", a.name, trace.ID)))
+			}
+			trace.UpdatedAt = exported.UpdatedAt
+		}
+		trace.ParentID = exported.ParentID
+		trace.CWD = exported.CWD
+		trace.Repository = exported.Repository
+	}
+	descriptor := domain.Descriptor{
+		Harness:             a.name,
+		Adapter:             a.format,
+		NativeTraceID:       trace.ID,
+		NativeUpdatedAt:     trace.UpdatedAt,
+		ParentNativeTraceID: trace.ParentID,
+		Title:               trace.Title,
+		WorkingDirectory:    trace.CWD,
+	}
+	if trace.Repository != (domain.Repository{}) {
+		descriptor.Repository = trace.Repository
+	} else if trace.CWD != "" {
+		root, remote := gitRepository(trace.CWD)
+		descriptor.Repository = domain.Repository{Root: root, Remote: remote}
+	}
+	if a.name == "amp" {
+		descriptor.Warnings = collectAmpImages(ctx, a.executable, dir)
+		warnings = append(warnings, descriptor.Warnings...)
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, warnings, err
+	}
+	return &archive.Input{Descriptor: descriptor, Directory: dir}, warnings, nil
 }
 
 func (a commandAdapter) list(ctx context.Context) ([]commandTrace, []domain.Warning) {

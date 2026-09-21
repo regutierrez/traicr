@@ -22,6 +22,10 @@ import (
 type Input struct {
 	Descriptor domain.Descriptor
 	Directory  string
+	// Source and Stamp identify the local files this snapshot came from so
+	// a later collection can skip an unchanged file source. Empty for CLI exports.
+	Source string
+	Stamp  string
 }
 
 // Only source names and bytes define a revision, never collection time or machine.
