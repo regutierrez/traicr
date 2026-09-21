@@ -62,37 +62,24 @@
 		{onToggle}
 	>
 		{#if isShellTool(call.name) && command}
-			<pre class="command">> {command}</pre>
+			<pre class="block command"><span class="sig">&gt;</span> {command}</pre>
 			{#if typeof args.workdir === 'string' && args.workdir}
 				<p class="field">Working directory · {args.workdir}</p>
 			{/if}
 		{/if}
-		{#if isFileTool(call.name) && path}
+		{#if isFileTool(call.name) && (args.offset != null || args.limit != null)}
 			<p class="field">
-				File · {path}
-				{#if args.offset != null} · start {args.offset}{/if}
-				{#if args.limit != null} · limit {args.limit}{/if}
+				{#if args.offset != null}start {args.offset}{/if}
+				{#if args.offset != null && args.limit != null} · {/if}
+				{#if args.limit != null}limit {args.limit}{/if}
 			</p>
 		{/if}
-		{#if call.name === 'skill' && typeof args.name === 'string'}
-			<p class="field">Skill · {args.name}</p>
-		{/if}
 		{#if typeof args.content === 'string' && call.name.toLowerCase() === 'write'}
-			<details>
-				<summary>Requested content</summary>
-				<pre class="code"><code class="hljs">{@html highlightCode(args.content, languageForPath(path))}</code></pre>
-			</details>
+			<pre class="block code"><code class="hljs">{@html highlightCode(args.content, languageForPath(path))}</code></pre>
 		{/if}
 		{#if edit.length}
-			<details>
-				<summary>Requested edit</summary>
-				<pre class="diff">{#each edit as line, index (`${index}:${line.text}`)}<span class={line.kind}>{line.text + '\n'}</span>{/each}</pre>
-			</details>
+			<pre class="block diff">{#each edit as line, index (`${index}:${line.text}`)}<span class={line.kind}>{line.text + '\n'}</span>{/each}</pre>
 		{/if}
-		<details>
-			<summary>Arguments</summary>
-			<pre>{JSON.stringify(args, null, 2)}</pre>
-		</details>
 		{#if typeof payload?.pid === 'number'}
 			<p class="field">Process ID · {payload.pid}</p>
 		{/if}
@@ -101,34 +88,35 @@
 		{/if}
 		{#if result}
 			{#if output}
-				<details>
-					<summary>Tool output</summary>
-					{#if isShellTool(call.name) || isFileTool(call.name)}
-						<pre class="code"><code class="hljs">{@html highlightCode(output, highlightLanguage)}</code></pre>
-					{:else}
-						<Markdown text={output} />
-					{/if}
-				</details>
+				{#if isShellTool(call.name)}
+					<pre class="block terminal">{output}</pre>
+				{:else if isFileTool(call.name)}
+					<pre class="block terminal"><code class="hljs">{@html highlightCode(output, highlightLanguage)}</code></pre>
+				{:else}
+					<div class="prose"><Markdown text={output} /></div>
+				{/if}
 			{:else}
 				<p class="field">No text output recorded.</p>
 			{/if}
 			{#each files as file, index (`${file.label}:${index}`)}
-				<details>
-					<summary>{file.label}{#if file.additions != null || file.deletions != null} · +{file.additions ?? '?'} −{file.deletions ?? '?'}{/if}</summary>
-					{#if file.diff.length}
-						<pre class="diff">{#each file.diff as line, lineIndex (`${lineIndex}:${line.text}`)}<span class={line.kind}>{line.text + '\n'}</span>{/each}</pre>
-					{/if}
-				</details>
+				<p class="field">{file.label}{#if file.additions != null || file.deletions != null} · +{file.additions ?? '?'} −{file.deletions ?? '?'}{/if}</p>
+				{#if file.diff.length}
+					<pre class="block diff">{#each file.diff as line, lineIndex (`${lineIndex}:${line.text}`)}<span class={line.kind}>{line.text + '\n'}</span>{/each}</pre>
+				{/if}
 			{/each}
 			{#each attachments as attachment, index (`${attachment.path ?? attachment.url ?? index}`)}
 				<AttachmentBlock {attachment} />
 			{/each}
-			{#if payload && typeof payload === 'object'}
-				<details>
-					<summary>Structured result</summary>
-					<pre>{JSON.stringify(payload, null, 2)}</pre>
-				</details>
-			{/if}
+		{/if}
+		<details class="extra">
+			<summary>Arguments</summary>
+			<pre class="block">{JSON.stringify(args, null, 2)}</pre>
+		</details>
+		{#if payload && typeof payload === 'object'}
+			<details class="extra">
+				<summary>Structured result</summary>
+				<pre class="block">{JSON.stringify(payload, null, 2)}</pre>
+			</details>
 		{/if}
 	</ExpandChip>
 	{#each cards as child (child.id)}
@@ -156,25 +144,49 @@
 		font-size: 11px;
 	}
 
-	pre {
-		overflow-x: auto;
-		margin: 0.4rem 0;
-		padding: 0.55rem 0.65rem;
-		border: 1px solid var(--border);
-		border-radius: var(--radius);
-		background: #181818;
+	.block {
+		overflow: auto;
+		max-height: 16rem;
+		margin: 0.35rem 0;
+		padding: 6px 10px;
+		border: 1px solid rgb(0 0 0 / 11%);
+		border-radius: 8px;
+		background: var(--muted);
+		color: var(--muted-foreground);
 		font-family: var(--font-mono);
-		font-size: 12px;
+		font-size: 13px;
+		line-height: 20px;
 		white-space: pre-wrap;
 	}
 
 	.command {
-		color: #d4d4d4;
+		white-space: pre-wrap;
+	}
+
+	.sig {
+		margin-right: 0.45rem;
+	}
+
+	.extra {
+		margin: 0.15rem 0 0.35rem;
+	}
+
+	.extra summary {
+		width: fit-content;
+		color: var(--muted-foreground);
+		font-size: 12px;
+		cursor: pointer;
+	}
+
+	.prose {
+		margin: 0.35rem 0;
+		color: var(--muted-foreground);
+		font-size: 13px;
 	}
 
 	.diff {
 		display: grid;
-		padding: 0.4rem 0;
+		padding: 4px 0;
 	}
 
 	.diff span {
@@ -182,13 +194,13 @@
 	}
 
 	.added {
-		background: rgb(80 200 120 / 12%);
-		color: #89d185;
+		background: #e6f4ea;
+		color: #137333;
 	}
 
 	.removed {
-		background: rgb(241 76 76 / 12%);
-		color: #f14c4c;
+		background: #fce8e6;
+		color: #c5221f;
 	}
 
 	.hljs {

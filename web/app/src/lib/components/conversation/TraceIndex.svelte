@@ -43,7 +43,7 @@
 				</button>
 				{#if row.id === 'tools' && counts.toolKinds.length}
 					<ul class="kinds">
-						{#each counts.toolKinds as kind (kind.kind)}
+						{#each counts.toolKinds as kind (kind.id)}
 							<li>
 								<span class="label">
 									<Icon name={toolKindIcon[kind.kind]} size={14} />
@@ -76,12 +76,11 @@
 
 <style>
 	.index {
-		width: 14.5rem;
+		width: 268px;
 		flex-shrink: 0;
 		overflow: auto;
-		padding: 0.85rem 0.75rem 1.5rem;
-		border-right: 1px solid var(--border);
-		background: var(--sidebar);
+		padding: 1.25rem 1.5rem 2rem;
+		background: transparent;
 	}
 
 	ul {
@@ -99,12 +98,12 @@
 		justify-content: space-between;
 		gap: 0.75rem;
 		border: 0;
-		border-radius: 2px;
+		border-radius: 6px;
 		background: transparent;
 		color: var(--muted-foreground);
-		padding: 0 0.35rem;
+		padding: 0 0.4rem;
 		font: inherit;
-		font-size: 13px;
+		font-size: 14px;
 		font-weight: 500;
 		line-height: 20px;
 		text-align: left;
@@ -120,24 +119,29 @@
 
 	.row:hover,
 	.row:focus-visible,
-	.row.is-current,
 	.leaf:hover,
-	.leaf:focus-visible,
+	.leaf:focus-visible {
+		color: var(--foreground);
+	}
+
+	.row.is-current,
 	.leaf.is-current {
 		color: var(--foreground);
-		background: var(--sidebar-accent);
+		background: var(--card);
+		box-shadow: var(--contour);
 	}
 
 	.count {
-		font-family: var(--font-mono);
-		font-size: 11px;
+		color: color-mix(in srgb, var(--muted-foreground) 70%, transparent);
+		font-size: 12px;
+		font-weight: 500;
 		font-variant-numeric: tabular-nums;
 	}
 
 	.kinds {
-		padding: 0.1rem 0 0.35rem 1.65rem;
+		padding: 0.15rem 0 0.45rem 1.35rem;
 		color: var(--muted-foreground);
-		font-size: 11px;
+		font-size: 13px;
 	}
 
 	.kinds li {
@@ -155,9 +159,16 @@
 	@media (max-width: 899px) {
 		.index {
 			width: auto;
-			border-right: 0;
+			padding: 0.55rem 1rem;
 			border-bottom: 1px solid var(--border);
-			padding: 0.45rem 0.75rem;
+		}
+
+		.row {
+			width: auto;
+			height: 28px;
+			border-radius: 6px;
+			background: var(--muted);
+			font-size: 12px;
 		}
 
 		.index > ul {

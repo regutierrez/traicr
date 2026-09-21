@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { renderMarkdown } from '$lib/transcript/markdown';
-	import 'highlight.js/styles/github-dark.css';
+	import 'highlight.js/styles/github.css';
 
 	let { text = '' }: { text?: string } = $props();
 	let html = $derived(renderMarkdown(text));
@@ -32,13 +32,15 @@
 	}
 
 	.md :global(pre) {
-		overflow-x: auto;
-		padding: 0.7rem 0.8rem;
-		border: 1px solid var(--border);
-		border-radius: var(--radius);
-		background: #181818;
+		overflow: auto;
+		max-height: 24rem;
+		padding: 6px 10px;
+		border: 1px solid rgb(0 0 0 / 11%);
+		border-radius: 8px;
+		background: var(--muted);
 		font-family: var(--font-mono);
-		font-size: 12px;
+		font-size: 13px;
+		line-height: 20px;
 	}
 
 	.md :global(code) {
@@ -47,9 +49,11 @@
 	}
 
 	.md :global(:not(pre) > code) {
-		padding: 0.05rem 0.25rem;
+		padding: 1px 6px;
+		border: 1px solid rgb(0 0 0 / 11%);
 		border-radius: 3px;
-		background: var(--muted);
+		background: rgb(0 0 0 / 4%);
+		font-size: 13px;
 	}
 
 	.md :global(.hljs) {

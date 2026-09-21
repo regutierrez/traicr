@@ -12,8 +12,8 @@ uses a separate session-card query; API clients do not need to change.
 
 ## Viewer
 
-Conversation is native Svelte. It uses the same dark, Cursor-like tokens as the
-rest of the embedded app: a left-aligned turn column, collapsed thinking and
+Conversation is native Svelte. It uses the same light, traces.com-like tokens as
+the rest of the embedded app: a left-aligned turn column, collapsed thinking and
 tools, and client-side navigation through the existing rail. The vendored Pi
 export DOM is gone. Adapter logic that groups normalized blocks into turns,
 pairs tool results with their calls, and guards parent cycles lives in

@@ -5,6 +5,7 @@
 	import { Input } from '$lib/components/ui/input';
 	import { highlightParts } from '$lib/highlight';
 	import { withQuery } from '$lib/links';
+	import { dayGroup, relativeTime, repoLabel } from '$lib/time';
 	import { harnesses, type TranscriptCard } from '$lib/types';
 	import type { PageProps } from './$types';
 
@@ -21,6 +22,21 @@
 		params.set('cursor', cursor);
 		return withQuery(resolve('/'), params);
 	}
+
+	let groups = $derived.by(() => {
+		const order: string[] = [];
+		const buckets = new Map<string, TranscriptCard[]>();
+		for (const card of data.cards) {
+			const label = dayGroup(card.updated_at);
+			const bucket = buckets.get(label);
+			if (bucket) bucket.push(card);
+			else {
+				order.push(label);
+				buckets.set(label, [card]);
+			}
+		}
+		return order.map((label) => ({ label, cards: buckets.get(label) ?? [] }));
+	});
 </script>
 
 <svelte:head>
@@ -29,8 +45,8 @@
 
 <header class="page-head">
 	<div>
-		<p class="meta">Sessions</p>
-		<h1>Your archive</h1>
+		<p class="meta">Your archive</p>
+		<h1>Sessions</h1>
 	</div>
 	<p class="count">{data.cards.length} on this page</p>
 </header>
@@ -88,8 +104,11 @@
 		<p class="error" role="alert">{data.error}</p>
 	{/if}
 	<ul class="sessions">
-		{#each data.cards as card (card.id)}
-			{@render session(card)}
+		{#each groups as group (group.label)}
+			<li class="day">{group.label}</li>
+			{#each group.cards as card (card.id)}
+				{@render session(card)}
+			{/each}
 		{:else}
 			{#if !data.error}
 				<li class="empty">
@@ -112,11 +131,10 @@
 			<span class="session-title">{card.title || card.native_trace_id}</span>
 			<span class="session-meta">
 				<span>{card.harness}</span>
-				<time datetime={card.updated_at}>{card.updated_at}</time>
+				<time datetime={card.updated_at}>{relativeTime(card.updated_at)}</time>
 				<span>{card.event_count} records</span>
-				<span>{card.revision_count} revisions</span>
+				{#if card.repository}<span>{repoLabel(card.repository)}</span>{/if}
 			</span>
-			<span class="session-repo">{card.repository || 'No repository recorded'}</span>
 			{#if card.snippet || query}
 				<span class="session-snippet">
 					{#each highlightParts(card.snippet || 'Open the transcript to explore this session.', query, mode) as part, index (`${index}:${part.mark}:${part.text}`)}
@@ -141,15 +159,16 @@
 	.count {
 		margin: 0;
 		color: var(--muted-foreground);
-		font-family: var(--font-mono);
-		font-size: 11px;
-		font-variant-numeric: tabular-nums;
+		font-size: 14px;
+		line-height: 20px;
 	}
 
 	h1 {
-		margin: 0.15rem 0 0;
-		font-size: 1.05rem;
-		font-weight: 600;
+		margin: 0.35rem 0 0;
+		font-size: 30px;
+		font-weight: 400;
+		letter-spacing: -0.03em;
+		line-height: 36px;
 	}
 
 	.filters {
@@ -217,8 +236,9 @@
 	.session-link {
 		display: flex;
 		flex-direction: column;
-		gap: 0.2rem;
-		padding: 0.65rem 0.15rem;
+		gap: 0.15rem;
+		padding: 0.7rem 0.35rem;
+		border-radius: 8px;
 		color: inherit;
 		text-decoration: none;
 	}
@@ -228,30 +248,34 @@
 		background: var(--accent);
 	}
 
+	.day {
+		padding: 0.85rem 0.15rem 0.2rem;
+		color: var(--muted-foreground);
+		font-size: 12px;
+		font-weight: 500;
+	}
+
 	.session-title {
 		overflow: hidden;
-		font-weight: 550;
+		font-size: 15px;
+		font-weight: 500;
+		letter-spacing: -0.01em;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
 
 	.session-meta,
-	.session-repo,
 	.session-snippet {
 		color: var(--muted-foreground);
-		font-size: 12px;
+		font-size: 13px;
 	}
 
 	.session-meta {
 		display: flex;
 		flex-wrap: wrap;
-		gap: 0.55rem;
-		font-family: var(--font-mono);
-		font-size: 11px;
-		font-variant-numeric: tabular-nums;
+		gap: 0.65rem;
 	}
 
-	.session-repo,
 	.session-snippet {
 		overflow: hidden;
 		display: -webkit-box;

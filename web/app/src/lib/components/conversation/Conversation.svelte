@@ -44,6 +44,8 @@
 	let toolOpen = $state<Record<string, boolean>>({});
 	let filter = $state<StreamFilter>('all');
 	let expandedUsers = $state<Record<string, boolean>>({});
+	let streamEl = $state<HTMLDivElement | null>(null);
+	let showJump = $state(false);
 
 	let sessionKey = $derived(`${trace.id}:${revision}`);
 	let session = $derived(initial);
@@ -121,6 +123,25 @@
 	function toolIsOpen(id: string) {
 		return toolOpen[id] ?? toolsExpanded;
 	}
+
+	function onStreamScroll() {
+		const el = streamEl;
+		if (!el) return;
+		showJump = el.scrollHeight - el.scrollTop - el.clientHeight > 180;
+	}
+
+	function jumpToRecent() {
+		const el = streamEl;
+		if (!el) return;
+		const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+		el.scrollTo({ top: el.scrollHeight, behavior: reduce ? 'auto' : 'smooth' });
+	}
+
+	$effect(() => {
+		rows;
+		sessionKey;
+		queueMicrotask(onStreamScroll);
+	});
 
 	function selectNode(entryId: string) {
 		if (!session) return;
@@ -286,7 +307,8 @@
 				onSelectLeaf={selectNode}
 			/>
 			{#key sessionKey}
-				<div class="stream">
+				<div class="stream-wrap">
+				<div class="stream" bind:this={streamEl} onscroll={onStreamScroll}>
 					{#each rows as row (row.id)}
 						<section class={['row', `is-${row.chrome}`, row.entries.some((entry) => entry.id === targetId) && 'is-target']}>
 							{#if row.chrome !== 'quiet'}
@@ -312,6 +334,12 @@
 					{#if !session.entries.length}
 						<p class="empty">No normalized messages. Open Details to inspect the retained source files.</p>
 					{/if}
+				</div>
+				{#if showJump}
+					<button class="jump" type="button" onclick={jumpToRecent} aria-label="Jump to recent messages">
+						<Icon name="chevron" size={16} />
+					</button>
+				{/if}
 				</div>
 			{/key}
 		</div>
@@ -341,28 +369,64 @@
 
 	.body {
 		display: flex;
+		width: 100%;
+		max-width: 1200px;
 		min-height: 0;
 		flex: 1;
 		flex-direction: column;
+		margin: 0 auto;
+	}
+
+	.stream-wrap {
+		position: relative;
+		min-width: 0;
+		min-height: 0;
+		flex: 1;
 	}
 
 	.stream {
+		height: 100%;
 		min-width: 0;
-		flex: 1;
 		overflow: auto;
-		padding: 0.85rem 1.25rem 2.25rem;
+		padding: 0.5rem 1.5rem 3rem;
+	}
+
+	.jump {
+		position: absolute;
+		right: 17px;
+		bottom: 16px;
+		z-index: 3;
+		display: grid;
+		width: 32px;
+		height: 32px;
+		place-items: center;
+		border: 0;
+		border-radius: 8px;
+		background: var(--card);
+		box-shadow: var(--contour);
+		color: var(--muted-foreground);
+		cursor: pointer;
+	}
+
+	.jump :global(svg) {
+		transform: rotate(90deg);
+	}
+
+	.jump:hover,
+	.jump:focus-visible {
+		color: var(--foreground);
 	}
 
 	.row {
 		position: relative;
-		max-width: 54rem;
+		max-width: 52rem;
 		padding: 0 0 0 46px;
 		font-size: 14px;
 		line-height: 20px;
 	}
 
 	.row.is-user {
-		margin: 0 0 24px;
+		margin: 8px 0 0;
 	}
 
 	.row.is-agent {
@@ -374,34 +438,28 @@
 	}
 
 	.row.is-target .turn-body {
-		outline: 1px solid color-mix(in oklch, var(--primary) 45%, transparent);
+		outline: 1px solid rgb(0 0 0 / 18%);
 		outline-offset: 3px;
 	}
 
 	.avatar {
 		position: absolute;
-		top: 8px;
-		left: 1px;
+		top: 2px;
+		left: 0;
 		display: flex;
-		width: 18px;
-		height: 18px;
+		width: 20px;
+		height: 20px;
 		align-items: center;
 		justify-content: center;
 		border-radius: 999px;
-		background: #1c1c1c;
-		box-shadow: inset 0 0 0 1px rgb(255 255 255 / 14%);
+		background: var(--card);
+		box-shadow: var(--contour);
 		color: var(--muted-foreground);
 	}
 
 	.row.is-user .avatar {
-		background: #2a2a2a;
-		color: #d4d4d4;
-	}
-
-	.row.is-agent .avatar {
-		top: 0.1rem;
-		background: #202020;
-		color: #9a9a9a;
+		top: 8px;
+		color: var(--foreground);
 	}
 
 	.turn-body {
@@ -409,30 +467,44 @@
 	}
 
 	.bubble {
+		position: relative;
 		margin-left: -10px;
 		padding: 6px 10px;
 		border-radius: 10px;
-		background: #242424;
-		box-shadow:
-			0 0 0 1px rgb(255 255 255 / 8%),
-			0 1px 3px rgb(0 0 0 / 32%),
-			0 1px 2px rgb(0 0 0 / 24%);
+		background: var(--card);
+		box-shadow: var(--contour);
 	}
 
 	.clamp.is-clamped {
-		max-height: 15rem;
+		max-height: 11.5rem;
 		overflow: hidden;
-		mask-image: linear-gradient(to bottom, #000 70%, transparent);
 	}
 
 	.more {
-		margin: 0.35rem 0 0.1rem;
+		position: absolute;
+		right: 0;
+		bottom: 0;
+		left: 0;
 		border: 0;
-		background: transparent;
+		border-radius: 0 0 10px 10px;
+		background: var(--card);
 		color: var(--muted-foreground);
-		padding: 0;
+		padding: 6px 10px;
 		font-size: 12px;
+		font-weight: 500;
+		text-align: left;
 		cursor: pointer;
+	}
+
+	.more::before {
+		content: '';
+		position: absolute;
+		right: 0;
+		bottom: 100%;
+		left: 0;
+		height: 28px;
+		background: linear-gradient(to bottom, transparent, var(--card));
+		pointer-events: none;
 	}
 
 	.more:hover,
@@ -462,13 +534,16 @@
 	}
 
 	pre {
-		overflow-x: auto;
-		padding: 0.55rem 0.65rem;
-		border: 1px solid var(--border);
-		border-radius: var(--radius);
-		background: #181818;
+		overflow: auto;
+		max-height: 16rem;
+		padding: 6px 10px;
+		border: 1px solid rgb(0 0 0 / 11%);
+		border-radius: 8px;
+		background: var(--muted);
+		color: var(--muted-foreground);
 		font-family: var(--font-mono);
-		font-size: 12px;
+		font-size: 13px;
+		line-height: 20px;
 		white-space: pre-wrap;
 	}
 
@@ -480,7 +555,7 @@
 		}
 
 		.stream {
-			padding: 1rem 1.75rem 2.5rem;
+			padding: 0.35rem 1.5rem 3rem 0.5rem;
 		}
 	}
 </style>

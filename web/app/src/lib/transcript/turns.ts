@@ -1,5 +1,5 @@
 import { leafCount } from './tree';
-import { toolKind, toolKindLabel, type ToolKind } from './tools';
+import { indexToolGroup, type ToolKind } from './tools';
 import type { TranscriptEntry, Turn } from './types';
 
 export type StreamFilter = 'all' | 'prompts' | 'responses' | 'thinking' | 'tools' | 'compaction' | 'branches';
@@ -11,7 +11,7 @@ export type StreamCounts = {
 	tools: number;
 	compaction: number;
 	branches: number;
-	toolKinds: { kind: ToolKind; label: string; count: number }[];
+	toolKinds: { id: string; kind: ToolKind; label: string; count: number }[];
 };
 
 export function streamCounts(entries: TranscriptEntry[], graph: TranscriptEntry[] = entries): StreamCounts {
@@ -20,7 +20,7 @@ export function streamCounts(entries: TranscriptEntry[], graph: TranscriptEntry[
 	let thinking = 0;
 	let tools = 0;
 	let compaction = 0;
-	const kinds = new Map<ToolKind, number>();
+	const kinds = new Map<string, { id: string; kind: ToolKind; label: string; count: number }>();
 	for (const entry of entries) {
 		if (entry.message?.role === 'user') prompts += 1;
 		if (entry.message?.role === 'assistant') {
@@ -30,8 +30,10 @@ export function streamCounts(entries: TranscriptEntry[], graph: TranscriptEntry[
 				if (block.type === 'thinking') thinking += 1;
 				if (block.type === 'toolCall') {
 					tools += 1;
-					const kind = toolKind(block.name);
-					kinds.set(kind, (kinds.get(kind) ?? 0) + 1);
+					const group = indexToolGroup(block.name);
+					const current = kinds.get(group.id);
+					if (current) current.count += 1;
+					else kinds.set(group.id, { ...group, count: 1 });
 				}
 			}
 		}
@@ -44,9 +46,7 @@ export function streamCounts(entries: TranscriptEntry[], graph: TranscriptEntry[
 		tools,
 		compaction,
 		branches: leafCount(graph),
-		toolKinds: [...kinds.entries()]
-			.map(([kind, count]) => ({ kind, label: toolKindLabel[kind], count }))
-			.sort((a, b) => a.label.localeCompare(b.label))
+		toolKinds: [...kinds.values()].sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
 	};
 }
 

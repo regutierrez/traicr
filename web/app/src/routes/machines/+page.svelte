@@ -50,20 +50,15 @@
 	.meta-row {
 		margin: 0;
 		color: var(--muted-foreground);
-		font-size: 12px;
-	}
-
-	.meta {
-		font-family: var(--font-mono);
-		font-size: 11px;
-		letter-spacing: 0.06em;
-		text-transform: uppercase;
+		font-size: 14px;
 	}
 
 	h1 {
-		margin: 0.15rem 0 0;
-		font-size: 1.05rem;
-		font-weight: 600;
+		margin: 0.35rem 0 0;
+		font-size: 30px;
+		font-weight: 400;
+		letter-spacing: -0.03em;
+		line-height: 36px;
 	}
 
 	.lede {

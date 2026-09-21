@@ -63,26 +63,26 @@
 	}
 
 	.meta {
-		margin: 0 0 0.4rem;
+		margin: 0 0 0.35rem;
 		color: var(--muted-foreground);
-		font-family: var(--font-mono);
-		font-size: 11px;
-		letter-spacing: 0.08em;
-		text-transform: uppercase;
+		font-size: 14px;
+		line-height: 20px;
 	}
 
 	h1 {
 		margin: 0;
-		font-size: 1.35rem;
-		font-weight: 600;
-		letter-spacing: -0.02em;
+		font-size: 30px;
+		font-weight: 400;
+		letter-spacing: -0.03em;
+		line-height: 36px;
 	}
 
 	.lede,
 	.hint {
-		margin: 0.55rem 0 0;
+		margin: 0.65rem 0 0;
 		color: var(--muted-foreground);
-		font-size: 12px;
+		font-size: 14px;
+		line-height: 20px;
 	}
 
 	.form {

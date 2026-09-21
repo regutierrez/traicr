@@ -176,11 +176,11 @@
 	.workspace-main {
 		flex: 1;
 		width: 100%;
-		max-width: 72rem;
+		max-width: 1200px;
 		min-height: 0;
 		margin: 0 auto;
 		overflow: auto;
-		padding: 1rem 1.25rem 2rem;
+		padding: 1.25rem 1.5rem 3rem;
 	}
 
 	.workspace-main.is-workspace {
@@ -197,12 +197,13 @@
 		place-items: center;
 		width: 28px;
 		height: 28px;
-		margin: 0.15rem 0 0.35rem;
+		margin: 0.15rem 0 0.55rem;
 		border-radius: 6px;
-		background: var(--sidebar-accent);
-		color: var(--sidebar-foreground);
-		font-size: 12px;
-		font-weight: 650;
+		background: var(--primary);
+		color: var(--primary-foreground);
+		font-size: 13px;
+		font-weight: 600;
+		letter-spacing: -0.04em;
 		text-decoration: none;
 	}
 
@@ -243,9 +244,9 @@
 	}
 
 	.rail-link.is-current {
-		background: var(--sidebar-accent);
-		color: var(--primary);
-		box-shadow: inset 2px 0 0 var(--primary);
+		background: var(--card);
+		color: var(--foreground);
+		box-shadow: var(--contour);
 	}
 
 	@media (min-width: 768px) {
@@ -258,7 +259,7 @@
 		}
 
 		.workspace-main {
-			padding: 1.25rem 1.75rem 2.5rem;
+			padding: 1.75rem 1.5rem 3rem;
 		}
 	}
 </style>

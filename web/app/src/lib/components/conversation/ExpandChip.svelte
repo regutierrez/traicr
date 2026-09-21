@@ -55,12 +55,13 @@
 		display: inline-flex;
 		max-width: 100%;
 		align-items: center;
-		gap: 5px;
-		min-height: 24px;
+		gap: 6px;
+		height: 24px;
 		cursor: pointer;
 		color: var(--muted-foreground);
 		font-family: var(--font-sans);
 		font-size: 13px;
+		font-weight: 400;
 		line-height: 20px;
 		list-style: none;
 	}
@@ -78,7 +79,7 @@
 
 	.verb {
 		flex-shrink: 0;
-		font-weight: 500;
+		font-weight: 400;
 	}
 
 	.rest {
@@ -113,6 +114,6 @@
 	}
 
 	.body {
-		margin: 0.2rem 0 0.35rem;
+		margin: 0.35rem 0 0.55rem;
 	}
 </style>

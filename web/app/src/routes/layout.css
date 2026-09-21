@@ -1,42 +1,47 @@
 @import 'tailwindcss';
+@import '@fontsource/inter/400.css';
+@import '@fontsource/inter/500.css';
+@import '@fontsource/inter/600.css';
+@import '@fontsource/ibm-plex-mono/400.css';
 
 @custom-variant dark (&:is(.dark *));
 
 /*
- * Dark-only Cursor-like tokens. There is no light theme and no prefers-color-scheme
- * flip. Tune the default shadcn-svelte dark palette toward a near-black canvas.
+ * Light reading surface measured from traces.com /full:
+ * off-white canvas, near-black text, white cards, 5px controls, 10px message cards.
  */
 :root {
-	color-scheme: dark;
-	--radius: 0.25rem;
-	--background: #1e1e1e;
-	--foreground: #cccccc;
-	--card: #1e1e1e;
-	--card-foreground: #cccccc;
-	--popover: #252526;
-	--popover-foreground: #cccccc;
-	--primary: #3794ff;
-	--primary-foreground: #f3f3f3;
-	--secondary: #252526;
-	--secondary-foreground: #cccccc;
-	--muted: #252526;
-	--muted-foreground: #8b8b8b;
-	--accent: #2a2d2e;
-	--accent-foreground: #d4d4d4;
-	--destructive: #f14c4c;
-	--border: rgb(255 255 255 / 11%);
-	--input: rgb(255 255 255 / 11%);
-	--ring: #3794ff;
-	--sidebar: #141414;
-	--sidebar-foreground: #cccccc;
-	--sidebar-primary: #3794ff;
-	--sidebar-primary-foreground: #f3f3f3;
-	--sidebar-accent: #1c1c1c;
-	--sidebar-accent-foreground: #d4d4d4;
-	--sidebar-border: rgb(255 255 255 / 11%);
-	--sidebar-ring: #3794ff;
-	--font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
-	--font-mono: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Consolas, monospace;
+	color-scheme: light;
+	--radius: 5px;
+	--background: #f5f5f5;
+	--foreground: #111111;
+	--card: #ffffff;
+	--card-foreground: #111111;
+	--popover: #ffffff;
+	--popover-foreground: #111111;
+	--primary: #171717;
+	--primary-foreground: #f5f5f5;
+	--secondary: #f3f3f3;
+	--secondary-foreground: #111111;
+	--muted: #f3f3f3;
+	--muted-foreground: #737373;
+	--accent: #ececec;
+	--accent-foreground: #111111;
+	--destructive: #c5221f;
+	--border: #e3e3e3;
+	--input: #e3e3e3;
+	--ring: #171717;
+	--sidebar: #f5f5f5;
+	--sidebar-foreground: #111111;
+	--sidebar-primary: #171717;
+	--sidebar-primary-foreground: #f5f5f5;
+	--sidebar-accent: #ffffff;
+	--sidebar-accent-foreground: #111111;
+	--sidebar-border: #e3e3e3;
+	--sidebar-ring: #171717;
+	--contour: 0 0 0 1px rgb(0 0 0 / 10%), 0 1px 3px rgb(0 0 0 / 10%), 0 1px 2px -1px rgb(0 0 0 / 10%);
+	--font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+	--font-mono: 'IBM Plex Mono', ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Consolas, monospace;
 }
 
 @theme inline {
@@ -93,7 +98,11 @@
 	}
 
 	mark {
-		background: color-mix(in oklch, var(--primary) 28%, transparent);
+		background: #fff3bf;
+		color: inherit;
+	}
+
+	a {
 		color: inherit;
 	}
 }

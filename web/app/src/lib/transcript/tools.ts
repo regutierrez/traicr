@@ -60,7 +60,7 @@ export const toolKindLabel: Record<ToolKind, string> = {
 	read: 'Read',
 	edit: 'Edit',
 	write: 'Write',
-	exec: 'Exec',
+	exec: 'Run Command',
 	web: 'Web',
 	browser: 'Browser',
 	other: 'Other'
@@ -136,6 +136,18 @@ export type ChipIcon =
 	| 'compaction'
 	| 'branch'
 	| 'chevron';
+
+export function indexToolGroup(name: string): { id: string; kind: ToolKind; label: string } {
+	const kind = toolKind(name);
+	if (kind === 'exec') return { id: 'exec', kind, label: 'Run Command' };
+	if (kind === 'read') return { id: 'read', kind, label: 'Read' };
+	if (kind === 'edit') return { id: 'edit', kind, label: 'Edit' };
+	if (kind === 'write') return { id: 'write', kind, label: 'Write' };
+	if (kind === 'web') return { id: 'web', kind, label: 'Read Website' };
+	if (kind === 'browser') return { id: 'browser', kind, label: 'Browser' };
+	const label = usedToolName(name);
+	return { id: `tool:${label}`, kind, label };
+}
 
 export const toolKindIcon: Record<ToolKind, ChipIcon> = {
 	read: 'book',
