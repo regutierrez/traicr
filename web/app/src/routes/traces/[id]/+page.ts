@@ -1,6 +1,7 @@
 import { redirect } from '@sveltejs/kit';
 import { readJSON } from '$lib/api';
 import { loadTranscriptSession } from '$lib/transcript/load';
+import { latestRevisionId } from '$lib/transcript/revision';
 import type { LoadedSession } from '$lib/transcript/types';
 import type { Trace } from '$lib/types';
 import type { PageLoad } from './$types';
@@ -14,11 +15,12 @@ export const load: PageLoad = async ({ fetch, params, url }) => {
 	}
 	const result = await readJSON<Trace>(fetch, `/api/v1/traces/${params.id}`);
 	if (!result.ok) return { trace: null, revision: '', session: null, loadError: '', error: result.message };
-	const revision = url.searchParams.get('revision') ?? '';
-	const known = result.data.revisions?.some((item) => String(item.id) === revision);
-	if (revision && (result.data.harness !== 'amp' || !known)) {
-		return { trace: null, revision, session: null, loadError: '', error: 'Revision not found for this Amp trace' };
+	if (url.searchParams.has('revision')) {
+		url.searchParams.delete('revision');
+		const query = url.searchParams.toString();
+		redirect(303, `/traces/${params.id}${query ? `?${query}` : ''}`);
 	}
+	const revision = result.data.harness === 'amp' ? latestRevisionId(result.data.revisions) : '';
 	try {
 		const session = await loadTranscriptSession(
 			{

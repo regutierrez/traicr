@@ -4,20 +4,19 @@ import type { LoadedSession, SessionMetadata, TranscriptEvent } from './types';
 export const CHANGED_MESSAGE = 'Transcript changed while loading. Reload the page to read the updated history.';
 export const LOAD_FAILED_MESSAGE = 'Transcript load failed. Reload the page and sign in again.';
 
-function statusFor(events: TranscriptEvent[], metadata: SessionMetadata, hasMore: boolean) {
+function statusFor(events: TranscriptEvent[], hasMore: boolean) {
 	if (!events.length) {
 		return 'No normalized messages. Open Session details to inspect the retained source files.';
 	}
-	const view = metadata.revision ? 'Selected revision' : 'Merged archive';
 	const more = hasMore ? ' · More records available below' : ' · All records loaded';
-	return `${view} · ${events.length} records loaded${more}. Original records and parsing warnings are in Session details.`;
+	return `${events.length} records loaded${more}. Original records and parsing warnings are in Session details.`;
 }
 
 function assemble(events: TranscriptEvent[], metadata: SessionMetadata, cursor: string, seen: string[]): LoadedSession {
 	return {
 		...buildTranscriptSession(events, metadata),
 		hasMore: !!cursor,
-		status: statusFor(events, metadata, !!cursor),
+		status: statusFor(events, !!cursor),
 		cursor,
 		events,
 		seenCursors: seen,

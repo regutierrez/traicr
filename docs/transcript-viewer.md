@@ -33,7 +33,8 @@ second layout.
 Forks do not grow a tree pane. Branches stay in the index: the count comes
 from the parent graph, and choosing Branches lists leaf paths so a different
 path can be selected without changing the page shape. Existing event/key links
-resolve to their containing turn. `T` and `O` toggle thinking and tools.
+resolve to their containing turn. Thinking and Tools sit at the top of the
+contents index; `T` and `O` still toggle them.
 
 Display features depend on the available data, not the harness name. Tool
 arguments and output start collapsed. Shell tools (`bash`, `Bash`,
@@ -69,8 +70,8 @@ Shared stream, when the Event has the data:
 - Unknown native types and uncommon stop reasons stay a note plus JSON/text.
 Amp-only today:
 
-- Archive view (merged vs one revision) still sits on the workspace header.
-  Other harnesses have no equivalent control, so the header is not identical.
+- Conversation always reads the latest retained revision. Older revisions stay
+  on Details as source files. There is no merged-archive picker.
 - `openAIResponsePhase` (`commentary`, `final_answer`) is retained on the
   Event and not drawn as its own chip.
 - `fromAutomation` is a quiet "Automation message" note.

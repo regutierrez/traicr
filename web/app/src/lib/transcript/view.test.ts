@@ -6,6 +6,7 @@ import { parseSkillBlock } from './skill';
 import { buildTranscriptSession } from './session';
 import { requestedEdit, resultText, toolChipLabel, toolChipParts, toolStatus, toolSummary } from './tools';
 import { defaultLeafId, findNewestLeaf, getPath, graphHasFork, graphLeaves } from './tree';
+import { latestRevisionId } from './revision';
 import { displayModel, entryMatchesFilter, groupTurns, isToolOnlyMessage, pathSessionFacts, streamCounts, streamRows } from './turns';
 import type { ToolCallBlock, TranscriptEntry } from './types';
 
@@ -288,6 +289,17 @@ test('tool-only assistant messages stay quiet rows', () => {
 			message: { role: 'assistant', content: [{ type: 'text', text: 'I will inspect it' }] }
 		})
 	).toBe(false);
+});
+
+test('conversation uses the newest native revision, not the highest id', () => {
+	expect(
+		latestRevisionId([
+			{ id: 4, native_updated_at: '2026-09-01T00:00:00Z', collected_at: '2026-09-21T00:00:00Z' },
+			{ id: 9, native_updated_at: '2026-08-01T00:00:00Z', collected_at: '2026-09-22T00:00:00Z' }
+		])
+	).toBe('4');
+	expect(latestRevisionId([{ id: 2, collected_at: '2026-09-02T00:00:00Z' }, { id: 3, collected_at: '2026-09-02T00:00:00Z' }])).toBe('3');
+	expect(latestRevisionId([])).toBe('');
 });
 
 test('a tool kind filter keeps that command family and drops the others', () => {

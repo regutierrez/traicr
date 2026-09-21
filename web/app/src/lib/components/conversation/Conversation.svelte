@@ -181,15 +181,10 @@
 <div class="workspace-root">
 	<WorkspaceHeader
 		{trace}
-		{revision}
 		tab="conversation"
 		recordCount={session?.events.length ?? session?.entries.length ?? 0}
 		model={facts.model ?? ''}
 		thinkingLevel={facts.thinkingLevel ?? ''}
-		{thinkingExpanded}
-		{toolsExpanded}
-		onToggleThinking={toggleThinking}
-		onToggleTools={toggleTools}
 	/>
 
 	{#if displayError && !session}
@@ -320,6 +315,10 @@
 				{filter}
 				{leaves}
 				{leafId}
+				{thinkingExpanded}
+				{toolsExpanded}
+				onToggleThinking={toggleThinking}
+				onToggleTools={toggleTools}
 				onFilter={(next) => (filter = next)}
 				onSelectLeaf={selectNode}
 			/>

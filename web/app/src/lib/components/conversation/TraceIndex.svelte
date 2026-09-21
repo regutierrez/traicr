@@ -9,6 +9,10 @@
 		filter = 'all',
 		leaves = [],
 		leafId = '',
+		thinkingExpanded = false,
+		toolsExpanded = false,
+		onToggleThinking,
+		onToggleTools,
 		onFilter,
 		onSelectLeaf
 	}: {
@@ -16,6 +20,10 @@
 		filter?: StreamFilter;
 		leaves?: { id: string; label: string }[];
 		leafId?: string;
+		thinkingExpanded?: boolean;
+		toolsExpanded?: boolean;
+		onToggleThinking?: () => void;
+		onToggleTools?: () => void;
 		onFilter: (filter: StreamFilter) => void;
 		onSelectLeaf?: (id: string) => void;
 	} = $props();
@@ -36,6 +44,34 @@
 </script>
 
 <nav class="index" aria-label="Trace contents">
+	<div class="modes">
+		<button
+			type="button"
+			class={['mode', thinkingExpanded && 'is-on']}
+			aria-pressed={thinkingExpanded}
+			title="Toggle thinking (T)"
+			onclick={onToggleThinking}
+		>
+			<span class="label">
+				<Icon name="brain" size={14} />
+				<span>Thinking</span>
+			</span>
+			<span class="count">T</span>
+		</button>
+		<button
+			type="button"
+			class={['mode', toolsExpanded && 'is-on']}
+			aria-pressed={toolsExpanded}
+			title="Toggle tools (O)"
+			onclick={onToggleTools}
+		>
+			<span class="label">
+				<Icon name="terminal" size={14} />
+				<span>Tools</span>
+			</span>
+			<span class="count">O</span>
+		</button>
+	</div>
 	<ul>
 		{#each rows as row (row.id)}
 			<li>
@@ -96,6 +132,40 @@
 		overflow: auto;
 		padding: 1.25rem 1.5rem 2rem;
 		background: transparent;
+	}
+
+	.modes {
+		display: flex;
+		flex-direction: column;
+		margin-bottom: 0.65rem;
+		padding-bottom: 0.45rem;
+		border-bottom: 1px solid var(--border);
+	}
+
+	.mode {
+		display: flex;
+		width: 100%;
+		height: 28px;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.75rem;
+		border: 0;
+		border-radius: 2px;
+		background: transparent;
+		color: var(--muted-foreground);
+		padding: 0;
+		font: inherit;
+		font-size: 13px;
+		font-weight: 500;
+		line-height: 20px;
+		text-align: left;
+		cursor: pointer;
+	}
+
+	.mode.is-on,
+	.mode:hover,
+	.mode:focus-visible {
+		color: var(--foreground);
 	}
 
 	ul {
@@ -198,6 +268,21 @@
 			width: auto;
 			padding: 0.55rem 1rem;
 			border-bottom: 1px solid var(--border);
+		}
+
+		.modes {
+			flex-direction: row;
+			gap: 0.35rem;
+			margin-bottom: 0.45rem;
+			padding-bottom: 0.45rem;
+		}
+
+		.mode {
+			width: auto;
+			border-radius: 6px;
+			background: var(--muted);
+			padding: 0 0.55rem;
+			font-size: 12px;
 		}
 
 		.row {
