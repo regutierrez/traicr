@@ -1,8 +1,17 @@
 import { leafCount } from './tree';
 import { indexToolGroup, type ToolKind } from './tools';
+import type { ContentBlock } from './types';
 import type { TranscriptEntry, Turn } from './types';
 
-export type StreamFilter = 'all' | 'prompts' | 'responses' | 'thinking' | 'tools' | 'compaction' | 'branches';
+export type StreamFilter =
+	| 'all'
+	| 'prompts'
+	| 'responses'
+	| 'thinking'
+	| 'tools'
+	| 'compaction'
+	| 'branches'
+	| `group:${string}`;
 
 export type StreamCounts = {
 	prompts: number;
@@ -152,8 +161,28 @@ export function visibleToolCalls(path: TranscriptEntry[]) {
 	return ids;
 }
 
+export function toolGroupFilter(filter: StreamFilter) {
+	return filter.startsWith('group:') ? filter.slice('group:'.length) : '';
+}
+
+export function toolInGroup(name: string, filter: StreamFilter) {
+	const id = toolGroupFilter(filter);
+	return !id || indexToolGroup(name).id === id;
+}
+
+function blockInGroup(block: ContentBlock, id: string) {
+	return block.type === 'toolCall' && indexToolGroup(block.name).id === id;
+}
+
 export function entryMatchesFilter(entry: TranscriptEntry, filter: StreamFilter) {
 	if (filter === 'all' || filter === 'branches') return true;
+	const group = toolGroupFilter(filter);
+	if (group) {
+		const content = entry.message?.content ?? [];
+		if (content.some((block) => blockInGroup(block, group))) return true;
+		const toolName = entry.message?.role === 'toolResult' ? entry.message.toolName : '';
+		return Boolean(toolName && indexToolGroup(toolName).id === group);
+	}
 	if (filter === 'prompts') return entry.message?.role === 'user';
 	if (filter === 'responses') {
 		return Boolean(entry.message?.role === 'assistant' && entry.message.content.some((block) => block.type === 'text'));

@@ -26,7 +26,8 @@ including zeros. The stream is always the selected path. User messages are
 chat cards with a small avatar; agent replies use the same avatar column and
 unfilled prose; tool and thought rows stay quiet — no avatar — with traces.com
 icons and labels (`Ran command`, `Read file`, `Thought`, `Used` leftovers).
-Clicking an index row filters that stream. It does not swap in a
+Clicking an index row filters that stream, including a tool kind such as
+Run Command. Clear filters restores the full path. It does not swap in a
 second layout.
 
 Forks do not grow a tree pane. Branches stay in the index: the count comes

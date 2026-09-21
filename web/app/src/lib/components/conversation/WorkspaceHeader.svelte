@@ -2,7 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import { absoluteTime, relativeTime, repoLabel } from '$lib/time';
+	import { absoluteTime, earlierTime, relativeTime, repoLabel } from '$lib/time';
 	import type { Trace } from '$lib/types';
 
 	let {
@@ -30,7 +30,7 @@
 	} = $props();
 
 	let title = $derived(trace.title || trace.native_trace_id);
-	let started = $derived(absoluteTime(trace.created_at || trace.updated_at));
+	let started = $derived(absoluteTime(earlierTime(trace.created_at, trace.updated_at)));
 	let ago = $derived(relativeTime(trace.updated_at || trace.created_at));
 	let repo = $derived(repoLabel(trace.repository || ''));
 	let repoHref = $derived(
@@ -54,8 +54,17 @@
 <header class="head">
 	<div class="inner">
 		<p class="byline">
-			<span>{trace.harness}</span>
-			{#if ago}<span>{ago}</span>{/if}
+			<span class="who">{trace.harness}</span>
+			shared
+			{#if repo}
+				in
+				{#if repoHref}
+					<a class="where" href={repoHref} target="_blank" rel="noreferrer">{repo}</a>
+				{:else}
+					<span class="where" title={trace.repository}>{repo}</span>
+				{/if}
+			{/if}
+			{#if ago}<span class="when">{ago}</span>{/if}
 		</p>
 		<div class="title-row">
 			<h1>{title}</h1>
@@ -66,7 +75,7 @@
 						<select name="revision" value={revision} onchange={changeRevision} aria-label="Archive view">
 							<option value="">Merged archive</option>
 							{#each trace.revisions ?? [] as item (item.id)}
-								<option value={String(item.id)}>Revision {item.id} · {item.native_updated_at}</option>
+								<option value={String(item.id)}>Revision {item.id} · {absoluteTime(item.native_updated_at || item.collected_at)}</option>
 							{/each}
 						</select>
 					</label>
@@ -93,42 +102,12 @@
 				{/if}
 			</div>
 		</div>
-		<dl class="facts">
-			{#if model}
-				<div>
-					<dt>Model</dt>
-					<dd>{model}</dd>
-				</div>
-			{/if}
-			<div>
-				<dt>Started</dt>
-				<dd>{started}</dd>
-			</div>
-			{#if recordCount}
-				<div>
-					<dt>Records</dt>
-					<dd>{recordCount}</dd>
-				</div>
-			{/if}
-			{#if thinkingLevel}
-				<div>
-					<dt>Thinking</dt>
-					<dd>{thinkingLevel}</dd>
-				</div>
-			{/if}
-			{#if repo}
-				<div class="repo">
-					<dt>Repository</dt>
-					<dd>
-						{#if repoHref}
-							<a href={repoHref} target="_blank" rel="noreferrer">{repo}</a>
-						{:else}
-							<span title={trace.repository}>{repo}</span>
-						{/if}
-					</dd>
-				</div>
-			{/if}
-		</dl>
+		<p class="facts">
+			{#if model}<span>{model}</span>{/if}
+			<span>Started {started}</span>
+			{#if recordCount}<span>{recordCount} records</span>{/if}
+			{#if thinkingLevel}<span>{thinkingLevel} thinking</span>{/if}
+		</p>
 		<nav class="tabs" aria-label="Trace views">
 			<a
 				class={['tab', tab === 'conversation' && 'is-current']}
@@ -163,12 +142,29 @@
 	}
 
 	.byline {
-		display: flex;
-		gap: 1rem;
 		margin: 0;
 		color: var(--muted-foreground);
 		font-size: 14px;
 		line-height: 20px;
+	}
+
+	.who,
+	.where {
+		color: var(--foreground);
+		font-weight: 500;
+	}
+
+	.where {
+		text-decoration: none;
+	}
+
+	.where:hover,
+	.where:focus-visible {
+		text-decoration: underline;
+	}
+
+	.when {
+		margin-left: 0.35rem;
 	}
 
 	.title-row {
@@ -176,7 +172,7 @@
 		align-items: flex-start;
 		justify-content: space-between;
 		gap: 1.5rem;
-		margin-top: 0.85rem;
+		margin-top: 0.7rem;
 	}
 
 	h1 {
@@ -229,44 +225,15 @@
 	.facts {
 		display: flex;
 		flex-wrap: wrap;
-		gap: 1.25rem 2.25rem;
-		margin: 1rem 0 0;
-	}
-
-	.facts div {
-		display: flex;
-		min-width: 0;
-		flex-direction: column;
-		gap: 0.15rem;
-	}
-
-	dt {
+		margin: 0.55rem 0 0;
 		color: var(--muted-foreground);
 		font-size: 13px;
 		line-height: 16px;
 	}
 
-	dd {
-		margin: 0;
-		overflow: hidden;
-		color: var(--foreground);
-		font-size: 13px;
-		line-height: 16px;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-
-	.repo {
-		max-width: 28rem;
-	}
-
-	.repo a {
-		text-decoration: none;
-	}
-
-	.repo a:hover,
-	.repo a:focus-visible {
-		text-decoration: underline;
+	.facts span + span::before {
+		content: '·';
+		margin: 0 0.45rem;
 	}
 
 	.tabs {

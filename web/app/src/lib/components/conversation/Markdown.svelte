@@ -31,6 +31,31 @@
 		margin: 0.55rem 0;
 	}
 
+	.md :global(h1),
+	.md :global(h2) {
+		margin: 1.5rem 0 0.5rem;
+		font-size: 24px;
+		font-weight: 600;
+		letter-spacing: -0.02em;
+		line-height: 32px;
+	}
+
+	.md :global(h3) {
+		margin: 1.15rem 0 0.35rem;
+		font-size: 16px;
+		font-weight: 600;
+		line-height: 24px;
+	}
+
+	.md :global(ul),
+	.md :global(ol) {
+		padding-left: 1.25rem;
+	}
+
+	.md :global(li + li) {
+		margin-top: 0.15rem;
+	}
+
 	.md :global(pre) {
 		overflow: auto;
 		max-height: 24rem;

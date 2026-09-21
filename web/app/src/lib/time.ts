@@ -1,5 +1,19 @@
+function parsed(value: string) {
+	const trimmed = value.trim().replace(/(\.\d{3})\d+/, '$1');
+	const time = Date.parse(trimmed);
+	return Number.isNaN(time) ? Date.parse(value) : time;
+}
+
+export function earlierTime(a: string, b: string) {
+	const left = parsed(a);
+	const right = parsed(b);
+	if (Number.isNaN(left)) return b || a;
+	if (Number.isNaN(right)) return a || b;
+	return left <= right ? a : b;
+}
+
 export function relativeTime(value: string, now = Date.now()) {
-	const then = Date.parse(value);
+	const then = parsed(value);
 	if (Number.isNaN(then)) return value;
 	const minutes = Math.round((now - then) / 60000);
 	if (Math.abs(minutes) < 1) return 'just now';
@@ -14,7 +28,8 @@ export function relativeTime(value: string, now = Date.now()) {
 }
 
 export function absoluteTime(value: string) {
-	const date = new Date(value);
+	const time = parsed(value);
+	const date = new Date(time);
 	if (Number.isNaN(date.getTime())) return value;
 	return new Intl.DateTimeFormat('en-US', {
 		month: 'short',
@@ -25,7 +40,8 @@ export function absoluteTime(value: string) {
 }
 
 export function dayGroup(value: string, now = new Date()) {
-	const date = new Date(value);
+	const time = parsed(value);
+	const date = new Date(time);
 	if (Number.isNaN(date.getTime())) return 'Undated';
 	const start = (item: Date) => new Date(item.getFullYear(), item.getMonth(), item.getDate()).getTime();
 	const days = Math.round((start(now) - start(date)) / 86400000);

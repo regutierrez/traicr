@@ -43,7 +43,7 @@
 	<p class="text-destructive p-6" role="alert">{data.error || 'Trace not found'}</p>
 {:else}
 	<WorkspaceHeader {trace} tab="details" />
-	<div class="details-grid grid items-start gap-6 px-5 py-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
+	<div class="details-grid mx-auto grid w-full max-w-[1200px] items-start gap-6 px-6 py-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
 		<section class="flex flex-col gap-4" aria-label="Trace events">
 			{#each data.events as event (event.id)}
 				<Card id="event-{event.id}">

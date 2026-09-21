@@ -11,6 +11,8 @@
 		customNote,
 		streamCounts,
 		streamRows,
+		toolGroupFilter,
+		toolInGroup,
 		toolResults,
 		type StreamFilter
 	} from '$lib/transcript/turns';
@@ -168,6 +170,10 @@
 		const id = entry.message?.toolCallId;
 		return !id || !path.some((item) => item.message?.content?.some((block) => block.type === 'toolCall' && block.id === id));
 	}
+
+	function showTool(name: string) {
+		return toolInGroup(name, filter);
+	}
 </script>
 
 <svelte:window onkeydown={onKeydown} />
@@ -197,7 +203,7 @@
 		{#snippet entryBlocks(entry: TranscriptEntry)}
 			{@const message = entry.message}
 			{#if message?.role === 'toolResult'}
-				{#if shouldRenderResult(entry)}
+				{#if shouldRenderResult(entry) && showTool(message.toolName || '')}
 					<ToolRow
 						call={{ type: 'toolCall', id: message.toolCallId || entry.id, name: message.toolName || 'Unpaired tool result', arguments: {} }}
 						result={entry}
@@ -213,7 +219,7 @@
 						<ChildCard {child} />
 					{/each}
 					{#each message.content as block, index (`${entry.id}:${index}:${block.type}`)}
-						{#if block.type === 'toolCall'}
+						{#if block.type === 'toolCall' && showTool(block.name)}
 							<ToolRow
 								call={block}
 								result={results.get(block.id)}
@@ -234,7 +240,18 @@
 						<ChildCard {child} />
 					{/each}
 					{#each message.content as block, index (`${entry.id}:${index}:${block.type}`)}
-						{#if block.type === 'text'}
+						{#if toolGroupFilter(filter)}
+							{#if block.type === 'toolCall' && showTool(block.name)}
+								<ToolRow
+									call={block}
+									result={results.get(block.id)}
+									{entry}
+									{children}
+									open={toolIsOpen(block.id)}
+									onToggle={(open) => (toolOpen[block.id] = open)}
+								/>
+							{/if}
+						{:else if block.type === 'text'}
 							{@const skill = message.role === 'user' ? parseSkillBlock(block.text) : null}
 							{#if skill}
 								<ExpandChip icon="sparkles" verb="Skill" rest={skill.name}>
@@ -264,7 +281,7 @@
 							</ExpandChip>
 						{:else if block.type === 'attachment'}
 							<AttachmentBlock attachment={block} />
-						{:else if block.type === 'toolCall'}
+						{:else if block.type === 'toolCall' && showTool(block.name)}
 							<ToolRow
 								call={block}
 								result={results.get(block.id)}
@@ -331,8 +348,12 @@
 					{#each leftover as child (child.native_trace_id)}
 						<ChildCard child={{ id: child.native_trace_id, title: child.title || child.native_trace_id, collected: true, traceId: child.id, meta: 'Child trace' }} />
 					{/each}
-					{#if !session.entries.length}
-						<p class="empty">No normalized messages. Open Details to inspect the retained source files.</p>
+					{#if !rows.length}
+						<p class="empty">
+							{session.entries.length
+								? 'Nothing in this filter.'
+								: 'No normalized messages. Open Details to inspect the retained source files.'}
+						</p>
 					{/if}
 				</div>
 				{#if showJump}

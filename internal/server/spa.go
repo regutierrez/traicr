@@ -58,7 +58,7 @@ func spaPolicy(html string) string {
 		scriptSrc = append(scriptSrc, cspHash(match[2]))
 	}
 	return "default-src 'none'; script-src " + strings.Join(scriptSrc, " ") +
-		"; style-src 'self'; style-src-attr 'unsafe-inline'; img-src 'self'; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
+		"; style-src 'self'; style-src-attr 'unsafe-inline'; font-src 'self'; img-src 'self'; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
 }
 
 func cspHash(value string) string {

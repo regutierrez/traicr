@@ -6,7 +6,7 @@ import { parseSkillBlock } from './skill';
 import { buildTranscriptSession } from './session';
 import { requestedEdit, resultText, toolChipLabel, toolChipParts, toolStatus, toolSummary } from './tools';
 import { defaultLeafId, findNewestLeaf, getPath, graphHasFork, graphLeaves } from './tree';
-import { displayModel, groupTurns, isToolOnlyMessage, pathSessionFacts, streamCounts, streamRows } from './turns';
+import { displayModel, entryMatchesFilter, groupTurns, isToolOnlyMessage, pathSessionFacts, streamCounts, streamRows } from './turns';
 import type { ToolCallBlock, TranscriptEntry } from './types';
 
 test('shared tools keep original names and display shell and file operations consistently', () => {
@@ -288,6 +288,41 @@ test('tool-only assistant messages stay quiet rows', () => {
 			message: { role: 'assistant', content: [{ type: 'text', text: 'I will inspect it' }] }
 		})
 	).toBe(false);
+});
+
+test('a tool kind filter keeps that command family and drops the others', () => {
+	const shell: TranscriptEntry = {
+		id: 'shell',
+		parentId: null,
+		type: 'message',
+		message: {
+			role: 'assistant',
+			content: [{ type: 'toolCall', id: 'c1', name: 'bash', arguments: { command: 'git status' } }]
+		}
+	};
+	const read: TranscriptEntry = {
+		id: 'read',
+		parentId: 'shell',
+		type: 'message',
+		message: {
+			role: 'assistant',
+			content: [{ type: 'toolCall', id: 'c2', name: 'read', arguments: { path: 'README.md' } }]
+		}
+	};
+	const prose: TranscriptEntry = {
+		id: 'prose',
+		parentId: 'read',
+		type: 'message',
+		message: { role: 'assistant', content: [{ type: 'text', text: 'Done.' }] }
+	};
+	expect(entryMatchesFilter(shell, 'group:exec')).toBe(true);
+	expect(entryMatchesFilter(read, 'group:exec')).toBe(false);
+	expect(entryMatchesFilter(prose, 'group:exec')).toBe(false);
+	expect(entryMatchesFilter(shell, 'tools')).toBe(true);
+	expect(streamCounts([shell, read, prose]).toolKinds).toEqual([
+		{ id: 'read', kind: 'read', label: 'Read', count: 1 },
+		{ id: 'exec', kind: 'exec', label: 'Run Command', count: 1 }
+	]);
 });
 
 test('leftover child traces stay unplaced when no visible card consumes them', () => {
