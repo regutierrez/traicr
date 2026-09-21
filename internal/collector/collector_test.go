@@ -109,6 +109,99 @@ func TestCollectDropsRepeatedTraceIdentitiesSoArchivesValidate(t *testing.T) {
 	}
 }
 
+func TestCollectSkipsUnchangedFileSourcesWithoutReadingThem(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "session.jsonl")
+	if err := os.WriteFile(path, []byte("{\"type\":\"session\",\"version\":3,\"id\":\"pi-stamped\"}\n{\"type\":\"message\",\"text\":\"hello\"}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg := config.Collector{MachineID: "machine-one", State: map[string]config.CollectionRevision{}}
+	options := collector.CollectOptions{
+		Harnesses: []string{"pi"},
+		Sources:   map[string][]string{"pi": {path}},
+		OutputDir: t.TempDir(),
+		ConfigDir: t.TempDir(),
+	}
+	first, err := collector.Collect(context.Background(), cfg, options)
+	if err != nil || len(first.Archives) != 1 {
+		t.Fatalf("initial collection: %+v, %v", first, err)
+	}
+	descriptor := validateArchive(t, first.Archives[0]).Manifest.Traces[0]
+	cfg.State[collector.StateKey("pi", "pi-stamped")] = config.CollectionRevision{Digest: descriptor.RevisionDigest, MachineID: cfg.MachineID}
+	if err := os.Chmod(path, 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(path, 0o600) })
+	options.OutputDir = t.TempDir()
+	second, err := collector.Collect(context.Background(), cfg, options)
+	if err != nil || len(second.Archives) != 0 || len(second.Warnings) != 0 {
+		t.Fatalf("unchanged source was re-read: %+v, %v", second, err)
+	}
+}
+
+func TestCollectRecollectsWhenSourceStampChanges(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "session.jsonl")
+	if err := os.WriteFile(path, []byte("{\"type\":\"session\",\"version\":3,\"id\":\"pi-stamped\"}\n{\"type\":\"message\",\"text\":\"hello\"}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg := config.Collector{MachineID: "machine-one", State: map[string]config.CollectionRevision{}}
+	options := collector.CollectOptions{
+		Harnesses: []string{"pi"},
+		Sources:   map[string][]string{"pi": {path}},
+		OutputDir: t.TempDir(),
+		ConfigDir: t.TempDir(),
+	}
+	first, err := collector.Collect(context.Background(), cfg, options)
+	if err != nil || len(first.Archives) != 1 {
+		t.Fatalf("initial collection: %+v, %v", first, err)
+	}
+	descriptor := validateArchive(t, first.Archives[0]).Manifest.Traces[0]
+	cfg.State[collector.StateKey("pi", "pi-stamped")] = config.CollectionRevision{Digest: descriptor.RevisionDigest, MachineID: cfg.MachineID}
+	if err := os.WriteFile(path, []byte("{\"type\":\"session\",\"version\":3,\"id\":\"pi-stamped\"}\n{\"type\":\"message\",\"text\":\"changed\"}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	options.OutputDir = t.TempDir()
+	second, err := collector.Collect(context.Background(), cfg, options)
+	if err != nil || len(second.Archives) != 1 {
+		t.Fatalf("changed source was skipped: %+v, %v", second, err)
+	}
+	if got := validateArchive(t, second.Archives[0]).Manifest.Traces[0]; got.RevisionDigest == descriptor.RevisionDigest {
+		t.Fatal("changed source reused the acknowledged digest")
+	}
+}
+
+func TestCollectAllIgnoresSourceStamps(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "session.jsonl")
+	if err := os.WriteFile(path, []byte("{\"type\":\"session\",\"version\":3,\"id\":\"pi-stamped\"}\n{\"type\":\"message\",\"text\":\"hello\"}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg := config.Collector{MachineID: "machine-one", State: map[string]config.CollectionRevision{}}
+	options := collector.CollectOptions{
+		Harnesses: []string{"pi"},
+		Sources:   map[string][]string{"pi": {path}},
+		OutputDir: t.TempDir(),
+		ConfigDir: t.TempDir(),
+	}
+	first, err := collector.Collect(context.Background(), cfg, options)
+	if err != nil || len(first.Archives) != 1 {
+		t.Fatalf("initial collection: %+v, %v", first, err)
+	}
+	descriptor := validateArchive(t, first.Archives[0]).Manifest.Traces[0]
+	cfg.State[collector.StateKey("pi", "pi-stamped")] = config.CollectionRevision{Digest: descriptor.RevisionDigest, MachineID: cfg.MachineID}
+	if err := os.Chmod(path, 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(path, 0o600) })
+	options.OutputDir = t.TempDir()
+	options.All = true
+	second, err := collector.Collect(context.Background(), cfg, options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(second.Archives) != 0 || len(second.Warnings) == 0 || second.Warnings[0].Code != "unreadable_source" {
+		t.Fatalf("--all did not re-read the source: %+v", second)
+	}
+}
+
 func TestCollectAllBackfillsPiTitleWithoutChangingRevision(t *testing.T) {
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "session.jsonl")

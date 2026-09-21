@@ -33,7 +33,7 @@ func (grokAdapter) Discover(_ context.Context, configured []string) Source {
 	return Source{Harness: "grok-build", Location: strings.Join(roots, string(os.PathListSeparator)), Traces: len(dirs), Warnings: warnings}
 }
 
-func (grokAdapter) Collect(ctx context.Context, configured []string, progress Progress) (Result, error) {
+func (grokAdapter) Collect(ctx context.Context, configured []string, progress Progress, skip SkipUnchanged) (Result, error) {
 	roots := chooseRoots(configured, grokRoots())
 	dirs, warnings := findGrokSessions(roots)
 	base, err := os.MkdirTemp("", "traicr-grok-*")
@@ -47,6 +47,20 @@ func (grokAdapter) Collect(ctx context.Context, configured []string, progress Pr
 			return Result{}, err
 		}
 		progress.report(index+1, len(dirs))
+		source, err = filepath.Abs(source)
+		if err != nil {
+			result.Warnings = append(result.Warnings, warning("unreadable_source", source+": "+err.Error()))
+			continue
+		}
+		sourceFiles, stampErr := directorySourceFiles(source)
+		stamp := ""
+		if stampErr == nil {
+			stamp, stampErr = sourceStamp(sourceFiles)
+		}
+		if stampErr == nil && skip.skip(source, stamp) {
+			result.Skipped++
+			continue
+		}
 		destination := filepath.Join(base, fmt.Sprintf("%06d", index+1), "source")
 		if err := os.MkdirAll(destination, 0o700); err != nil {
 			result.Cleanup()
@@ -81,7 +95,12 @@ func (grokAdapter) Collect(ctx context.Context, configured []string, progress Pr
 		}
 		// Grok's Markdown export drops native structure, so the complete session is the durable source record.
 		descriptor.Warnings = append(descriptor.Warnings, warning("native_snapshot", "Grok Markdown export is lossy; preserved summary.json, updates.jsonl, and the complete native session directory"))
-		result.Inputs = append(result.Inputs, archive.Input{Descriptor: descriptor, Directory: filepath.Dir(destination)})
+		if files, err := directorySourceFiles(source); err == nil {
+			if after, stampErr := sourceStamp(files); stampErr == nil {
+				stamp = after
+			}
+		}
+		result.Inputs = append(result.Inputs, archive.Input{Descriptor: descriptor, Directory: filepath.Dir(destination), Source: source, Stamp: stamp})
 	}
 	return result, nil
 }

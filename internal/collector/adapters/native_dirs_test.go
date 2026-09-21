@@ -10,6 +10,32 @@ import (
 	"time"
 )
 
+func TestGrokCollectHonorsSkipWithoutOpeningSource(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "session")
+	writeTestFile(t, filepath.Join(source, "summary.json"), `{"sessionId":"snapshot-session"}`)
+	writeTestFile(t, filepath.Join(source, "updates.jsonl"), "{\"id\":\"update\"}\n")
+	if err := os.Chmod(filepath.Join(source, "summary.json"), 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(filepath.Join(source, "summary.json"), 0o600) })
+	result, err := (grokAdapter{}).Collect(context.Background(), []string{root}, nil, func(path, stamp string) bool {
+		if path == "" || stamp == "" {
+			t.Fatalf("skip missing source identity: %q %q", path, stamp)
+		}
+		return true
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Cleanup != nil {
+		defer result.Cleanup()
+	}
+	if len(result.Inputs) != 0 || result.Skipped != 1 || len(result.Warnings) != 0 {
+		t.Fatalf("skip re-opened the source: %+v", result)
+	}
+}
+
 func TestGrokDescriptorUsesSnapshotSummary(t *testing.T) {
 	root := t.TempDir()
 	source := filepath.Join(root, "native-directory")
@@ -41,7 +67,7 @@ func TestGrokDescriptorUsesSnapshotSummary(t *testing.T) {
 			}
 		}
 	}()
-	result, err := (grokAdapter{}).Collect(context.Background(), []string{root}, nil)
+	result, err := (grokAdapter{}).Collect(context.Background(), []string{root}, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

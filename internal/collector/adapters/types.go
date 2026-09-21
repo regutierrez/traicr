@@ -18,6 +18,9 @@ type Result struct {
 	Inputs   []archive.Input
 	Warnings []domain.Warning
 	Cleanup  func()
+	// Skipped is the number of traces left on disk because their source stamp
+	// matched an already acknowledged revision.
+	Skipped int
 }
 
 // Progress reports how many traces an adapter has gathered so far and the
@@ -30,10 +33,18 @@ func (p Progress) report(completed, total int) {
 	}
 }
 
+// SkipUnchanged reports whether a local source with this stamp can be left
+// uncopied because Collection State already has its revision digest.
+type SkipUnchanged func(source, stamp string) bool
+
+func (skip SkipUnchanged) skip(source, stamp string) bool {
+	return skip != nil && source != "" && stamp != "" && skip(source, stamp)
+}
+
 type Adapter interface {
 	Name() string
 	Discover(context.Context, []string) Source
-	Collect(context.Context, []string, Progress) (Result, error)
+	Collect(context.Context, []string, Progress, SkipUnchanged) (Result, error)
 }
 
 func All() []Adapter {

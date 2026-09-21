@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestAmpCollectArchivesImagesWithoutChangingExport(t *testing.T) {
@@ -51,7 +52,7 @@ func TestAmpCollectArchivesImagesWithoutChangingExport(t *testing.T) {
 	t.Setenv("TRAICR_TEST_AMP_IMAGES", "1")
 	t.Setenv("TRAICR_TEST_BINARY", binary)
 	t.Setenv("TRAICR_IMAGE_REQUESTS", filepath.Join(dir, "requests"))
-	result, err := (commandAdapter{name: "amp", format: "amp-thread-export", executable: command}).Collect(context.Background(), nil, nil)
+	result, err := (commandAdapter{name: "amp", format: "amp-thread-export", executable: command}).Collect(context.Background(), nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -160,6 +161,96 @@ func TestAmpListPaginatesWithinCLILimitAndDropsRepeatedThreads(t *testing.T) {
 	}
 }
 
+func TestAmpCollectExportsThreadsInParallel(t *testing.T) {
+	const traces = 12
+	if os.Getenv("TRAICR_TEST_AMP_PARALLEL") == "1" {
+		args := os.Args[slices.Index(os.Args, "--")+1:]
+		switch {
+		case len(args) >= 2 && args[0]+" "+args[1] == "threads list":
+			entries := make([]map[string]string, traces)
+			for i := range traces {
+				entries[i] = map[string]string{"id": fmt.Sprintf("T-%d", i), "updated": "2026-09-20T00:00:00Z"}
+			}
+			json.NewEncoder(os.Stdout).Encode(entries)
+		case len(args) >= 3 && args[0]+" "+args[1] == "threads export":
+			started := filepath.Join(os.Getenv("TRAICR_PARALLEL_DIR"), "started", args[2])
+			if err := os.WriteFile(started, []byte(args[2]), 0o600); err != nil {
+				os.Exit(2)
+			}
+			release := filepath.Join(os.Getenv("TRAICR_PARALLEL_DIR"), "release")
+			for {
+				if _, err := os.Stat(release); err == nil {
+					break
+				}
+				time.Sleep(5 * time.Millisecond)
+			}
+			fmt.Printf(`{"v":1,"id":%q,"title":"Thread","updatedAt":"2026-09-20T00:00:00Z","messages":[]}`, args[2])
+		default:
+			os.Exit(2)
+		}
+		os.Exit(0)
+	}
+	binary, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	if err := os.Mkdir(filepath.Join(dir, "started"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	command := filepath.Join(dir, "amp")
+	if err := os.WriteFile(command, []byte("#!/bin/sh\nexec \"$TRAICR_TEST_BINARY\" -test.run=^TestAmpCollectExportsThreadsInParallel$ -- \"$@\"\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("TRAICR_TEST_AMP_PARALLEL", "1")
+	t.Setenv("TRAICR_TEST_BINARY", binary)
+	t.Setenv("TRAICR_PARALLEL_DIR", dir)
+	done := make(chan error, 1)
+	var result Result
+	go func() {
+		var collectErr error
+		result, collectErr = (commandAdapter{name: "amp", format: "amp-thread-export", executable: command}).Collect(context.Background(), nil, nil, nil)
+		done <- collectErr
+	}()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		entries, _ := os.ReadDir(filepath.Join(dir, "started"))
+		if len(entries) >= commandConcurrency {
+			break
+		}
+		select {
+		case err := <-done:
+			t.Fatalf("collect finished before overlapping exports: %v, started %d", err, len(entries))
+		default:
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("exports did not overlap; started %d, want %d", len(entries), commandConcurrency)
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "release"), []byte("ok"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	if result.Cleanup != nil {
+		defer result.Cleanup()
+	}
+	if len(result.Inputs) != traces || len(result.Warnings) != 0 {
+		t.Fatalf("parallel collect: %+v, warnings: %+v", result.Inputs, result.Warnings)
+	}
+	seen := map[string]bool{}
+	for _, input := range result.Inputs {
+		seen[input.Descriptor.NativeTraceID] = true
+	}
+	for i := range traces {
+		if !seen[fmt.Sprintf("T-%d", i)] {
+			t.Fatalf("missing exported thread T-%d: %v", i, seen)
+		}
+	}
+}
+
 func TestAmpCollectUsesExportTimestampWithoutLiveChangeWarning(t *testing.T) {
 	if os.Getenv("TRAICR_TEST_AMP_COLLECT") == "1" {
 		args := os.Args
@@ -180,7 +271,7 @@ func TestAmpCollectUsesExportTimestampWithoutLiveChangeWarning(t *testing.T) {
 	}
 	t.Setenv("TRAICR_TEST_AMP_COLLECT", "1")
 	t.Setenv("TRAICR_TEST_BINARY", binary)
-	result, err := (commandAdapter{name: "amp", format: "amp-thread-export", executable: command}).Collect(context.Background(), nil, nil)
+	result, err := (commandAdapter{name: "amp", format: "amp-thread-export", executable: command}).Collect(context.Background(), nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

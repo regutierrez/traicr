@@ -37,7 +37,7 @@ func (a jsonlAdapter) Discover(_ context.Context, configured []string) Source {
 	return Source{Harness: a.name, Location: strings.Join(roots, string(os.PathListSeparator)), Traces: len(files), Warnings: warnings}
 }
 
-func (a jsonlAdapter) Collect(ctx context.Context, configured []string, progress Progress) (Result, error) {
+func (a jsonlAdapter) Collect(ctx context.Context, configured []string, progress Progress, skip SkipUnchanged) (Result, error) {
 	roots := chooseRoots(configured, a.defaultRoots())
 	files, warnings := findFiles(roots, ".jsonl")
 	base, err := os.MkdirTemp("", "traicr-"+a.name+"-*")
@@ -51,6 +51,17 @@ func (a jsonlAdapter) Collect(ctx context.Context, configured []string, progress
 			return Result{}, err
 		}
 		progress.report(i+1, len(files))
+		path, err = filepath.Abs(path)
+		if err != nil {
+			result.Warnings = append(result.Warnings, warning("unreadable_source", path+": "+err.Error()))
+			continue
+		}
+		sourceFiles := jsonlSourceFiles(a, path)
+		stamp, stampErr := sourceStamp(sourceFiles)
+		if stampErr == nil && skip.skip(path, stamp) {
+			result.Skipped++
+			continue
+		}
 		dir := filepath.Join(base, fmt.Sprintf("%06d", i+1))
 		if err := os.MkdirAll(filepath.Join(dir, "source"), 0o700); err != nil {
 			result.Cleanup()
@@ -115,7 +126,12 @@ func (a jsonlAdapter) Collect(ctx context.Context, configured []string, progress
 		} else {
 			populateRepository(&descriptor, first)
 		}
-		result.Inputs = append(result.Inputs, archive.Input{Descriptor: descriptor, Directory: dir})
+		if after, err := sourceStamp(sourceFiles); err == nil {
+			stamp = after
+		} else if stampErr != nil {
+			stamp = ""
+		}
+		result.Inputs = append(result.Inputs, archive.Input{Descriptor: descriptor, Directory: dir, Source: path, Stamp: stamp})
 	}
 	return result, nil
 }

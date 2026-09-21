@@ -43,7 +43,9 @@ func (cursorEditorAdapter) Discover(_ context.Context, configured []string) Sour
 	return Source{Harness: "cursor", Location: strings.Join(roots, string(os.PathListSeparator)), Traces: len(files), Warnings: warnings}
 }
 
-func (cursorEditorAdapter) Collect(ctx context.Context, configured []string, progress Progress) (Result, error) {
+func (cursorEditorAdapter) Collect(ctx context.Context, configured []string, progress Progress, _ SkipUnchanged) (Result, error) {
+	// Cursor writes land in the WAL, so a .vscdb size/mtime stamp can stay still
+	// while composer rows change. Always read the live snapshot.
 	roots := chooseRoots(configured, cursorDatabaseRoots())
 	files, warnings := findFiles(roots, ".vscdb", ".sqlite", ".db")
 	base, err := os.MkdirTemp("", "traicr-cursor-*")
