@@ -17,6 +17,8 @@ var forbidden = []*regexp.Regexp{
 	regexp.MustCompile(`/Users/pael\b`),
 	regexp.MustCompile(`(?i)\bmaelle\b`),
 	regexp.MustCompile(`(?i)\besquie\b`),
+	regexp.MustCompile(`(?i)\bakkio\b`),
+	regexp.MustCompile(`\bpakkio\b`),
 	regexp.MustCompile(`(?i)@[a-z0-9.-]*(gmail|akkio)\.com\b`),
 }
 

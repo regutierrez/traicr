@@ -20,9 +20,14 @@ ENV_ASSIGN = re.compile(
     r"TRAICR_ADMIN_TOKEN|AWS_SECRET_ACCESS_KEY|CURSOR_API_KEY)\s*=\s*(?:\"[^\"]+\"|'[^']+'|\$\([^)]+\)|\S+)"
 )
 HOME = re.compile(r"/home/pael\b")
-USERS_HOME = re.compile(r"/Users/pael\b")
+USERS_HOME = re.compile(r"/Users/(?:pael|pakkio)\b")
 HOME_SLUG = re.compile(r"(?<=[-_])home-pael(?=[-_])")
 USER_WORD = re.compile(r"\b[Pp]ael\b")
+WORK_REMOTE = re.compile(r"(?i)akkio-remote")
+PAKKIO_PATH = re.compile(r"(?<=/)pakkio(?=/)")
+WORK_TICKET = re.compile(r"\bAKKIO-(\d+)\b")
+WORK_WORD = re.compile(r"(?i)\bakkio\b")
+PAKKIO_WORD = re.compile(r"\bpakkio\b")
 HOSTS = (
     (re.compile(r"https://traicr\.esquie\.pael\.dev"), "https://traicr.example.test"),
     (re.compile(r"https://esquie\.pael\.dev"), "https://example.test"),
@@ -84,6 +89,11 @@ def scrub_text(text: str) -> str:
     text = USERS_HOME.sub("/home/user", text)
     text = HOME_SLUG.sub("home-user", text)
     text = USER_WORD.sub("user", text)
+    text = WORK_REMOTE.sub("work-remote", text)
+    text = PAKKIO_PATH.sub("user", text)
+    text = WORK_TICKET.sub(r"TICKET-\1", text)
+    text = WORK_WORD.sub("project", text)
+    text = PAKKIO_WORD.sub("user", text)
     for pattern, replacement in HOSTS:
         text = pattern.sub(replacement, text)
     text = MACHINE_ID.sub("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", text)
