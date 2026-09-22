@@ -17,3 +17,5 @@ These files contain invented prompts, paths, IDs, and tool output. They are mini
 | `grok-build` | `grok-native-session` | Native chat format 1 summary and ACP update log, [`persistence.rs`](https://github.com/xai-org/grok-build/blob/main/crates/codegen/xai-grok-shell/src/session/persistence.rs) and [`storage/mod.rs`](https://github.com/xai-org/grok-build/blob/main/crates/codegen/xai-grok-shell/src/session/storage/mod.rs) |
 
 Unknown-version and malformed-record cases are assembled in tests so their deliberately invalid bytes cannot be mistaken for native fixture examples.
+
+Full-length viewer sessions live in [`testdata/sessions`](../sessions/README.md). Those files are real transcripts with tokens and personal identifiers replaced.
