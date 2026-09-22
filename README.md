@@ -136,6 +136,8 @@ git config core.hooksPath .githooks
 
 `commit-msg` strips Cursor attribution trailers. `prepare-commit-msg` exports Rafael as `GIT_AUTHOR_*` / `GIT_COMMITTER_*` when the ident is Cursor Agent (and sets local `user.name` / `user.email`). Git resolves author before that hook, so `post-commit` amends the commit to `regutierrez <rpegutierrez@gmail.com>` when HEAD still has a Cursor author or committer. Hosted Cursor cloud agents may still force Cursor Agent as author; squash-merge to Rafael (`regutierrez` / `rpegutierrez@gmail.com`) if that happens.
 
+Agents spinning up a disposable archive should follow [`AGENTS.md`](./AGENTS.md): start `traicr-server` on port 8080, then import [`testdata/sessions`](./testdata/sessions/README.md).
+
 Run the complete local checks and builds:
 
 ```sh

@@ -1,6 +1,6 @@
 # Scrubbed session fixtures
 
-These are real Pi, Amp, and Claude Code sessions used to exercise the transcript viewer. Tokens, personal emails, home directories, and host names were replaced. The original pack is not in git.
+These are real Pi, Amp, and Claude Code sessions used to exercise the transcript viewer. Tokens, personal emails, home directories, local usernames, and host names were replaced. The original pack is not in git.
 
 | Directory | Harness | Adapter | Native source |
 | --- | --- | --- | --- |
@@ -9,3 +9,5 @@ These are real Pi, Amp, and Claude Code sessions used to exercise the transcript
 | `claude-cleanup` | `claude-code` | `claude-code-jsonl` | `source/records.jsonl` |
 
 `testdata/harnesses` stays the small invented structural fixtures. Do not copy an unsanitized export here. Re-run `scrub.py` against a new pack, then `go test ./test/sessions`.
+
+When spinning up a test archive, import these files after the server is healthy. The commands are in [`AGENTS.md`](../../AGENTS.md).
