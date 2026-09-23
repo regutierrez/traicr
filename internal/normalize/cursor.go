@@ -97,8 +97,12 @@ func cursorBubble(row cursorRow, header map[string]any) []domain.Event {
 	if tool := object(row.Value["toolFormerData"]); tool != nil {
 		call := base
 		call.Kind, call.Tool = "tool_call", stringValue(tool["name"])
-		call.CallID = firstString(tool, "callId", "id")
-		call.Text = readableJSON(tool["params"])
+		// Composer bubbles store the provider id on toolCallId.
+		call.CallID = firstString(tool, "toolCallId", "tool_call_id", "callId", "call_id", "id")
+		if call.CallID == "" {
+			call.CallID = id
+		}
+		call.Text = readableJSON(cursorToolArgs(tool))
 		call.Key = nativeKey(call.Kind, id, row.Value)
 		events = append(events, call)
 		if tool["result"] != nil {
@@ -109,6 +113,29 @@ func cursorBubble(row cursorRow, header map[string]any) []domain.Event {
 		}
 	}
 	return events
+}
+
+func cursorToolArgs(tool map[string]any) any {
+	for _, key := range []string{"params", "rawArgs"} {
+		value, ok := tool[key]
+		if !ok || value == nil {
+			continue
+		}
+		text, isString := value.(string)
+		if !isString {
+			return value
+		}
+		text = strings.TrimSpace(text)
+		if text == "" {
+			continue
+		}
+		var decoded any
+		if json.Unmarshal([]byte(text), &decoded) == nil && decoded != nil {
+			return decoded
+		}
+		return text
+	}
+	return map[string]any{}
 }
 
 func normalizeLegacyCursor(row cursorRow) ([]domain.Event, []domain.Warning) {

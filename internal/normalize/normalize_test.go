@@ -60,6 +60,116 @@ func TestRunSanitizedFixtures(t *testing.T) {
 	}
 }
 
+func TestCursorMCPToolResultStaysWithItsCall(t *testing.T) {
+	composerID := "ddf4e792-18a5-4ad4-9004-8b7e6d5008ee"
+	params := `{"server":"user-doop","toolName":"get_guide"}`
+	resultText := `{"content":"{\"tool\":\"get_guide\",\"description\":\"Read the Doop agent guide\"}"}`
+	rows := strings.Join([]string{
+		cursorDiskRow("composerData:"+composerID, map[string]any{
+			"composerId": composerID,
+			"fullConversationHeadersOnly": []any{
+				map[string]any{"bubbleId": "bubble-guide", "type": 2},
+				map[string]any{"bubbleId": "bubble-pending", "type": 2},
+				map[string]any{"bubbleId": "bubble-legacy", "type": 2},
+			},
+		}),
+		cursorDiskRow("bubbleId:"+composerID+":bubble-guide", map[string]any{
+			"bubbleId": "bubble-guide",
+			"type":     2,
+			"text":     "I'll pull the Doop guide and inspect that canvas so we can draw the Linear redesign there for collaboration.",
+			"toolFormerData": map[string]any{
+				"tool":       19,
+				"toolCallId": "toolu_guide",
+				"name":       "GetMcpTools",
+				"status":     "completed",
+				"params":     params,
+				"rawArgs":    params,
+				"result":     resultText,
+			},
+		}),
+		cursorDiskRow("bubbleId:"+composerID+":bubble-pending", map[string]any{
+			"bubbleId": "bubble-pending",
+			"type":     2,
+			"toolFormerData": map[string]any{
+				"tool":       19,
+				"toolCallId": "toolu_pending",
+				"name":       "GetMcpTools",
+				"status":     "loading",
+				"params":     `{"server":"user-doop","toolName":"get_canvas"}`,
+			},
+		}),
+		cursorDiskRow("bubbleId:"+composerID+":bubble-legacy", map[string]any{
+			"bubbleId": "bubble-legacy",
+			"type":     2,
+			"toolFormerData": map[string]any{
+				"name":   "GetMcpTools",
+				"params": `{"server":"user-doop"}`,
+				"result": "listed tools",
+			},
+		}),
+	}, "\n") + "\n"
+	result, err := Run(context.Background(), domain.Descriptor{Harness: "cursor", Adapter: "cursor-sqlite-rows"}, fstest.MapFS{
+		"source/rows.jsonl": {Data: []byte(rows)},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Version != 2 {
+		t.Fatalf("cursor normalizer version = %d", result.Version)
+	}
+	var guideCall, guideResult, pendingCall, legacyCall, legacyResult *domain.Event
+	for index := range result.Events {
+		event := &result.Events[index]
+		switch event.Key {
+		case "tool_call:bubble-guide":
+			guideCall = event
+		case "tool_result:bubble-guide":
+			guideResult = event
+		case "tool_call:bubble-pending":
+			pendingCall = event
+		case "tool_call:bubble-legacy":
+			legacyCall = event
+		case "tool_result:bubble-legacy":
+			legacyResult = event
+		}
+	}
+	if guideCall == nil || guideResult == nil || pendingCall == nil || legacyCall == nil || legacyResult == nil {
+		t.Fatalf("missing tool events: %#v", result.Events)
+	}
+	if guideCall.CallID != "toolu_guide" || guideResult.CallID != guideCall.CallID || guideCall.Tool != "GetMcpTools" {
+		t.Fatalf("guide call was not linked: call=%+v result=%+v", guideCall, guideResult)
+	}
+	if !strings.Contains(guideCall.Text, `"server":"user-doop"`) || !strings.Contains(guideCall.Text, `"toolName":"get_guide"`) || strings.Contains(guideCall.Text, `\"server\"`) {
+		t.Fatalf("params stayed a JSON string: %s", guideCall.Text)
+	}
+	if guideResult.Text != resultText {
+		t.Fatalf("result text = %q", guideResult.Text)
+	}
+	if pendingCall.CallID != "toolu_pending" {
+		t.Fatalf("pending call id = %q", pendingCall.CallID)
+	}
+	for _, event := range result.Events {
+		if event.Kind == "tool_result" && event.CallID == "toolu_pending" {
+			t.Fatalf("loading call invented a result: %+v", event)
+		}
+	}
+	if legacyCall.CallID != "bubble-legacy" || legacyResult.CallID != "bubble-legacy" {
+		t.Fatalf("legacy bubble ids did not pair the result: call=%q result=%q", legacyCall.CallID, legacyResult.CallID)
+	}
+}
+
+func cursorDiskRow(key string, value any) string {
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		panic(err)
+	}
+	row, err := json.Marshal(map[string]string{"table": "cursorDiskKV", "key": key, "value": string(encoded)})
+	if err != nil {
+		panic(err)
+	}
+	return string(row)
+}
+
 func TestAttachmentIndexesMetadataWithoutPayload(t *testing.T) {
 	root, err := findFixtureRoot()
 	if err != nil {

@@ -6,7 +6,7 @@ import { parseSkillBlock } from './skill';
 import { buildTranscriptSession } from './session';
 import { requestedEdit, resultText, toolChipLabel, toolChipParts, toolStatus, toolSummary } from './tools';
 import { defaultLeafId, findNewestLeaf, getPath, graphHasFork, graphLeaves } from './tree';
-import { displayModel, groupTurns, isToolOnlyMessage, pathSessionFacts, streamCounts, streamRows } from './turns';
+import { displayModel, groupTurns, isToolOnlyMessage, pathSessionFacts, streamCounts, streamRows, toolResults } from './turns';
 import type { ToolCallBlock, TranscriptEntry } from './types';
 
 test('shared tools keep original names and display shell and file operations consistently', () => {
@@ -58,6 +58,68 @@ test('Amp recorded tool states preserve failure and running precedence', () => {
 		const call = { type: 'toolCall', id: 'call', name: 'tool', arguments: {}, details: { complete } } as ToolCallBlock;
 		expect(toolStatus(call, result ? { id: '2', parentId: null, type: 'message', message: result } : undefined)).toBe(status);
 	}
+});
+
+test('an empty Cursor call id detaches the result into a second chip', () => {
+	const detached = buildTranscriptSession(
+		[
+			{ id: 1, key: 'message:bubble-guide', kind: 'message', role: 'assistant', text: "I'll pull the Doop guide" },
+			{
+				id: 2,
+				key: 'tool_call:bubble-guide',
+				kind: 'tool_call',
+				role: 'assistant',
+				tool: 'GetMcpTools',
+				text: '"{\\"server\\":\\"user-doop\\",\\"toolName\\":\\"get_guide\\"}"'
+			},
+			{ id: 3, key: 'tool_result:bubble-guide', kind: 'tool_result', role: 'assistant', tool: 'GetMcpTools', text: '{"content":"guide schema"}' }
+		],
+		{ harness: 'cursor', nativeId: 'ddf4e792-18a5-4ad4-9004-8b7e6d5008ee', traceId: '1' }
+	);
+	const detachedPath = getPath(detached.entries, detached.leafId ?? '');
+	const call = detachedPath.flatMap((entry) => entry.message?.content ?? []).find((block) => block.type === 'toolCall');
+	expect(call && call.type === 'toolCall' ? call.id : '').toBe('tool_call:bubble-guide');
+	expect(call && call.type === 'toolCall' ? call.arguments : {}).toEqual({
+		raw: '"{\\"server\\":\\"user-doop\\",\\"toolName\\":\\"get_guide\\"}"'
+	});
+	expect(toolResults(detachedPath).has(call && call.type === 'toolCall' ? call.id : '')).toBe(false);
+	expect(toolStatus(call as ToolCallBlock, undefined)).toBe('result not collected');
+	const detachedRows = streamRows(detachedPath).flatMap((row) => row.entries);
+	expect(detachedRows.some((entry) => entry.message?.role === 'toolResult' && entry.message.toolName === 'GetMcpTools')).toBe(true);
+
+	const linked = buildTranscriptSession(
+		[
+			{ id: 1, key: 'message:bubble-guide', kind: 'message', role: 'assistant', text: "I'll pull the Doop guide" },
+			{
+				id: 2,
+				key: 'tool_call:bubble-guide',
+				kind: 'tool_call',
+				role: 'assistant',
+				call_id: 'toolu_guide',
+				tool: 'GetMcpTools',
+				text: '{"server":"user-doop","toolName":"get_guide"}'
+			},
+			{
+				id: 3,
+				key: 'tool_result:bubble-guide',
+				kind: 'tool_result',
+				role: 'assistant',
+				call_id: 'toolu_guide',
+				tool: 'GetMcpTools',
+				text: '{"content":"guide schema"}'
+			}
+		],
+		{ harness: 'cursor', nativeId: 'ddf4e792-18a5-4ad4-9004-8b7e6d5008ee', traceId: '1' }
+	);
+	const linkedPath = getPath(linked.entries, linked.leafId ?? '');
+	const linkedCall = linkedPath.flatMap((entry) => entry.message?.content ?? []).find((block) => block.type === 'toolCall');
+	const linkedResult = toolResults(linkedPath).get(linkedCall && linkedCall.type === 'toolCall' ? linkedCall.id : '');
+	expect(linkedCall && linkedCall.type === 'toolCall' ? linkedCall.arguments : {}).toEqual({
+		server: 'user-doop',
+		toolName: 'get_guide'
+	});
+	expect(resultText(linkedResult)).toBe('{"content":"guide schema"}');
+	expect(streamRows(linkedPath).some((row) => row.entries.some((entry) => entry.message?.role === 'toolResult'))).toBe(false);
 });
 
 test('empty reasoning stays empty so the UI can explain the omitted text', () => {
