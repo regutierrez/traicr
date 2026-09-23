@@ -1,6 +1,7 @@
 package normalize
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"io/fs"
@@ -107,8 +108,12 @@ func cursorBubble(row cursorRow, header map[string]any) []domain.Event {
 		events = append(events, call)
 		if tool["result"] != nil {
 			result := call
-			result.Kind, result.Text = "tool_result", contentText(tool["result"])
+			decoded := decodeCursorValue(tool["result"])
+			result.Kind, result.Text = "tool_result", formatCursorResult(decoded, 6)
 			result.Key = nativeKey(result.Kind, id, row.Value)
+			if meta := cursorRunMetadata(tool, decoded); meta != nil {
+				result.Metadata, _ = json.Marshal(meta)
+			}
 			events = append(events, result)
 		}
 	}
@@ -136,6 +141,135 @@ func cursorToolArgs(tool map[string]any) any {
 		return text
 	}
 	return map[string]any{}
+}
+
+func decodeCursorValue(value any) any {
+	text, ok := value.(string)
+	if !ok {
+		return value
+	}
+	trimmed := strings.TrimSpace(text)
+	if len(trimmed) < 2 {
+		return text
+	}
+	if !(strings.HasPrefix(trimmed, "{") && strings.HasSuffix(trimmed, "}")) && !(strings.HasPrefix(trimmed, "[") && strings.HasSuffix(trimmed, "]")) && !(strings.HasPrefix(trimmed, `"`) && strings.HasSuffix(trimmed, `"`)) {
+		return text
+	}
+	var decoded any
+	if json.Unmarshal([]byte(trimmed), &decoded) != nil || decoded == nil {
+		return text
+	}
+	if _, still := decoded.(string); still {
+		return decodeCursorValue(decoded)
+	}
+	return decoded
+}
+
+func formatCursorResult(value any, depth int) string {
+	if depth <= 0 || value == nil {
+		return ""
+	}
+	value = decodeCursorValue(value)
+	switch value := value.(type) {
+	case string:
+		if searchableValue("", value) == nil {
+			return ""
+		}
+		return value
+	case []any:
+		var parts []string
+		for _, item := range value {
+			if text := strings.TrimSpace(formatCursorResult(item, depth-1)); text != "" {
+				parts = append(parts, text)
+			}
+		}
+		return strings.Join(parts, "\n")
+	case map[string]any:
+		for _, key := range []string{"content", "contents", "output", "text"} {
+			if _, ok := value[key]; !ok {
+				continue
+			}
+			if text := strings.TrimSpace(formatCursorResult(value[key], depth-1)); text != "" {
+				return text
+			}
+		}
+		if text := cursorErrorText(value["error"]); text != "" {
+			return text
+		}
+		if nested, ok := value["result"]; ok {
+			if text := strings.TrimSpace(formatCursorResult(nested, depth-1)); text != "" {
+				return text
+			}
+		}
+		return prettyJSON(searchableValue("", value))
+	default:
+		return prettyJSON(value)
+	}
+}
+
+func cursorErrorText(value any) string {
+	switch value := value.(type) {
+	case string:
+		return strings.TrimSpace(value)
+	case map[string]any:
+		if text := strings.TrimSpace(stringValue(value["message"])); text != "" {
+			return text
+		}
+		if len(value) == 0 {
+			return ""
+		}
+		return prettyJSON(value)
+	default:
+		return ""
+	}
+}
+
+func cursorRunMetadata(tool map[string]any, decoded any) map[string]any {
+	run := map[string]any{}
+	switch strings.ToLower(stringValue(tool["status"])) {
+	case "error":
+		run["status"] = "error"
+	case "cancelled":
+		run["status"] = "cancelled"
+	}
+	if object, ok := decoded.(map[string]any); ok {
+		if code, ok := wholeNumber(object["exitCode"]); ok {
+			run["result"] = map[string]any{"exitCode": code}
+			if code != 0 {
+				run["status"] = "error"
+			}
+		}
+	}
+	if len(run) == 0 {
+		return nil
+	}
+	return map[string]any{"run": run}
+}
+
+func wholeNumber(value any) (int, bool) {
+	switch value := value.(type) {
+	case float64:
+		code := int(value)
+		return code, value == float64(code)
+	case int:
+		return value, true
+	default:
+		return 0, false
+	}
+}
+
+func prettyJSON(value any) string {
+	if value == nil {
+		return ""
+	}
+	var buf bytes.Buffer
+	encoder := json.NewEncoder(&buf)
+	encoder.SetEscapeHTML(false)
+	encoder.SetIndent("", "  ")
+	if err := encoder.Encode(value); err != nil {
+		return ""
+	}
+	return strings.TrimRight(buf.String(), "\n")
 }
 
 func normalizeLegacyCursor(row cursorRow) ([]domain.Event, []domain.Warning) {

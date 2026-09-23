@@ -114,7 +114,7 @@ func TestCursorMCPToolResultStaysWithItsCall(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.Version != 2 {
+	if result.Version != 3 {
 		t.Fatalf("cursor normalizer version = %d", result.Version)
 	}
 	var guideCall, guideResult, pendingCall, legacyCall, legacyResult *domain.Event
@@ -142,7 +142,7 @@ func TestCursorMCPToolResultStaysWithItsCall(t *testing.T) {
 	if !strings.Contains(guideCall.Text, `"server":"user-doop"`) || !strings.Contains(guideCall.Text, `"toolName":"get_guide"`) || strings.Contains(guideCall.Text, `\"server\"`) {
 		t.Fatalf("params stayed a JSON string: %s", guideCall.Text)
 	}
-	if guideResult.Text != resultText {
+	if strings.Contains(guideResult.Text, `\n`) || strings.Contains(guideResult.Text, `\"tool\"`) || !strings.Contains(guideResult.Text, `"description": "Read the Doop agent guide"`) {
 		t.Fatalf("result text = %q", guideResult.Text)
 	}
 	if pendingCall.CallID != "toolu_pending" {
@@ -155,6 +155,59 @@ func TestCursorMCPToolResultStaysWithItsCall(t *testing.T) {
 	}
 	if legacyCall.CallID != "bubble-legacy" || legacyResult.CallID != "bubble-legacy" {
 		t.Fatalf("legacy bubble ids did not pair the result: call=%q result=%q", legacyCall.CallID, legacyResult.CallID)
+	}
+}
+
+func TestCursorToolResultTextUnwrapsJSONEnvelopes(t *testing.T) {
+	composerID := "cursor-results"
+	shellResult := `{"output":"ok\n","exitCode":0}`
+	readResult := `{"contents":"package main\n","relativeWorkspacePath":"main.go"}`
+	mcpResult := "{\"content\":[{\"type\":\"text\",\"text\":\"Call with topic `doop-instructions` once.\"}]}"
+	rows := strings.Join([]string{
+		cursorDiskRow("composerData:"+composerID, map[string]any{
+			"composerId": composerID,
+			"fullConversationHeadersOnly": []any{
+				map[string]any{"bubbleId": "shell", "type": 2},
+				map[string]any{"bubbleId": "read", "type": 2},
+				map[string]any{"bubbleId": "mcp", "type": 2},
+			},
+		}),
+		cursorDiskRow("bubbleId:"+composerID+":shell", map[string]any{
+			"bubbleId": "shell", "type": 2,
+			"toolFormerData": map[string]any{"toolCallId": "shell-1", "name": "run_terminal_command_v2", "status": "completed", "params": `{"command":"echo ok"}`, "result": shellResult},
+		}),
+		cursorDiskRow("bubbleId:"+composerID+":read", map[string]any{
+			"bubbleId": "read", "type": 2,
+			"toolFormerData": map[string]any{"toolCallId": "read-1", "name": "read_file_v2", "status": "completed", "params": `{"targetFile":"main.go"}`, "result": readResult},
+		}),
+		cursorDiskRow("bubbleId:"+composerID+":mcp", map[string]any{
+			"bubbleId": "mcp", "type": 2,
+			"toolFormerData": map[string]any{"toolCallId": "mcp-1", "name": "mcp_user-doop_get_guide", "status": "completed", "params": `{"topic":"doop-instructions"}`, "result": mcpResult},
+		}),
+	}, "\n") + "\n"
+	result, err := Run(context.Background(), domain.Descriptor{Harness: "cursor", Adapter: "cursor-sqlite-rows"}, fstest.MapFS{
+		"source/rows.jsonl": {Data: []byte(rows)},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	texts := map[string]domain.Event{}
+	for _, event := range result.Events {
+		if event.Kind == "tool_result" {
+			texts[event.CallID] = event
+		}
+	}
+	if texts["shell-1"].Text != "ok" {
+		t.Fatalf("shell output = %q", texts["shell-1"].Text)
+	}
+	if !strings.Contains(string(texts["shell-1"].Metadata), `"exitCode":0`) {
+		t.Fatalf("shell metadata = %s", texts["shell-1"].Metadata)
+	}
+	if texts["read-1"].Text != "package main" {
+		t.Fatalf("read output = %q", texts["read-1"].Text)
+	}
+	if texts["mcp-1"].Text != "Call with topic `doop-instructions` once." {
+		t.Fatalf("mcp output = %q", texts["mcp-1"].Text)
 	}
 }
 

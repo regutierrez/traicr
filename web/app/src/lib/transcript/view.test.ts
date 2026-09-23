@@ -4,7 +4,7 @@ import { renderMarkdown, sanitizeMarkdownUrl } from './markdown';
 import { leftoverCards } from './children';
 import { parseSkillBlock } from './skill';
 import { buildTranscriptSession } from './session';
-import { requestedEdit, resultText, toolChipLabel, toolChipParts, toolStatus, toolSummary } from './tools';
+import { isStructuredOutput, requestedEdit, resultText, toolChipLabel, toolChipParts, toolStatus, toolSummary } from './tools';
 import { defaultLeafId, findNewestLeaf, getPath, graphHasFork, graphLeaves } from './tree';
 import { displayModel, groupTurns, isToolOnlyMessage, pathSessionFacts, streamCounts, streamRows, toolResults } from './turns';
 import type { ToolCallBlock, TranscriptEntry } from './types';
@@ -58,6 +58,11 @@ test('Amp recorded tool states preserve failure and running precedence', () => {
 		const call = { type: 'toolCall', id: 'call', name: 'tool', arguments: {}, details: { complete } } as ToolCallBlock;
 		expect(toolStatus(call, result ? { id: '2', parentId: null, type: 'message', message: result } : undefined)).toBe(status);
 	}
+});
+
+test('JSON tool output stays structured text', () => {
+	expect(isStructuredOutput('{\n  "tool": "get_guide",\n  "description": "Call `doop-instructions` once."\n}')).toBe(true);
+	expect(isStructuredOutput('Call `doop-instructions` once.')).toBe(false);
 });
 
 test('an empty Cursor call id detaches the result into a second chip', () => {

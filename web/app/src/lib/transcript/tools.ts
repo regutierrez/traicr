@@ -179,6 +179,17 @@ export function diffLines(text: string): DiffLine[] {
 	}));
 }
 
+export function isStructuredOutput(text: string) {
+	const trimmed = text.trim();
+	if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) return false;
+	try {
+		const value = JSON.parse(trimmed);
+		return value !== null && typeof value === 'object';
+	} catch {
+		return false;
+	}
+}
+
 export function resultText(result?: TranscriptEntry) {
 	return (result?.message?.content ?? [])
 		.filter((block) => block.type === 'text')

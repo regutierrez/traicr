@@ -7,6 +7,7 @@
 	import {
 		isFileTool,
 		isShellTool,
+		isStructuredOutput,
 		requestedEdit,
 		resultFiles,
 		resultText,
@@ -42,6 +43,7 @@
 	let command = $derived(toolCommand(args));
 	let path = $derived(toolPath(args));
 	let output = $derived(resultText(result));
+	let structured = $derived(isStructuredOutput(output));
 	let files = $derived(resultFiles(result?.message?.run?.result));
 	let edit = $derived(requestedEdit(args));
 	let cards = $derived(childCards(entry, call, result, children));
@@ -103,8 +105,8 @@
 			{#if output}
 				<details>
 					<summary>Tool output</summary>
-					{#if isShellTool(call.name) || isFileTool(call.name)}
-						<pre class="code"><code class="hljs">{@html highlightCode(output, highlightLanguage)}</code></pre>
+					{#if isShellTool(call.name) || isFileTool(call.name) || structured}
+						<pre class="code"><code class="hljs">{@html highlightCode(output, structured ? 'json' : highlightLanguage)}</code></pre>
 					{:else}
 						<Markdown text={output} />
 					{/if}
