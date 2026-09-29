@@ -26,8 +26,9 @@ type cursorRow struct {
 }
 
 type cursorTrace struct {
-	ID   string
-	Rows []cursorRow
+	ID    string
+	Title string
+	Rows  []cursorRow
 }
 
 func (cursorEditorAdapter) Name() string { return "cursor" }
@@ -87,7 +88,7 @@ func (cursorEditorAdapter) Collect(ctx context.Context, configured []string, pro
 				result.Cleanup()
 				return Result{}, err
 			}
-			descriptor := domain.Descriptor{Harness: "cursor", Adapter: "cursor-sqlite-rows", NativeTraceID: trace.ID}
+			descriptor := domain.Descriptor{Harness: "cursor", Adapter: "cursor-sqlite-rows", NativeTraceID: trace.ID, Title: trace.Title}
 			if info != nil {
 				descriptor.NativeUpdatedAt = info.ModTime().UTC().Format(time.RFC3339Nano)
 			}
@@ -180,7 +181,7 @@ func groupCursorRows(rows []cursorRow) []cursorTrace {
 	for _, row := range rows {
 		lowerKey := strings.ToLower(row.Key)
 		if strings.Contains(lowerKey, "composerdata") {
-			trace := cursorTrace{ID: cursorRowID(row), Rows: []cursorRow{row}}
+			trace := cursorTrace{ID: cursorRowID(row), Title: cursorComposerName(row.Value), Rows: []cursorRow{row}}
 			ids := referencedBubbleIDs(row.Value)
 			for _, candidate := range rows {
 				if !strings.Contains(strings.ToLower(candidate.Key), "bubble") {
@@ -220,6 +221,17 @@ func cursorRowID(row cursorRow) string {
 		return suffix
 	}
 	return row.Table + ":" + row.Key
+}
+
+// Cursor keeps the composer's generated or user-edited name on composerData.
+func cursorComposerName(value string) string {
+	var composer struct {
+		Name string `json:"name"`
+	}
+	if json.Unmarshal([]byte(value), &composer) != nil {
+		return ""
+	}
+	return strings.TrimSpace(composer.Name)
 }
 
 func cursorBubbleKeyMatches(key, id string) bool {

@@ -25,7 +25,7 @@ func TestCursorCollectsComposerAndReferencedBubblesFromLiveWALReadOnly(t *testin
 		"PRAGMA journal_mode=WAL",
 		"PRAGMA wal_autocheckpoint=0",
 		"CREATE TABLE ItemTable (key TEXT PRIMARY KEY, value TEXT)",
-		`INSERT INTO ItemTable VALUES ('composerData:composer-1', '{"id":"composer-1","fullConversationHeadersOnly":[{"bubbleId":"bubble-1"}]}')`,
+		`INSERT INTO ItemTable VALUES ('composerData:composer-1', '{"id":"composer-1","name":" Fix login redirect ","fullConversationHeadersOnly":[{"bubbleId":"bubble-1"}]}')`,
 		`INSERT INTO ItemTable VALUES ('bubbleId:bubble-1', '{"role":"user","text":"hello"}')`,
 		`INSERT INTO ItemTable VALUES ('bubbleId:unreferenced', '{"role":"assistant","text":"not part of trace"}')`,
 	} {
@@ -50,6 +50,9 @@ func TestCursorCollectsComposerAndReferencedBubblesFromLiveWALReadOnly(t *testin
 	defer result.Cleanup()
 	if len(result.Inputs) != 1 || result.Inputs[0].Descriptor.NativeTraceID != "composer-1" {
 		t.Fatalf("unexpected inputs: %+v", result.Inputs)
+	}
+	if title := result.Inputs[0].Descriptor.Title; title != "Fix login redirect" {
+		t.Fatalf("title = %q, want the Cursor composer name", title)
 	}
 	file, err := os.Open(filepath.Join(result.Inputs[0].Directory, "source", "rows.jsonl"))
 	if err != nil {
