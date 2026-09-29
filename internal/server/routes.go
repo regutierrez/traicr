@@ -74,6 +74,7 @@ func NewHTTPHandler(configuration config.ServerConfig, database *store.Store, lo
 	mux.Handle("GET /api/v1/revisions/{id}/sources", app.api(app.revisionSources))
 	mux.Handle("GET /api/v1/revisions/{id}/file", app.api(app.sourceFile))
 	mux.Handle("GET /api/v1/machines", app.api(app.machines))
+	mux.Handle("PATCH /api/v1/traces/{id}", app.api(app.updateTrace))
 	mux.Handle("DELETE /api/v1/traces/{id}", app.api(app.deleteAPI))
 	// Unknown API paths must not fall through to the browser shell below.
 	mux.HandleFunc("GET /api/", apiNotFound)
@@ -164,6 +165,8 @@ func (app *application) failure(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusConflict, "transcript_changed", err.Error())
 	case errors.Is(err, store.ErrInvalidQuery):
 		writeError(w, http.StatusBadRequest, "invalid_query", err.Error())
+	case errors.Is(err, store.ErrInvalidTitle):
+		writeError(w, http.StatusBadRequest, "invalid_title", err.Error())
 	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
 		writeError(w, http.StatusRequestTimeout, "cancelled", "request cancelled or timed out")
 	default:

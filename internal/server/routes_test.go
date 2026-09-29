@@ -77,6 +77,9 @@ func request(handler http.Handler, method, target string, body io.Reader, token 
 	if method == http.MethodPost {
 		req.Header.Set("Content-Type", "application/zip")
 	}
+	if method == http.MethodPatch {
+		req.Header.Set("Content-Type", "application/json")
+	}
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, req)
 	return response
@@ -92,9 +95,9 @@ func TestHTTPAuthenticationAndValidation(t *testing.T) {
 			}
 		}
 	}
-	for _, method := range []string{"POST", "DELETE"} {
+	for _, method := range []string{"POST", "PATCH", "DELETE"} {
 		path := "/api/v1/imports"
-		if method == "DELETE" {
+		if method != "POST" {
 			path = "/api/v1/traces/1"
 		}
 		if got := request(handler, method, path, nil, ""); got.Code != http.StatusUnauthorized {
@@ -319,5 +322,87 @@ func TestImportSearchInspectRetryAndDelete(t *testing.T) {
 	response = request(handler, "POST", "/api/v1/imports", strings.NewReader("corrupt zip"), adminToken)
 	if !strings.Contains(response.Body.String(), `"phase":"failed"`) || strings.Contains(response.Body.String(), `"phase":"complete"`) {
 		t.Fatalf("corrupt ZIP accepted: %s", response.Body)
+	}
+}
+
+func TestRenameTraceThroughAPI(t *testing.T) {
+	handler := testHandler(t, false)
+	source := "{\"type\":\"session\",\"version\":3,\"id\":\"rename-session\"}\n" +
+		"{\"type\":\"message\",\"id\":\"m1\",\"timestamp\":\"2026-08-22T10:00:00Z\",\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hello\"}]}}\n"
+	dir := t.TempDir()
+	if err := os.Mkdir(filepath.Join(dir, "source"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "source", "records.jsonl"), []byte(source), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	paths, err := archive.Write(context.Background(), t.TempDir(), domain.Manifest{SourceMachine: domain.Machine{ID: "rename-machine", Hostname: "fixture"}}, []archive.Input{{Directory: dir, Descriptor: domain.Descriptor{Harness: "pi", Adapter: "pi-jsonl", NativeTraceID: "rename-session"}}}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	zipBytes, err := os.ReadFile(paths[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response := request(handler, "POST", "/api/v1/imports", bytes.NewReader(zipBytes), adminToken); !strings.Contains(response.Body.String(), `"phase":"complete"`) {
+		t.Fatalf("import: %s", response.Body)
+	}
+	cards := request(handler, "GET", "/api/v1/cards", nil, adminToken)
+	var page struct {
+		Cards []struct {
+			ID int64 `json:"id"`
+		} `json:"cards"`
+	}
+	if err := json.Unmarshal(cards.Body.Bytes(), &page); err != nil || len(page.Cards) != 1 {
+		t.Fatalf("cards: %s %v", cards.Body, err)
+	}
+	tracePath := fmt.Sprintf("/api/v1/traces/%d", page.Cards[0].ID)
+
+	response := request(handler, "PATCH", tracePath, strings.NewReader(`{"title_override":"Fix session names"}`), adminToken)
+	var trace store.Trace
+	if err := json.Unmarshal(response.Body.Bytes(), &trace); err != nil || response.Code != http.StatusOK || trace.Title != "Fix session names" || trace.TitleOverride != "Fix session names" {
+		t.Fatalf("rename: %d %s %v", response.Code, response.Body, err)
+	}
+	search := request(handler, "GET", "/api/v1/search?q=session+names&mode=exact", nil, adminToken)
+	if !strings.Contains(search.Body.String(), `"trace_title":"Fix session names"`) {
+		t.Fatalf("renamed trace is not searchable: %s", search.Body)
+	}
+
+	cookie, _ := login(t, handler, false)
+	browser := httptest.NewRequest("PATCH", tracePath, strings.NewReader(`{"title_override":"From a page"}`))
+	browser.Header.Set("Content-Type", "application/json")
+	browser.AddCookie(cookie)
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, browser)
+	if recorder.Code != http.StatusUnauthorized {
+		t.Fatalf("session-cookie rename = %d, want bearer-only", recorder.Code)
+	}
+
+	for body, status := range map[string]int{
+		`{"title_override":"a\nb"}`: http.StatusBadRequest,
+		`{"title":"wrong field"}`:   http.StatusBadRequest,
+		`{}`:                        http.StatusBadRequest,
+		`{"title_override":"a"} {}`: http.StatusBadRequest,
+		`not json`:                  http.StatusBadRequest,
+		`{"title_override":""}`:     http.StatusOK,
+	} {
+		if got := request(handler, "PATCH", tracePath, strings.NewReader(body), adminToken); got.Code != status {
+			t.Errorf("PATCH %s = %d, want %d: %s", body, got.Code, status, got.Body)
+		}
+	}
+	if got := request(handler, "PATCH", "/api/v1/traces/999", strings.NewReader(`{"title_override":"x"}`), adminToken); got.Code != http.StatusNotFound {
+		t.Fatalf("missing trace = %d", got.Code)
+	}
+	wrongType := httptest.NewRequest("PATCH", tracePath, strings.NewReader(`{"title_override":"x"}`))
+	wrongType.Header.Set("Authorization", "Bearer "+adminToken)
+	wrongType.Header.Set("Content-Type", "text/plain")
+	recorder = httptest.NewRecorder()
+	handler.ServeHTTP(recorder, wrongType)
+	if recorder.Code != http.StatusUnsupportedMediaType {
+		t.Fatalf("text/plain rename = %d", recorder.Code)
+	}
+	cleared := request(handler, "GET", tracePath, nil, adminToken)
+	if strings.Contains(cleared.Body.String(), "title_override") {
+		t.Fatalf("cleared override still returned: %s", cleared.Body)
 	}
 }

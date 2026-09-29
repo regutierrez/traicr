@@ -8,7 +8,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/regutierrez/traicr/internal/domain"
@@ -163,7 +162,12 @@ func (s *Store) Renormalize(ctx context.Context, version func(string) int, norma
 			if normalizeErr != nil || normalization.Status == "failed" || normalization.Status == "unsupported" {
 				err = s.recordRun(ctx, item.revisionID, normalization.Version, normalization.Status, normalization.Warnings)
 			} else {
-				labels := strings.Join([]string{item.descriptor.Harness, item.descriptor.Title, item.descriptor.WorkingDirectory, item.descriptor.Repository.Remote, item.descriptor.Repository.Root}, "\n")
+				// The batch row was read before the lock; a rename may have landed since.
+				labels, labelErr := currentSearchLabels(ctx, s.db, item.traceID)
+				if labelErr != nil {
+					s.unlockWriter()
+					return labelErr
+				}
 				_, err = s.replaceRevisionEvents(ctx, item.traceID, item.revisionID, labels, normalization)
 			}
 			s.unlockWriter()
@@ -233,6 +237,10 @@ func (s *Store) replaceRevisionEvents(ctx context.Context, traceID, revisionID i
 				return nil, err
 			}
 		}
+	}
+	// New events may give a trace that produced no title something to name.
+	if _, err = tx.ExecContext(ctx, "UPDATE traces SET generated_title_revision_id=0 WHERE id=? AND generated_title=''", traceID); err != nil {
+		return nil, err
 	}
 	if _, err = tx.ExecContext(ctx, "DELETE FROM observation_revisions WHERE revision_id=?", revisionID); err != nil {
 		return nil, err

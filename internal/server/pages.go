@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"mime"
 	"net/http"
@@ -258,6 +259,38 @@ func (app *application) deleteAPI(w http.ResponseWriter, r *http.Request) {
 	}
 	app.logger.Info("trace deleted", "trace_id", id)
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// updateTrace sets or clears the manual title. Imports never change it.
+func (app *application) updateTrace(w http.ResponseWriter, r *http.Request) {
+	id, ok := requestID(w, r)
+	if !ok {
+		return
+	}
+	if strings.Split(r.Header.Get("Content-Type"), ";")[0] != "application/json" {
+		writeError(w, http.StatusUnsupportedMediaType, "content_type", "send JSON with Content-Type: application/json")
+		return
+	}
+	var body struct {
+		TitleOverride *string `json:"title_override"`
+	}
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<10))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&body); err != nil || decoder.More() {
+		writeError(w, http.StatusBadRequest, "invalid_json", `send one JSON object such as {"title_override":"New title"}`)
+		return
+	}
+	if body.TitleOverride == nil {
+		writeError(w, http.StatusBadRequest, "invalid_title", "title_override is required; send an empty string to clear it")
+		return
+	}
+	trace, err := app.store.SetTitleOverride(r.Context(), id, *body.TitleOverride)
+	if err != nil {
+		app.failure(w, err)
+		return
+	}
+	app.logger.Info("trace title changed", "trace_id", id, "override", trace.TitleOverride != "")
+	writeJSON(w, trace)
 }
 
 func (app *application) deletePage(w http.ResponseWriter, r *http.Request) {

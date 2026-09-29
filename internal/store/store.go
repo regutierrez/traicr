@@ -43,13 +43,16 @@ func Open(dataDir string) (*Store, error) {
 		db.Close()
 		return nil, err
 	}
-	if version < 2 {
+	if version < 3 {
 		tx, txErr := db.Begin()
 		if txErr == nil && version == 0 {
 			_, txErr = tx.Exec(migrations.Initial)
 		}
-		if txErr == nil {
+		if txErr == nil && version < 2 {
 			_, txErr = tx.Exec(migrations.EventAliases)
+		}
+		if txErr == nil {
+			_, txErr = tx.Exec(migrations.TraceTitles)
 		}
 		if txErr == nil {
 			txErr = tx.Commit()
@@ -60,7 +63,7 @@ func Open(dataDir string) (*Store, error) {
 			db.Close()
 			return nil, fmt.Errorf("migrate sqlite: %w", txErr)
 		}
-	} else if version != 2 {
+	} else if version != 3 {
 		db.Close()
 		return nil, fmt.Errorf("unsupported database version %d", version)
 	}
@@ -177,8 +180,12 @@ func (s *Store) importTrace(ctx context.Context, manifest domain.Manifest, descr
 			outcome.Status = normalization.Status
 			return outcome
 		}
-		labels := strings.Join([]string{descriptor.Harness, descriptor.Title, descriptor.WorkingDirectory, descriptor.Repository.Remote, descriptor.Repository.Root}, "\n")
-		conflicts, replaceErr := s.replaceRevisionEvents(ctx, existingTraceID, existingID, labels, normalization)
+		override, generated, titlesErr := storedTitles(ctx, s.db, existingTraceID)
+		if titlesErr != nil {
+			outcome.Status, outcome.Error = "failed", titlesErr.Error()
+			return outcome
+		}
+		conflicts, replaceErr := s.replaceRevisionEvents(ctx, existingTraceID, existingID, searchLabels(descriptor, override, generated), normalization)
 		outcome.Warnings = append(outcome.Warnings, conflicts...)
 		if replaceErr != nil {
 			outcome.Status, outcome.Error = "failed", replaceErr.Error()
@@ -499,8 +506,11 @@ func (s *Store) commitRevision(ctx context.Context, manifest domain.Manifest, de
 			return 0, false, nil, err
 		}
 	}
-	labels := strings.Join([]string{descriptor.Harness, descriptor.Title, descriptor.WorkingDirectory, descriptor.Repository.Remote, descriptor.Repository.Root}, "\n")
-	conflicts, err := s.insertEvents(ctx, tx, traceID, revisionID, labels, normalization.Events)
+	override, generated, err := storedTitles(ctx, tx, traceID)
+	if err != nil {
+		return 0, false, nil, err
+	}
+	conflicts, err := s.insertEvents(ctx, tx, traceID, revisionID, searchLabels(descriptor, override, generated), normalization.Events)
 	if err != nil {
 		return 0, false, nil, err
 	}

@@ -31,6 +31,11 @@ RUN CGO_ENABLED=0 go build -trimpath \
 
 FROM debian:bookworm-slim
 
+# The optional title worker calls a model API over HTTPS.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN groupadd --system --gid 10001 traicr \
     && useradd --system --uid 10001 --gid traicr --home-dir /nonexistent --shell /usr/sbin/nologin traicr \
     && install -d -o traicr -g traicr -m 0700 /data

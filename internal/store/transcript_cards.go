@@ -94,7 +94,7 @@ func (s *Store) TranscriptCards(ctx context.Context, query SearchQuery) (Transcr
 		}
 		args = append(args, query.Machine)
 	}
-	rows, err := s.db.QueryContext(ctx, "SELECT t.id,t.title,t.harness,t.native_trace_id,COALESCE(repo.remote,repo.root,''),t.updated_at,"+text+joins+" WHERE "+strings.Join(where, " AND ")+" ORDER BY t.updated_at DESC,t.id DESC", args...)
+	rows, err := s.db.QueryContext(ctx, "SELECT t.id,"+displayTitle+",t.harness,t.native_trace_id,COALESCE(repo.remote,repo.root,''),t.updated_at,"+text+joins+" WHERE "+strings.Join(where, " AND ")+" ORDER BY t.updated_at DESC,t.id DESC", args...)
 	if err != nil {
 		return TranscriptPage{}, err
 	}

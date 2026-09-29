@@ -201,7 +201,7 @@ func selectiveSearchStatement(prepared preparedSearch, before int64) (string, []
 		where = append(where, "EXISTS(SELECT 1 FROM revision_machines rm WHERE rm.revision_id=rev.id AND rm.machine_id=?)")
 		args = append(args, query.Machine)
 	}
-	return `SELECT e.id,t.id,t.title,t.harness,COALESCE(repo.remote,repo.root,''),o.kind,o.role,o.model,o.tool,o.event_time,ox.searchable_text` + joins + " WHERE " + strings.Join(where, " AND ") + " ORDER BY e.id DESC,o.id DESC", args
+	return `SELECT e.id,t.id,` + displayTitle + `,t.harness,COALESCE(repo.remote,repo.root,''),o.kind,o.role,o.model,o.tool,o.event_time,ox.searchable_text` + joins + " WHERE " + strings.Join(where, " AND ") + " ORDER BY e.id DESC,o.id DESC", args
 }
 
 func candidateFirstSearchStatement(prepared preparedSearch, before int64, batchSize int) (string, []any) {
@@ -246,7 +246,7 @@ func candidateFirstSearchStatement(prepared preparedSearch, before int64, batchS
 		SELECT sc.event_id` + joins + ` WHERE ` + strings.Join(where, " AND ") + `
 		GROUP BY sc.event_id ORDER BY sc.event_id DESC LIMIT ?
 	)
-	SELECT DISTINCT e.id,t.id,t.title,t.harness,COALESCE(repo.remote,repo.root,''),
+	SELECT DISTINCT e.id,t.id,` + displayTitle + `,t.harness,COALESCE(repo.remote,repo.root,''),
 		o.kind,o.role,o.model,o.tool,o.event_time,ox.searchable_text
 	FROM event_batch b
 	JOIN search_chunks sc INDEXED BY search_chunks_event ON sc.event_id=b.event_id
@@ -288,7 +288,7 @@ func eventFirstSearchStatement(prepared preparedSearch, before int64, batchSize 
 			WHERE ` + strings.Join(innerWhere, " AND ") + `
 		) ORDER BY e.id DESC LIMIT ?
 	)
-	SELECT DISTINCT e.id,t.id,t.title,t.harness,COALESCE(repo.remote,repo.root,''),
+	SELECT DISTINCT e.id,t.id,` + displayTitle + `,t.harness,COALESCE(repo.remote,repo.root,''),
 		o.kind,o.role,o.model,o.tool,o.event_time,ox.searchable_text
 	FROM event_batch b
 	JOIN events e ON e.id=b.id

@@ -26,7 +26,7 @@ The canonical domain language is defined in [CONTEXT.md](../CONTEXT.md).
 - Automatic or scheduled collection
 - Server-controlled SSH collection
 - Automatic redaction or review before upload
-- Trace editing or annotation
+- Trace editing or annotation, except a manual title override ([ADR 0009](./adr/0009-manual-title-overrides.md))
 - Dashboards and charts
 - Browser-based trace collection
 - Automatic collector updates
@@ -89,8 +89,12 @@ traicr collect --harness amp --output ./exports
 traicr collect --all --output ./exports
 traicr login http://traicr-server:8080
 traicr upload ./exports/*.zip
+traicr traces rename 42 "Speed up incremental collect"
+traicr traces rename --clear 42
 traicr version
 ```
+
+`traces rename` sets or clears a trace's manual title on the server through `PATCH /api/v1/traces/{id}`.
 
 `sources` reports detected harnesses, source locations, available trace counts, and collection warnings without writing an archive.
 

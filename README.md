@@ -95,7 +95,7 @@ Replace the URL with your server's address when it runs on another machine. Run 
 
 Pi sessions are collected from `$PI_CODING_AGENT_DIR/sessions` (default `~/.pi/agent/sessions`) and, when it exists, from bb's Pi bridge directory `$BB_PI_BRIDGE_SESSION_DIR` (default `~/.bb/pi-bridge-sessions`), where bb writes the sessions of its Pi threads. Trace identity and working directory come from the session header, not the filename. A session found in both places is collected once, from the most recently written copy.
 
-The collector uses the latest saved Pi session name (from `/name` or extensions such as `pi-rename`) as the transcript title. UUIDs remain the session IDs. Traicr does not generate names or change Pi session files.
+The collector uses the latest saved Pi session name (from `/name` or extensions such as `pi-rename`) as the transcript title. UUIDs remain the session IDs. The collector does not generate names or change Pi session files; see [trace naming](./docs/operations.md#trace-naming) for server-generated titles.
 
 To repair missing titles from an older collector, first update both the client and server, then recollect Pi sessions, including acknowledged revisions:
 
@@ -114,6 +114,26 @@ traicr upload ./claude-metadata-backfill/*.zip
 ```
 
 Collection reads but does not modify the native Claude JSONL files.
+
+Cursor editor collection uses the composer's saved `name` (Cursor's generated or edited chat name) as the title. Composers Cursor never named keep their ID as the display fallback. Recollect on each machine that uses Cursor to backfill missing titles:
+
+```sh
+traicr collect --harness cursor --all --output ./cursor-title-backfill
+traicr upload ./cursor-title-backfill/*.zip
+```
+
+### Rename a trace
+
+Give a trace a manual title on the server. The ID is the number in the Web UI address `/traces/<id>`:
+
+```sh
+traicr traces rename 3362 "Speed up incremental collect"
+traicr traces rename --clear 3362
+```
+
+The manual title is shown everywhere and is searchable. Later uploads never replace it; they only update the collected title, which stays searchable and returns when you clear the manual title.
+
+The server can also name untitled traces with a language model. It is off unless configured; see [trace naming](./docs/operations.md#trace-naming). A collected title wins over a generated one, and a manual title wins over both.
 
 ## Development
 

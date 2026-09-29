@@ -30,7 +30,7 @@ func main() {
 	}
 }
 
-const usage = "usage: traicr <sources|collect|login|upload|version>"
+const usage = "usage: traicr <sources|collect|login|upload|traces|version>"
 
 func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	if len(args) == 0 {
@@ -50,6 +50,8 @@ func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 		return runLogin(args[1:], stdin, stderr)
 	case "upload":
 		return runUpload(ctx, args[1:], stdout, stderr)
+	case "traces":
+		return runTraces(ctx, args[1:], stdout, stderr)
 	default:
 		return errors.New(usage)
 	}
@@ -355,6 +357,7 @@ func printRootHelp(w io.Writer) {
 	writeCommand(w, "collect", "Collect new or changed traces into Trace ZIP archives")
 	writeCommand(w, "login", "Save the Traicr server URL and admin token for uploads")
 	writeCommand(w, "upload", "Upload Trace ZIP archives to the configured server")
+	writeCommand(w, "traces", "Manage traces stored on the configured server, such as renaming them")
 	writeCommand(w, "version", "Print the version number and exit")
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Environment variables:")

@@ -159,27 +159,37 @@ func TestSearchDateOnlyBeforeExcludesNextMidnight(t *testing.T) {
 }
 
 func TestOpenMigratesExistingArchive(t *testing.T) {
-	directory := t.TempDir()
-	db, err := sql.Open("sqlite", filepath.Join(directory, "traicr.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := db.Exec(migrations.Initial + `INSERT INTO source_machines VALUES ('old','existing archive','linux','amd64','2026-01-01','2026-01-01');`); err != nil {
-		t.Fatal(err)
-	}
-	if err := db.Close(); err != nil {
-		t.Fatal(err)
-	}
-	for range 2 {
-		database, err := store.Open(directory)
-		if err != nil {
-			t.Fatal(err)
-		}
-		machines, err := database.Machines(context.Background())
-		database.Close()
-		if err != nil || len(machines) != 1 || machines[0].Hostname != "existing archive" {
-			t.Fatalf("existing archive lost: %+v %v", machines, err)
-		}
+	for name, schema := range map[string]string{"version 1": migrations.Initial, "version 2": migrations.Initial + migrations.EventAliases} {
+		t.Run(name, func(t *testing.T) {
+			directory := t.TempDir()
+			db, err := sql.Open("sqlite", filepath.Join(directory, "traicr.db"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := db.Exec(schema + `INSERT INTO source_machines VALUES ('old','existing archive','linux','amd64','2026-01-01','2026-01-01');
+				INSERT INTO traces(harness,native_trace_id,title,working_directory,parent_native_trace_id,created_at,updated_at) VALUES('pi','old-trace','Collected','','','2026-01-01','2026-01-01');`); err != nil {
+				t.Fatal(err)
+			}
+			if err := db.Close(); err != nil {
+				t.Fatal(err)
+			}
+			for range 2 {
+				database, err := store.Open(directory)
+				if err != nil {
+					t.Fatal(err)
+				}
+				machines, err := database.Machines(context.Background())
+				if err != nil || len(machines) != 1 || machines[0].Hostname != "existing archive" {
+					database.Close()
+					t.Fatalf("existing archive lost: %+v %v", machines, err)
+				}
+				trace, err := database.Trace(context.Background(), 1)
+				database.Close()
+				if err != nil || trace.Title != "Collected" || trace.TitleOverride != "" {
+					t.Fatalf("existing trace after migration: %+v %v", trace, err)
+				}
+			}
+		})
 	}
 }
 
@@ -197,7 +207,7 @@ func TestOpenRejectsInvalidDatabase(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				statement := "PRAGMA user_version=3"
+				statement := "PRAGMA user_version=4"
 				if state == "partial" {
 					statement = "CREATE TABLE events(id INTEGER)"
 				}

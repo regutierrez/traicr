@@ -35,6 +35,25 @@ Store the token in a root-owned environment file with mode `0600` when managing 
 | `TRAICR_MAX_UPLOAD_BYTES` | no | `8589934592` (8 GiB) | Maximum compressed upload size |
 | `TRAICR_MAX_EXPANDED_BYTES` | no | `34359738368` (32 GiB) | Maximum total expanded archive size |
 | `TRAICR_MAX_FILE_BYTES` | no | `4294967296` (4 GiB) | Maximum expanded size of one archived file |
+| `TRAICR_TITLE_API_URL` | no | unset (naming off) | OpenAI-compatible API base URL for naming untitled traces, such as `https://opencode.ai/zen/go/v1` |
+| `TRAICR_TITLE_API_KEY` | no | none | Bearer key for the title API; omit for a local model server that needs none |
+| `TRAICR_TITLE_MODEL` | with the URL | none | Model ID, such as `longcat-2.5-preview-free` |
+| `TRAICR_TITLE_REASONING_EFFORT` | no | not sent | `reasoning_effort` sent with each request, such as `minimal` |
+
+### Trace naming
+
+When `TRAICR_TITLE_API_URL` is set, a background worker names traces that have no manual or collected title. It sends each trace's user messages, with harness-injected context removed and long sessions cut to their start and end, plus the final assistant message, working directory, and repository, to the configured model. This sends unredacted transcript text to that provider. The worker waits until a trace has had no new revision for 30 minutes, makes one request at a time, and names a trace again only after a new revision arrives. A collected title always wins over a generated one, and a manual title (`traicr traces rename`) wins over both. API failures pause the worker with backoff; they never mark traces as done.
+
+For OpenCode Go:
+
+```sh
+export TRAICR_TITLE_API_URL=https://opencode.ai/zen/go/v1
+export TRAICR_TITLE_API_KEY='your OpenCode Go key'
+export TRAICR_TITLE_MODEL=longcat-2.5-preview-free
+export TRAICR_TITLE_REASONING_EFFORT=minimal
+```
+
+Requests to OpenCode hosts carry the `x-opencode-session` header OpenCode requires (one stable ID per trace) and identify themselves as `traicr/<version>`.
 
 The production container runs as UID and GID `10001:10001`, has a read-only root filesystem, and writes only to `/data`. A named Docker volume is initialized with the correct ownership. For a bind mount, create an empty directory owned by `10001:10001` with mode `0700`; do not make it world-writable.
 

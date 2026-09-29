@@ -22,7 +22,7 @@ func (s *Store) TraceID(ctx context.Context, harness, nativeID string) (int64, e
 
 func (s *Store) Trace(ctx context.Context, id int64) (Trace, error) {
 	var trace Trace
-	err := s.db.QueryRowContext(ctx, `SELECT t.id,t.harness,t.native_trace_id,t.title,t.working_directory,COALESCE(r.remote,''),t.parent_native_trace_id,t.created_at,t.updated_at FROM traces t LEFT JOIN repositories r ON r.id=t.repository_id WHERE t.id=?`, id).Scan(&trace.ID, &trace.Harness, &trace.NativeTraceID, &trace.Title, &trace.WorkingDirectory, &trace.Repository, &trace.ParentNativeTraceID, &trace.CreatedAt, &trace.UpdatedAt)
+	err := s.db.QueryRowContext(ctx, `SELECT t.id,t.harness,t.native_trace_id,`+displayTitle+`,t.title,t.title_override,t.generated_title,t.working_directory,COALESCE(r.remote,''),t.parent_native_trace_id,t.created_at,t.updated_at FROM traces t LEFT JOIN repositories r ON r.id=t.repository_id WHERE t.id=?`, id).Scan(&trace.ID, &trace.Harness, &trace.NativeTraceID, &trace.Title, &trace.NativeTitle, &trace.TitleOverride, &trace.GeneratedTitle, &trace.WorkingDirectory, &trace.Repository, &trace.ParentNativeTraceID, &trace.CreatedAt, &trace.UpdatedAt)
 	if err != nil {
 		return Trace{}, err
 	}
@@ -51,14 +51,14 @@ func (s *Store) Trace(ctx context.Context, id int64) (Trace, error) {
 	}
 	if trace.ParentNativeTraceID != "" {
 		var parent TraceRef
-		err = s.db.QueryRowContext(ctx, "SELECT id,native_trace_id,title FROM traces WHERE harness=? AND native_trace_id=?", trace.Harness, trace.ParentNativeTraceID).Scan(&parent.ID, &parent.NativeTraceID, &parent.Title)
+		err = s.db.QueryRowContext(ctx, "SELECT t.id,t.native_trace_id,"+displayTitle+" FROM traces t WHERE t.harness=? AND t.native_trace_id=?", trace.Harness, trace.ParentNativeTraceID).Scan(&parent.ID, &parent.NativeTraceID, &parent.Title)
 		if err == nil {
 			trace.Parents = append(trace.Parents, parent)
 		} else if !errors.Is(err, sql.ErrNoRows) {
 			return Trace{}, err
 		}
 	}
-	rows, err = s.db.QueryContext(ctx, "SELECT id,native_trace_id,title FROM traces WHERE harness=? AND parent_native_trace_id=? ORDER BY id", trace.Harness, trace.NativeTraceID)
+	rows, err = s.db.QueryContext(ctx, "SELECT t.id,t.native_trace_id,"+displayTitle+" FROM traces t WHERE t.harness=? AND t.parent_native_trace_id=? ORDER BY t.id", trace.Harness, trace.NativeTraceID)
 	if err != nil {
 		return Trace{}, err
 	}

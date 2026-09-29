@@ -8,12 +8,11 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"os"
-	"path"
 	"strings"
 
 	"github.com/regutierrez/traicr/internal/archive"
+	apiclient "github.com/regutierrez/traicr/internal/client"
 	"github.com/regutierrez/traicr/internal/config"
 	"github.com/regutierrez/traicr/internal/domain"
 )
@@ -76,15 +75,7 @@ func Upload(ctx context.Context, client *http.Client, cfg *config.Collector, con
 }
 
 func importURL(server string) (string, error) {
-	parsed, err := url.Parse(server)
-	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
-		return "", errors.New("server URL must be an absolute http or https URL")
-	}
-	if parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
-		return "", errors.New("server URL must not contain credentials, a query, or a fragment")
-	}
-	parsed.Path = path.Join(parsed.Path, "/api/v1/imports")
-	return parsed.String(), nil
+	return apiclient.Endpoint(server, "/api/v1/imports")
 }
 
 func uploadOne(ctx context.Context, client *http.Client, endpoint, token, filePath string, progress UploadProgress) (domain.ImportReport, domain.Manifest, error) {

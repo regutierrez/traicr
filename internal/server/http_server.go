@@ -8,11 +8,14 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/regutierrez/traicr/internal/config"
 	"github.com/regutierrez/traicr/internal/normalize"
 	"github.com/regutierrez/traicr/internal/store"
+	"github.com/regutierrez/traicr/internal/titles"
+	"github.com/regutierrez/traicr/internal/version"
 )
 
 const shutdownTimeout = 10 * time.Second
@@ -32,19 +35,24 @@ func RunHTTPServer(ctx context.Context, serverConfig config.ServerConfig, logger
 		return err
 	}
 	workerContext, stopWorker := context.WithCancel(ctx)
-	workerDone := make(chan struct{})
-	go func() {
-		defer close(workerDone)
+	var workers sync.WaitGroup
+	if serverConfig.Titles.Enabled() {
+		namer := titles.NewGenerator(serverConfig.Titles, version.CurrentBuildInfo().Version, nil)
+		worker := titles.NewWorker(database, namer, logger)
+		logger.Info("trace naming enabled", "model", serverConfig.Titles.Model)
+		workers.Go(func() { worker.Run(workerContext) })
+	}
+	workers.Go(func() {
 		if err := database.GC(workerContext); err != nil && workerContext.Err() == nil {
 			logger.Error("object cleanup failed", "error_type", fmt.Sprintf("%T", err))
 		}
 		if err := database.Renormalize(workerContext, normalize.Version, normalize.Run); err != nil && workerContext.Err() == nil {
 			logger.Error("normalizer rebuild failed; previous events retained", "error_type", fmt.Sprintf("%T", err))
 		}
-	}()
+	})
 	defer func() {
 		stopWorker()
-		<-workerDone
+		workers.Wait()
 	}()
 
 	httpServer := &http.Server{

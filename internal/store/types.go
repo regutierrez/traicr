@@ -54,6 +54,9 @@ type Trace struct {
 	Harness             string     `json:"harness"`
 	NativeTraceID       string     `json:"native_trace_id"`
 	Title               string     `json:"title,omitempty"`
+	NativeTitle         string     `json:"native_title,omitempty"`
+	TitleOverride       string     `json:"title_override,omitempty"`
+	GeneratedTitle      string     `json:"generated_title,omitempty"`
 	WorkingDirectory    string     `json:"working_directory,omitempty"`
 	Repository          string     `json:"repository,omitempty"`
 	ParentNativeTraceID string     `json:"parent_native_trace_id,omitempty"`

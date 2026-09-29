@@ -6,6 +6,11 @@ services:
       TRAICR_ADMIN_TOKEN: "${TRAICR_ADMIN_TOKEN:?TRAICR_ADMIN_TOKEN must be set}"
       TRAICR_DATA_DIR: /data
       TRAICR_LISTEN_ADDRESS: ":8080"
+      # Optional trace naming; leave TRAICR_TITLE_API_URL unset to turn it off.
+      TRAICR_TITLE_API_URL: "${TRAICR_TITLE_API_URL:-}"
+      TRAICR_TITLE_API_KEY: "${TRAICR_TITLE_API_KEY:-}"
+      TRAICR_TITLE_MODEL: "${TRAICR_TITLE_MODEL:-}"
+      TRAICR_TITLE_REASONING_EFFORT: "${TRAICR_TITLE_REASONING_EFFORT:-}"
       # SQLite needs writable disk space for temporary tables and sorting.
       TMPDIR: /data/tmp
     ports:
