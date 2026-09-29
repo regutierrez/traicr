@@ -92,13 +92,31 @@ func TestUploadStatusShowsServerImportProgress(t *testing.T) {
 }
 
 func TestRootHelpPrintsUsage(t *testing.T) {
-	for _, args := range [][]string{{"-h"}, {"--help"}} {
+	for _, args := range [][]string{{"-h"}, {"--help"}, {"help"}} {
 		var stdout, stderr bytes.Buffer
 		if err := run(t.Context(), args, strings.NewReader(""), &stdout, &stderr); err != nil {
 			t.Fatalf("%v: %v", args, err)
 		}
-		if !strings.Contains(stderr.String(), usage) {
-			t.Fatalf("%v stderr %q", args, stderr.String())
+		out := stderr.String()
+		for _, want := range []string{
+			"Traicr CLI",
+			"Usage: traicr [command] [options]",
+			"Commands:",
+			"sources",
+			"collect",
+			"login",
+			"upload",
+			"version",
+			"Environment variables:",
+			"TRAICR_ADMIN_TOKEN",
+			"TRAICR_CONFIG_DIR",
+			"Examples:",
+			"$ traicr sources",
+			"$ traicr collect --output ./traces",
+		} {
+			if !strings.Contains(out, want) {
+				t.Fatalf("%v missing %q in %q", args, want, out)
+			}
 		}
 		if stdout.Len() != 0 {
 			t.Fatalf("%v wrote stdout %q", args, stdout.String())
@@ -120,11 +138,45 @@ func TestCollectHelpPrintsUsage(t *testing.T) {
 	if err := run(t.Context(), []string{"collect", "-h"}, strings.NewReader(""), &stdout, &stderr); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(stderr.String(), "usage: traicr collect --output DIR") {
-		t.Fatalf("stderr %q", stderr.String())
+	out := stderr.String()
+	for _, want := range []string{
+		"Usage: traicr collect --output <dir> [options]",
+		"--output <dir>",
+		"--harness <name>",
+		"--source <harness=path>",
+		"--all",
+		"$ traicr collect --output ./traces",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("missing %q in %q", want, out)
+		}
 	}
 	if stdout.Len() != 0 {
 		t.Fatalf("stdout %q", stdout.String())
+	}
+}
+
+func TestSourcesLoginUploadVersionHelp(t *testing.T) {
+	cases := []struct {
+		args []string
+		want string
+	}{
+		{[]string{"sources", "--help"}, "Usage: traicr sources [options]"},
+		{[]string{"login", "--help"}, "Usage: traicr login <url>"},
+		{[]string{"upload", "-h"}, "Usage: traicr upload <archive.zip>"},
+		{[]string{"version", "help"}, "Usage: traicr version"},
+	}
+	for _, tc := range cases {
+		var stdout, stderr bytes.Buffer
+		if err := run(t.Context(), tc.args, strings.NewReader(""), &stdout, &stderr); err != nil {
+			t.Fatalf("%v: %v", tc.args, err)
+		}
+		if !strings.Contains(stderr.String(), tc.want) {
+			t.Fatalf("%v missing %q in %q", tc.args, tc.want, stderr.String())
+		}
+		if stdout.Len() != 0 {
+			t.Fatalf("%v wrote stdout %q", tc.args, stdout.String())
+		}
 	}
 }
 
