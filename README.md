@@ -93,6 +93,8 @@ Replace the URL with your server's address when it runs on another machine. Run 
 
 ### Saved session metadata
 
+Pi sessions are collected from `$PI_CODING_AGENT_DIR/sessions` (default `~/.pi/agent/sessions`) and, when it exists, from bb's Pi bridge directory `$BB_PI_BRIDGE_SESSION_DIR` (default `~/.bb/pi-bridge-sessions`), where bb writes the sessions of its Pi threads. Trace identity and working directory come from the session header, not the filename. A session found in both places is collected once, from the most recently written copy.
+
 The collector uses the latest saved Pi session name (from `/name` or extensions such as `pi-rename`) as the transcript title. UUIDs remain the session IDs. Traicr does not generate names or change Pi session files.
 
 To repair missing titles from an older collector, first update both the client and server, then recollect Pi sessions, including acknowledged revisions:

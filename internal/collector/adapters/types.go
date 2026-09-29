@@ -52,7 +52,7 @@ func All() []Adapter {
 		commandAdapter{name: "amp", format: "amp-thread-export", executable: "amp"},
 		commandAdapter{name: "opencode", format: "opencode-export", executable: "opencode"},
 		codexAdapter{},
-		jsonlAdapter{name: "pi", format: "pi-jsonl", defaultRoots: piRoots},
+		jsonlAdapter{name: "pi", format: "pi-jsonl", defaultRoots: piRoots, unique: uniquePiSessions},
 		jsonlAdapter{name: "claude-code", format: "claude-code-jsonl", defaultRoots: claudeRoots},
 		jsonlAdapter{
 			name: "cursor-agent", format: "cursor-agent-jsonl", companionJSON: true,

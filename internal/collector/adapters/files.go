@@ -27,19 +27,29 @@ type jsonlAdapter struct {
 	format        string
 	defaultRoots  func() []string
 	companionJSON bool
+	// unique drops files that hold the same native trace as another file, so
+	// a trace reachable from several roots is collected once.
+	unique func([]string) []string
+}
+
+func (a jsonlAdapter) files(configured []string) ([]string, []string, []domain.Warning) {
+	roots := chooseRoots(configured, a.defaultRoots())
+	files, warnings := findFiles(roots, ".jsonl")
+	if a.unique != nil {
+		files = a.unique(files)
+	}
+	return roots, files, warnings
 }
 
 func (a jsonlAdapter) Name() string { return a.name }
 
 func (a jsonlAdapter) Discover(_ context.Context, configured []string) Source {
-	roots := chooseRoots(configured, a.defaultRoots())
-	files, warnings := findFiles(roots, ".jsonl")
+	roots, files, warnings := a.files(configured)
 	return Source{Harness: a.name, Location: strings.Join(roots, string(os.PathListSeparator)), Traces: len(files), Warnings: warnings}
 }
 
 func (a jsonlAdapter) Collect(ctx context.Context, configured []string, progress Progress, skip SkipUnchanged) (Result, error) {
-	roots := chooseRoots(configured, a.defaultRoots())
-	files, warnings := findFiles(roots, ".jsonl")
+	_, files, warnings := a.files(configured)
 	base, err := os.MkdirTemp("", "traicr-"+a.name+"-*")
 	if err != nil {
 		return Result{}, err
@@ -137,11 +147,75 @@ func (a jsonlAdapter) Collect(ctx context.Context, configured []string, progress
 }
 
 func piRoots() []string {
+	var roots []string
 	if value := os.Getenv("PI_CODING_AGENT_DIR"); value != "" {
-		return []string{filepath.Join(value, "sessions")}
+		roots = []string{filepath.Join(value, "sessions")}
+	} else {
+		roots = []string{homePath(".pi", "agent", "sessions")}
 	}
-	home, _ := os.UserHomeDir()
-	return []string{filepath.Join(home, ".pi", "agent", "sessions")}
+	// bb runs Pi with PI_SESSION_FILE in its own bridge directory, so bb Pi
+	// threads never reach the native sessions directory.
+	if bridge := bbPiBridgeRoot(); bridge != "" {
+		if info, err := os.Stat(bridge); err == nil && info.IsDir() {
+			roots = append(roots, bridge)
+		}
+	}
+	return roots
+}
+
+// bbPiBridgeRoot mirrors bb's resolvePiBridgeSessionDir.
+func bbPiBridgeRoot() string {
+	if value := strings.TrimSpace(os.Getenv("BB_PI_BRIDGE_SESSION_DIR")); value != "" {
+		if absolute, err := filepath.Abs(value); err == nil {
+			return absolute
+		}
+		return value
+	}
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return ""
+	}
+	return filepath.Join(home, ".bb", "pi-bridge-sessions")
+}
+
+// uniquePiSessions keeps one file per Pi session header id. The most recently
+// written copy wins, then the larger one, then the first path. Files without a
+// readable header keep their own filename identity and are never dropped.
+func uniquePiSessions(files []string) []string {
+	type candidate struct {
+		path     string
+		modified time.Time
+		size     int64
+	}
+	chosen := map[string]candidate{}
+	var order []string
+	var kept []string
+	for _, path := range files {
+		var header struct {
+			Type string `json:"type"`
+			ID   string `json:"id"`
+		}
+		info, err := os.Stat(path)
+		if err != nil || !decodeFirstRecord(path, &header) || header.Type != "session" || header.ID == "" {
+			kept = append(kept, path)
+			continue
+		}
+		next := candidate{path: path, modified: info.ModTime(), size: info.Size()}
+		current, seen := chosen[header.ID]
+		if !seen {
+			order = append(order, header.ID)
+			chosen[header.ID] = next
+			continue
+		}
+		if next.modified.After(current.modified) || (next.modified.Equal(current.modified) && next.size > current.size) {
+			chosen[header.ID] = next
+		}
+	}
+	for _, id := range order {
+		kept = append(kept, chosen[id].path)
+	}
+	sort.Strings(kept)
+	return kept
 }
 
 func claudeRoots() []string {
