@@ -116,9 +116,6 @@ func normalizeAmp(ctx context.Context, sourceFS fs.FS, files []domain.File) (dom
 					event.Timestamp = timestamp(object(message["usage"])["timestamp"])
 				}
 			}
-			if parent != "" {
-				event.ParentKey = nativeKey("message", parent, nil)
-			}
 			switch kind {
 			case "text", "message", "input_text", "output_text":
 				event.Kind, event.Text = "message", contentText(block)

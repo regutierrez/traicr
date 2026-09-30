@@ -10,7 +10,7 @@ import (
 func Version(harness string) int {
 	switch harness {
 	case "amp":
-		return 4
+		return 5
 	case "pi":
 		return 2
 	case "cursor":

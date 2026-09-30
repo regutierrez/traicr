@@ -13,6 +13,39 @@ import (
 	"github.com/regutierrez/traicr/internal/domain"
 )
 
+func TestAmpKeepsParentsInMetadataWithoutDanglingParentKeys(t *testing.T) {
+	source := fstest.MapFS{"source/export.json": {Data: []byte(`{"messages":[
+ {"id":"parent","role":"user","content":[{"type":"text","text":"prompt"}]},
+ {"id":"child","parentId":"parent","role":"assistant","content":[{"type":"text","text":"reply"}]}
+ ]}`)}}
+	result, err := Run(context.Background(), domain.Descriptor{Harness: "amp"}, source)
+	if err != nil || len(result.Events) != 2 {
+		t.Fatalf("Amp parent metadata: %+v %v", result, err)
+	}
+	keys := map[string]bool{}
+	for _, event := range result.Events {
+		keys[event.Key] = true
+	}
+	for _, event := range result.Events {
+		if event.ParentKey != "" && !keys[event.ParentKey] {
+			t.Fatalf("event %q has ParentKey %q, which names no emitted event", event.Key, event.ParentKey)
+		}
+	}
+	var child struct {
+		Message string `json:"transcript_message"`
+		Parent  string `json:"transcript_parent"`
+	}
+	if err := json.Unmarshal(result.Events[1].Metadata, &child); err != nil {
+		t.Fatal(err)
+	}
+	if child.Message != "amp-message:child" || child.Parent != "amp-message:parent" {
+		t.Fatalf("Amp transcript parent metadata: %+v", child)
+	}
+	if result.Version < 5 {
+		t.Fatalf("Amp normalizer must rebuild stored events that still carry the dangling ParentKey: version %d", result.Version)
+	}
+}
+
 func TestAmpMissingHostedImagesProduceRebuildableDiagnostics(t *testing.T) {
 	const data = `{"messages":[{"id":1,"role":"user","content":[
  {"type":"image","url":"https://ampcode.com/user-content/attachments/missing.png"},
@@ -80,8 +113,11 @@ func TestAmpNumericMessageIdentitySurvivesReadAndContentChanges(t *testing.T) {
 			if strings.Contains(event.Key, "sha256:") || previous.Key != "" && previous.Key != event.Key {
 				t.Fatalf("native identity lost: %q -> %q", previous.Key, event.Key)
 			}
-			if event.ParentKey != "message:0" || event.Text != text {
-				t.Fatalf("native parent or updated content lost: %+v", event)
+			var metadata struct {
+				Parent string `json:"transcript_parent"`
+			}
+			if err := json.Unmarshal(event.Metadata, &metadata); err != nil || metadata.Parent != "amp-message:0" || event.Text != text {
+				t.Fatalf("native parent or updated content lost: %+v %v", event, err)
 			}
 			previous = event
 		}
@@ -181,7 +217,7 @@ func TestAmpPairsNativeToolIDsBeforeProviderIDs(t *testing.T) {
 	if len(result.Events) != 2 || result.Events[0].CallID != "TU-native" || result.Events[1].CallID != result.Events[0].CallID {
 		t.Fatalf("unpaired Amp tool result: %+v", result.Events)
 	}
-	if result.Version != 4 {
+	if result.Version < 4 {
 		t.Fatalf("Amp normalizer must rebuild stored ID mappings: version %d", result.Version)
 	}
 }
