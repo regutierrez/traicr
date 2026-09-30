@@ -22,7 +22,7 @@ import (
 
 func TestAmpAgentFixturePairsToolsAndPreservesThreadOrigin(t *testing.T) {
 	handler := testHandler(t, false)
-	archives, err := archive.Write(context.Background(), t.TempDir(), domain.Manifest{SourceMachine: domain.Machine{ID: "test", Hostname: "test"}}, []archive.Input{{Directory: "../../testdata/harnesses/amp-agents", Descriptor: domain.Descriptor{Harness: "amp", Adapter: "amp-thread-export", NativeTraceID: "T-amp-agents-fixture"}}}, 0)
+	archives, err := archive.Write(context.Background(), t.TempDir(), domain.Manifest{SourceMachine: domain.Machine{ID: "test", Hostname: "test"}}, []archive.Input{{Directory: writeExportDir(t, ampAgentsExport), Descriptor: domain.Descriptor{Harness: "amp", Adapter: "amp-thread-export", NativeTraceID: "T-amp-agents-fixture"}}}, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -249,7 +249,7 @@ func TestAmpImagesAndNumericIdentityThroughRepeatedImports(t *testing.T) {
 
 func TestAmpTranscriptRevisionAndSourceInspection(t *testing.T) {
 	handler := testHandler(t, false)
-	archives, err := archive.Write(context.Background(), t.TempDir(), domain.Manifest{SourceMachine: domain.Machine{ID: "test", Hostname: "test"}}, []archive.Input{{Directory: "../../testdata/harnesses/amp-rich", Descriptor: domain.Descriptor{Harness: "amp", Adapter: "amp-thread-export", NativeTraceID: "T-amp-rich-fixture", Title: "Amp details"}}}, 0)
+	archives, err := archive.Write(context.Background(), t.TempDir(), domain.Manifest{SourceMachine: domain.Machine{ID: "test", Hostname: "test"}}, []archive.Input{{Directory: writeExportDir(t, ampRichExport), Descriptor: domain.Descriptor{Harness: "amp", Adapter: "amp-thread-export", NativeTraceID: "T-amp-rich-fixture", Title: "Amp details"}}}, 0)
 	if err != nil {
 		t.Fatal(err)
 	}

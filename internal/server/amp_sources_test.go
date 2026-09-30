@@ -1,4 +1,16 @@
-{
+package server_test
+
+import (
+	_ "embed"
+	"os"
+	"path/filepath"
+	"testing"
+)
+
+//go:embed testdata/amp_agents.json
+var ampAgentsExport string
+
+const ampRichExport = `{
   "v": 84,
   "id": "T-amp-rich-fixture",
   "title": "Inspect the failing build",
@@ -27,4 +39,16 @@
     {"messageId": 14, "role": "assistant", "meta": {"openAIResponsePhase": "final_answer"}, "state": {"type": "complete", "stopReason": "end_turn"}, "usage": {"model": "second-model", "inputTokens": 5, "outputTokens": 11, "cacheReadInputTokens": 0}, "content": [{"type": "text", "text": "The boundary is fixed. Verification still needs to be rerun."}]},
     {"messageId": 15, "role": "info", "content": [{"type": "future_widget", "label": "Unknown content stays inspectable", "bytes": "PRIVATE_BYTES"}]}
   ]
+}`
+
+func writeExportDir(t *testing.T, export string) string {
+	t.Helper()
+	dir := t.TempDir()
+	if err := os.Mkdir(filepath.Join(dir, "source"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "source", "export.json"), []byte(export), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return dir
 }
