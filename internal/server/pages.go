@@ -13,6 +13,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/regutierrez/traicr/internal/store"
+	"github.com/regutierrez/traicr/internal/version"
 )
 
 const searchTimeout = 30 * time.Second
@@ -313,4 +314,19 @@ func (app *application) deletePage(w http.ResponseWriter, r *http.Request) {
 	}
 	app.logger.Info("trace deleted", "trace_id", id)
 	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
+type statusResponse struct {
+	Version string `json:"version"`
+	store.Status
+}
+
+func (app *application) status(w http.ResponseWriter, r *http.Request) {
+	status, err := app.store.Status(r.Context())
+	if err != nil {
+		app.failure(w, err)
+		return
+	}
+	status.Titles.Enabled = app.config.Titles.Enabled()
+	writeJSON(w, statusResponse{Version: version.CurrentBuildInfo().Version, Status: status})
 }

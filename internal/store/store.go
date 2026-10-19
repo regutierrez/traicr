@@ -89,6 +89,7 @@ func (s *Store) Import(ctx context.Context, manifest domain.Manifest, sources fs
 	}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	report := domain.ImportReport{CreatedAt: now, Machine: manifest.SourceMachine, Traces: make([]domain.TraceOutcome, 0, len(manifest.Traces))}
+	defer s.activeImport.Store(0)
 	if err := s.beginImport(ctx, &report); err != nil {
 		return report, err
 	}
@@ -99,6 +100,7 @@ func (s *Store) Import(ctx context.Context, manifest domain.Manifest, sources fs
 		countOutcome(&report, outcome.Status)
 		progress(domain.Progress{Phase: "normalizing", Completed: i + 1, Total: len(manifest.Traces), Outcome: &outcome})
 	}
+	report.Complete = true
 	b, err := json.Marshal(report)
 	if err == nil {
 		_, err = s.db.ExecContext(ctx, "UPDATE imports SET report_json=? WHERE id=?", b, report.ID)
@@ -130,6 +132,8 @@ func (s *Store) beginImport(ctx context.Context, report *domain.ImportReport) er
 	if err != nil {
 		return err
 	}
+	// Mark the import running before its row becomes visible to status readers.
+	s.activeImport.Store(report.ID)
 	return tx.Commit()
 }
 

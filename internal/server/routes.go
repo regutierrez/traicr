@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"database/sql"
+	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -29,6 +30,45 @@ type application struct {
 	logger  *slog.Logger
 	uploads chan struct{}
 	ui      spaDocument
+	// logBuffer holds the recent records GET /api/v1/logs returns.
+	logBuffer *logBuffer
+}
+
+// openAPIDocument is the /api/v1 contract. It describes every route in apiRoutes.
+//
+//go:embed openapi.json
+var openAPIDocument []byte
+
+type apiRoute struct {
+	pattern string
+	handler http.HandlerFunc
+}
+
+// apiRoutes are the authenticated /api/v1 operations. A test keeps this list
+// and openapi.json in agreement.
+func (app *application) apiRoutes() []apiRoute {
+	return []apiRoute{
+		{"POST /api/v1/imports", app.importZIP},
+		{"GET /api/v1/imports", app.imports},
+		{"GET /api/v1/imports/{id}", app.importReport},
+		{"GET /api/v1/search", app.search},
+		{"GET /api/v1/cards", app.cards},
+		{"GET /api/v1/traces/{id}", app.trace},
+		{"PATCH /api/v1/traces/{id}", app.updateTrace},
+		{"DELETE /api/v1/traces/{id}", app.deleteAPI},
+		{"GET /api/v1/traces/{id}/events", app.events},
+		{"GET /api/v1/events/{id}/sources", app.eventSources},
+		{"GET /api/v1/revisions/{id}/sources", app.revisionSources},
+		{"GET /api/v1/revisions/{id}/file", app.sourceFile},
+		{"GET /api/v1/machines", app.machines},
+		{"GET /api/v1/status", app.status},
+		{"GET /api/v1/logs", app.logs},
+	}
+}
+
+func serveOpenAPI(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write(openAPIDocument)
 }
 
 func NewHTTPHandler(configuration config.ServerConfig, database *store.Store, logger *slog.Logger) (http.Handler, error) {
@@ -38,11 +78,12 @@ func NewHTTPHandler(configuration config.ServerConfig, database *store.Store, lo
 	if configuration.ArchiveLimits.ArchiveBytes == 0 {
 		configuration.ArchiveLimits = archive.DefaultLimits()
 	}
+	logger, logs := recordLogs(logger, configuration)
 	ui, err := loadSPA(assets.Files)
 	if err != nil {
 		logger.Error("embedded Svelte UI is missing; browser pages will not work until web/app is built", "error", err)
 	}
-	app := &application{config: configuration, store: database, logger: logger, uploads: make(chan struct{}, 1), ui: ui}
+	app := &application{config: configuration, store: database, logger: logger, uploads: make(chan struct{}, 1), ui: ui, logBuffer: logs}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", serveProcessHealth)
 	mux.Handle("GET /static/", http.FileServerFS(assets.Files))
@@ -62,20 +103,12 @@ func NewHTTPHandler(configuration config.ServerConfig, database *store.Store, lo
 	mux.Handle("GET /revisions/{id}/block", app.browser(app.sourceBlock))
 	mux.Handle("GET /revisions/{id}/attachment", app.browser(app.sourceAttachment))
 	mux.Handle("GET /revisions/{id}/file", app.browser(app.revisionFile))
-	mux.Handle("POST /api/v1/imports", app.api(app.importZIP))
-	mux.Handle("GET /api/v1/search", app.api(app.search))
-	mux.Handle("GET /api/v1/cards", app.api(app.cards))
+	for _, route := range app.apiRoutes() {
+		mux.Handle(route.pattern, app.api(route.handler))
+	}
+	// The only public API routes: the browser's CSRF token and the contract itself.
 	mux.HandleFunc("GET /api/v1/csrf", app.csrfAPI)
-	mux.Handle("GET /api/v1/imports", app.api(app.imports))
-	mux.Handle("GET /api/v1/imports/{id}", app.api(app.importReport))
-	mux.Handle("GET /api/v1/traces/{id}", app.api(app.trace))
-	mux.Handle("GET /api/v1/traces/{id}/events", app.api(app.events))
-	mux.Handle("GET /api/v1/events/{id}/sources", app.api(app.eventSources))
-	mux.Handle("GET /api/v1/revisions/{id}/sources", app.api(app.revisionSources))
-	mux.Handle("GET /api/v1/revisions/{id}/file", app.api(app.sourceFile))
-	mux.Handle("GET /api/v1/machines", app.api(app.machines))
-	mux.Handle("PATCH /api/v1/traces/{id}", app.api(app.updateTrace))
-	mux.Handle("DELETE /api/v1/traces/{id}", app.api(app.deleteAPI))
+	mux.HandleFunc("GET /api/v1/openapi.json", serveOpenAPI)
 	// Unknown API paths must not fall through to the browser shell below.
 	mux.HandleFunc("GET /api/", apiNotFound)
 	mux.Handle("GET /", app.browser(app.spa))
@@ -133,6 +166,7 @@ func (app *application) importZIP(w http.ResponseWriter, r *http.Request) {
 	progress(domain.Progress{Phase: "validating"})
 	validated, err := archive.Validate(ctx, file, size, app.config.ArchiveLimits)
 	if err != nil {
+		app.logger.Warn("import rejected", "error", err.Error())
 		progress(domain.Progress{Phase: "failed", Error: err.Error()})
 		return
 	}

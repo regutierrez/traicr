@@ -3,6 +3,7 @@ package store
 import (
 	"database/sql"
 	"encoding/json"
+	"sync/atomic"
 
 	"github.com/regutierrez/traicr/internal/domain"
 )
@@ -12,6 +13,8 @@ type Store struct {
 	dataDir string
 	objects string
 	writer  chan struct{}
+	// activeImport is the imports row being processed, or 0.
+	activeImport atomic.Int64
 }
 
 type SearchQuery struct {

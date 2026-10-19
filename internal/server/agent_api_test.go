@@ -1,0 +1,274 @@
+package server_test
+
+import (
+	"bytes"
+	"context"
+	"crypto/sha256"
+	"database/sql"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"io/fs"
+	"log/slog"
+	"net/http"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"testing"
+	"testing/fstest"
+
+	"github.com/regutierrez/traicr/internal/config"
+	"github.com/regutierrez/traicr/internal/domain"
+	"github.com/regutierrez/traicr/internal/server"
+	"github.com/regutierrez/traicr/internal/store"
+)
+
+func archiveHandler(t *testing.T, cfg config.ServerConfig, logger *slog.Logger) (http.Handler, *store.Store, string) {
+	t.Helper()
+	cfg.DataDir = t.TempDir()
+	cfg.AdminToken = adminToken
+	database, err := store.Open(cfg.DataDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { database.Close() })
+	if logger == nil {
+		logger = slog.New(slog.DiscardHandler)
+	}
+	handler, err := server.NewHTTPHandler(cfg, database, logger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return handler, database, cfg.DataDir
+}
+
+// importOne imports one synthetic trace from machine. A missing source file
+// makes that trace fail; normalize may block or cancel to model a running or
+// interrupted import.
+func importOne(ctx context.Context, database *store.Store, machine, nativeID string, missingFile bool, normalize func()) (domain.ImportReport, error) {
+	content := []byte(nativeID)
+	sum := sha256.Sum256(content)
+	descriptor := domain.Descriptor{Path: "traces/000001", Harness: "synthetic", Adapter: "test", NativeTraceID: nativeID, NativeUpdatedAt: "2026-10-01T10:00:00Z", RevisionDigest: nativeID,
+		Files: []domain.File{{Path: "source/records.jsonl", Size: int64(len(content)), SHA256: hex.EncodeToString(sum[:])}}}
+	manifest := domain.Manifest{FormatVersion: 1, CreatedAt: "2026-10-01T10:00:00Z", SourceMachine: domain.Machine{ID: machine, Hostname: machine + "-host", OS: "linux", Arch: "amd64"}, Traces: []domain.Descriptor{descriptor}}
+	files := fstest.MapFS{"traces/000001/source/records.jsonl": &fstest.MapFile{Data: content}}
+	if missingFile {
+		files = fstest.MapFS{}
+	}
+	return database.Import(ctx, manifest, files, func(context.Context, domain.Descriptor, fs.FS) (domain.Normalization, error) {
+		if normalize != nil {
+			normalize()
+		}
+		return domain.Normalization{Version: 1, Status: "normalized", Events: []domain.Event{{Key: nativeID, Kind: "message", Role: "user", Text: "hello " + nativeID}}}, nil
+	}, nil)
+}
+
+func decode[T any](t *testing.T, response interface{ Result() *http.Response }, into *T) {
+	t.Helper()
+	result := response.Result()
+	if result.StatusCode != http.StatusOK {
+		t.Fatalf("status %d", result.StatusCode)
+	}
+	if err := json.NewDecoder(result.Body).Decode(into); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestStatusReportsLatestImportPerMachineAndExcludesTheRunningImport(t *testing.T) {
+	handler, database, _ := archiveHandler(t, config.ServerConfig{}, nil)
+	ctx := context.Background()
+	mustImport := func(machine, nativeID string, missing bool) domain.ImportReport {
+		t.Helper()
+		report, err := importOne(ctx, database, machine, nativeID, missing, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return report
+	}
+	mustImport("recovered", "old-failure", true)
+	clean := mustImport("recovered", "clean", false)
+	mustImport("failing", "new-failure", true)
+	mustImport("failing", "untitled", false)
+	mustImport("failing", "another-failure", true)
+	// A manual title takes a trace out of the title backlog.
+	renamed := request(handler, http.MethodPatch, "/api/v1/traces/"+itoa(clean.Traces[0].TraceID), strings.NewReader(`{"title_override":"Named by hand"}`), adminToken)
+	if renamed.Code != http.StatusOK {
+		t.Fatalf("rename: %d %s", renamed.Code, renamed.Body)
+	}
+
+	interruptedCtx, interrupt := context.WithCancel(ctx)
+	if _, err := importOne(interruptedCtx, database, "interrupted", "cut-off", false, interrupt); !errors.Is(err, context.Canceled) {
+		t.Fatalf("interrupted import err = %v", err)
+	}
+
+	started, release := make(chan struct{}), make(chan struct{})
+	running := make(chan domain.ImportReport)
+	go func() {
+		report, _ := importOne(ctx, database, "busy", "in-progress", false, func() { close(started); <-release })
+		running <- report
+	}()
+	<-started
+
+	var status struct {
+		Version         string `json:"version"`
+		RunningImportID int64  `json:"running_import_id"`
+		Machines        []struct {
+			ID                     string `json:"id"`
+			LastImportComplete     bool   `json:"last_import_complete"`
+			LastImportFailedTraces int    `json:"last_import_failed_traces"`
+		} `json:"machines"`
+		Imports struct {
+			Total            int64 `json:"total"`
+			WithFailedTraces int64 `json:"with_failed_traces"`
+			Incomplete       int64 `json:"incomplete"`
+		} `json:"imports"`
+		Traces int64 `json:"traces"`
+		Titles struct {
+			Enabled bool  `json:"enabled"`
+			Pending int64 `json:"pending"`
+		} `json:"titles"`
+		Storage struct {
+			DatabaseBytes int64 `json:"database_bytes"`
+		} `json:"storage"`
+	}
+	decode(t, request(handler, http.MethodGet, "/api/v1/status", nil, adminToken), &status)
+	close(release)
+	finished := <-running
+
+	if status.RunningImportID == 0 || status.RunningImportID != finished.ID {
+		t.Fatalf("running_import_id = %d, want %d", status.RunningImportID, finished.ID)
+	}
+	machines := map[string][2]any{}
+	for _, m := range status.Machines {
+		machines[m.ID] = [2]any{m.LastImportComplete, m.LastImportFailedTraces}
+	}
+	want := map[string][2]any{
+		"recovered":   {true, 0}, // its older failure must not leak into its latest import
+		"failing":     {true, 1}, // its latest import, not the earlier clean one
+		"interrupted": {false, 0},
+		"busy":        {false, 0},
+	}
+	for id, w := range want {
+		if machines[id] != w {
+			t.Errorf("machine %s = %v, want %v", id, machines[id], w)
+		}
+	}
+	// Seven imports; three listed a failed trace; only the cancelled one is
+	// interrupted, because the running one is excluded.
+	if status.Imports.Total != 7 || status.Imports.WithFailedTraces != 3 || status.Imports.Incomplete != 1 {
+		t.Fatalf("imports = %+v", status.Imports)
+	}
+	// Every stored trace but the renamed one still needs a generated title.
+	if status.Version == "" || status.Traces < 2 || status.Titles.Enabled || status.Titles.Pending != status.Traces-1 || status.Storage.DatabaseBytes == 0 {
+		t.Fatalf("status = %+v", status)
+	}
+
+	status.RunningImportID = 0 // omitted from the response when nothing runs
+	decode(t, request(handler, http.MethodGet, "/api/v1/status", nil, adminToken), &status)
+	if status.RunningImportID != 0 || status.Imports.Incomplete != 1 {
+		t.Fatalf("after the import finished: running=%d incomplete=%d", status.RunningImportID, status.Imports.Incomplete)
+	}
+}
+
+func TestImportReportsDeriveCompleteFromTheStoredReport(t *testing.T) {
+	handler, database, dir := archiveHandler(t, config.ServerConfig{}, nil)
+	ctx := context.Background()
+	finished, err := importOne(ctx, database, "laptop", "done", false, nil)
+	if err != nil || !finished.Complete {
+		t.Fatalf("finished import: %+v %v", finished, err)
+	}
+	legacy, err := importOne(ctx, database, "laptop", "legacy", false, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	interruptedCtx, interrupt := context.WithCancel(ctx)
+	interrupted, _ := importOne(interruptedCtx, database, "laptop", "cut-off", false, interrupt)
+
+	// Reports stored before the field existed have no "complete" key.
+	raw, err := sql.Open("sqlite", "file:"+filepath.Join(dir, "traicr.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer raw.Close()
+	if _, err := raw.Exec(`UPDATE imports SET report_json=CAST(json_remove(CAST(report_json AS TEXT),'$.complete') AS BLOB) WHERE id=?`, legacy.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	var page struct {
+		Imports []domain.ImportReport `json:"imports"`
+	}
+	decode(t, request(handler, http.MethodGet, "/api/v1/imports", nil, adminToken), &page)
+	complete := map[int64]bool{}
+	for _, report := range page.Imports {
+		complete[report.ID] = report.Complete
+	}
+	if !complete[finished.ID] || !complete[legacy.ID] || complete[interrupted.ID] || len(complete) != 3 {
+		t.Fatalf("complete by id = %v (finished %d, legacy %d, interrupted %d)", complete, finished.ID, legacy.ID, interrupted.ID)
+	}
+	var one domain.ImportReport
+	decode(t, request(handler, http.MethodGet, "/api/v1/imports/"+itoa(interrupted.ID), nil, adminToken), &one)
+	if one.Complete {
+		t.Fatal("interrupted import reads as complete")
+	}
+}
+
+func TestLogsRecordRejectedUploadsAndFilterByLevel(t *testing.T) {
+	var stdout bytes.Buffer
+	handler, database, _ := archiveHandler(t, config.ServerConfig{}, slog.New(slog.NewJSONHandler(&stdout, nil)))
+	report, err := importOne(context.Background(), database, "laptop", "named", false, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// An info record the warn filter must drop.
+	if response := request(handler, http.MethodPatch, "/api/v1/traces/"+itoa(report.Traces[0].TraceID), strings.NewReader(`{"title_override":"x"}`), adminToken); response.Code != http.StatusOK {
+		t.Fatalf("rename: %d", response.Code)
+	}
+	upload := request(handler, http.MethodPost, "/api/v1/imports", strings.NewReader("not a zip"), adminToken)
+	if upload.Code != http.StatusOK || !strings.Contains(upload.Body.String(), `"phase":"failed"`) {
+		t.Fatalf("upload: %d %s", upload.Code, upload.Body)
+	}
+	var page struct {
+		Records []struct {
+			Level   string         `json:"level"`
+			Message string         `json:"message"`
+			Attrs   map[string]any `json:"attrs"`
+		} `json:"records"`
+	}
+	decode(t, request(handler, http.MethodGet, "/api/v1/logs", nil, adminToken), &page)
+	if len(page.Records) < 2 || page.Records[0].Message != "import rejected" || page.Records[0].Level != "warn" || page.Records[0].Attrs["error"] != "ZIP end directory missing" || page.Records[1].Message != "trace title changed" {
+		t.Fatalf("newest records = %+v", page.Records)
+	}
+	decode(t, request(handler, http.MethodGet, "/api/v1/logs?level=warn", nil, adminToken), &page)
+	for _, record := range page.Records {
+		if record.Level == "info" {
+			t.Fatalf("level=warn returned %+v", record)
+		}
+	}
+	if len(page.Records) == 0 || page.Records[0].Message != "import rejected" {
+		t.Fatalf("warn records = %+v", page.Records)
+	}
+	if !strings.Contains(stdout.String(), `"msg":"import rejected"`) {
+		t.Fatalf("stdout lost the record: %s", stdout.String())
+	}
+	if response := request(handler, http.MethodGet, "/api/v1/logs?level=debug", nil, adminToken); response.Code != http.StatusBadRequest {
+		t.Fatalf("level=debug: %d", response.Code)
+	}
+}
+
+func TestOpenAPIIsPublicButStatusAndLogsNeedAToken(t *testing.T) {
+	handler := testHandler(t, false)
+	response := request(handler, http.MethodGet, "/api/v1/openapi.json", nil, "")
+	var doc struct {
+		OpenAPI string `json:"openapi"`
+	}
+	if response.Code != http.StatusOK || json.Unmarshal(response.Body.Bytes(), &doc) != nil || !strings.HasPrefix(doc.OpenAPI, "3.1") {
+		t.Fatalf("openapi.json: %d %.80s", response.Code, response.Body)
+	}
+	for _, path := range []string{"/api/v1/status", "/api/v1/logs"} {
+		if response := request(handler, http.MethodGet, path, nil, ""); response.Code != http.StatusUnauthorized {
+			t.Fatalf("%s without token: %d", path, response.Code)
+		}
+	}
+}
+
+func itoa(id int64) string { return strconv.FormatInt(id, 10) }

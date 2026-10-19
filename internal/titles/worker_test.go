@@ -1,6 +1,7 @@
 package titles
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -9,6 +10,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"strings"
+	"sync"
 	"testing"
 	"testing/fstest"
 	"time"
@@ -136,5 +138,50 @@ func TestPromptKeepsTheRequestAfterALongInjectedBlock(t *testing.T) {
 	prompt := Prompt(source)
 	if !strings.Contains(prompt, "review the traicr title worker") || strings.Contains(prompt, "Skill instructions") {
 		t.Fatalf("prompt lost the request or kept the skill body:\n%s", prompt)
+	}
+}
+
+// lockedBuffer lets the test read what the worker goroutine logs.
+type lockedBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *lockedBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *lockedBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
+
+func TestPausedWorkerNeverLogsTheProvidersMessage(t *testing.T) {
+	// Providers may echo a masked part of the key, which exact redaction cannot catch.
+	namer := &fakeNamer{reply: func(int64) (string, error) {
+		return "", &RequestError{Status: 401, Message: "Incorrect API key provided: sk-ab****wxyz"}
+	}}
+	worker, s := testWorker(t, namer)
+	var output lockedBuffer
+	worker.Logger = slog.New(slog.NewJSONHandler(&output, nil))
+	importTrace(t, s, "untitled", "", "fix the build")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { worker.Run(ctx); close(done) }()
+	for !strings.Contains(output.String(), "trace naming paused") {
+		time.Sleep(time.Millisecond)
+	}
+	cancel()
+	<-done
+	logged := output.String()
+	if strings.Contains(logged, "sk-ab") || strings.Contains(logged, "Incorrect API key") {
+		t.Fatalf("provider message leaked: %s", logged)
+	}
+	if !strings.Contains(logged, `"status":401`) || !strings.Contains(logged, `"error_type":"*titles.RequestError"`) {
+		t.Fatalf("pause log lost its safe diagnostics: %s", logged)
 	}
 }

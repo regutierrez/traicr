@@ -83,6 +83,12 @@ The collector uploads a complete numbered Trace ZIP to `POST /api/v1/imports`. T
 
 One trace is never split between archives. The collector's split size is a soft target, so one large trace can produce an archive larger than that target. Configure all three upload limits for the largest trusted trace while retaining finite bounds against malformed archives.
 
+## Agent access
+
+Agents use the same `/api/v1` API as the collector, with the admin token (ADR 0011). `GET /api/v1/openapi.json` describes every operation and needs no token. `GET /api/v1/status` answers whether the archive is healthy, and `GET /api/v1/logs` returns the last 1,000 server log records with the admin token and title API key replaced by `[redacted]`. Those records live in memory and reset on restart; `docker compose logs` stays the long-term record.
+
+The Executor app in `integrations/executor/traicr` turns the OpenAPI document into agent tools and asks for approval before every delete and upload. It expects Traicr at `http://traicr-server:8080` on Executor's Docker network; change `host` in `provider.ts` if yours differs. Deploy it with the `executor apps` CLI, then link the admin token on the app's Accounts tab.
+
 ## Token rotation
 
 Replace `TRAICR_ADMIN_TOKEN` and restart the container:
@@ -92,7 +98,7 @@ export TRAICR_ADMIN_TOKEN='new-long-random-token'
 docker compose up -d --force-recreate
 ```
 
-Rotation immediately rejects the old bearer token and invalidates every browser session cookie signed with it. Log in again and update the token stored by each collector.
+Rotation immediately rejects the old bearer token and invalidates every browser session cookie signed with it. Log in again, update the token stored by each collector, and relink the Executor app's account.
 
 ## Upgrades
 

@@ -1,0 +1,2198 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Traicr API",
+    "version": "1",
+    "description": "The Trace Archive API. Traicr stores one person's AI coding Traces collected from several Source Machines. Use it to find, read, rename, and delete Traces, check imports, and read the server's recent logs.\n\n## Auth\nSend `Authorization: Bearer <TRAICR_ADMIN_TOKEN>` on every request. Without a valid token the server answers `401`, except for a `GET` or `HEAD` that carries a valid browser session cookie. This document itself (`GET /api/v1/openapi.json`) needs no token.\n\n## Pagination\nThese operations page: `listTraces`, `searchEvents`, `listTraceEvents`, `listImports`, `listLogs`. They take `limit` (1-200, default 50) and an opaque `cursor`. A response includes `next_cursor` only when another page exists; pass it back unchanged as `cursor`. A cursor keeps its snapshot: rows added after the first page do not appear in later pages. `listMachines`, `listEventSources`, and `listRevisionSources` return plain arrays.\n\n## Errors\nEvery error response has the shape `{\"api_version\":1,\"error\":{\"code\":\"...\",\"message\":\"...\"}}`. The `code` is stable and meant for programs; the `message` is for people. Each operation lists the codes it can return. `POST /api/v1/imports` is the exception after its upload is received: it answers `200` and reports failures inside its NDJSON stream.\n\n## Dates\n`after` and `before` accept `YYYY-MM-DD` (a whole UTC day, inclusive) or an RFC 3339 timestamp.\n\n## Words\nA **Trace** is one native harness session. An **Event** is a searchable message, tool call, tool result, or model change derived from a Trace. A **Source Record** is the lossless harness-specific data an Event came from. A **Revision** is one collected state of a Trace. An **Import** processes one uploaded Trace ZIP. A **Source Machine** is a computer the Traces were collected on. A **Harness** is the coding tool that produced the Trace, such as `amp`, `claude-code`, `codex`, `cursor`, or `pi`."
+  },
+  "servers": [
+    {
+      "url": "/"
+    }
+  ],
+  "tags": [
+    {
+      "name": "traces",
+      "description": "Find, read, rename, and delete Traces."
+    },
+    {
+      "name": "search",
+      "description": "Search individual Events."
+    },
+    {
+      "name": "events",
+      "description": "Inspect where an Event came from."
+    },
+    {
+      "name": "revisions",
+      "description": "Read the original harness files of a Revision."
+    },
+    {
+      "name": "imports",
+      "description": "Upload Trace ZIPs and read Import Reports."
+    },
+    {
+      "name": "machines",
+      "description": "Source Machines that uploaded."
+    },
+    {
+      "name": "status",
+      "description": "Archive health."
+    },
+    {
+      "name": "logs",
+      "description": "Recent server log records."
+    }
+  ],
+  "paths": {
+    "/api/v1/cards": {
+      "get": {
+        "tags": [
+          "traces"
+        ],
+        "operationId": "listTraces",
+        "summary": "List Traces",
+        "description": "List Traces newest first, one row per Trace. Every filter is optional. Event filters (`q`, `model`, `role`, `kind`, `tool`, `after`, `before`) keep a Trace when at least one of its Events matches all of them together; `after` and `before` therefore match Traces with any Event in the range, not their update time.",
+        "security": [
+          {
+            "adminToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of Traces.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TraceCardPage"
+                },
+                "example": {
+                  "cards": [
+                    {
+                      "id": 42,
+                      "title": "Fix the login redirect",
+                      "harness": "amp",
+                      "native_trace_id": "T-0198",
+                      "repository": "https://github.com/me/app",
+                      "updated_at": "2026-10-01T12:40:00Z",
+                      "snippet": "why does login redirect forever?",
+                      "event_count": 118,
+                      "revision_count": 2
+                    }
+                  ],
+                  "next_cursor": "eyJpZCI6NDIsInVwZGF0ZWQiOiIyMDI2LTEwLTAxVDEyOjQwOjAwWiIsIm1heF9pZCI6OTAwfQ"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/InvalidSearch"
+          },
+          "408": {
+            "$ref": "#/components/responses/Timeout"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/q"
+          },
+          {
+            "$ref": "#/components/parameters/mode"
+          },
+          {
+            "$ref": "#/components/parameters/harness"
+          },
+          {
+            "$ref": "#/components/parameters/model"
+          },
+          {
+            "$ref": "#/components/parameters/machine"
+          },
+          {
+            "$ref": "#/components/parameters/repository"
+          },
+          {
+            "$ref": "#/components/parameters/after"
+          },
+          {
+            "$ref": "#/components/parameters/before"
+          },
+          {
+            "$ref": "#/components/parameters/role"
+          },
+          {
+            "$ref": "#/components/parameters/kind"
+          },
+          {
+            "$ref": "#/components/parameters/tool"
+          },
+          {
+            "$ref": "#/components/parameters/cursor"
+          },
+          {
+            "$ref": "#/components/parameters/limit"
+          }
+        ]
+      }
+    },
+    "/api/v1/search": {
+      "get": {
+        "tags": [
+          "search"
+        ],
+        "operationId": "searchEvents",
+        "summary": "Search Events",
+        "description": "Search individual Events, newest match first. Each result names its `trace_id`; open it with getTrace or listTraceEvents.",
+        "security": [
+          {
+            "adminToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of matching Events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/InvalidSearch"
+          },
+          "408": {
+            "$ref": "#/components/responses/Timeout"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/q"
+          },
+          {
+            "$ref": "#/components/parameters/mode"
+          },
+          {
+            "$ref": "#/components/parameters/harness"
+          },
+          {
+            "$ref": "#/components/parameters/model"
+          },
+          {
+            "$ref": "#/components/parameters/machine"
+          },
+          {
+            "$ref": "#/components/parameters/repository"
+          },
+          {
+            "$ref": "#/components/parameters/after"
+          },
+          {
+            "$ref": "#/components/parameters/before"
+          },
+          {
+            "$ref": "#/components/parameters/role"
+          },
+          {
+            "$ref": "#/components/parameters/kind"
+          },
+          {
+            "$ref": "#/components/parameters/tool"
+          },
+          {
+            "$ref": "#/components/parameters/cursor"
+          },
+          {
+            "$ref": "#/components/parameters/limit"
+          }
+        ]
+      }
+    },
+    "/api/v1/traces/{id}": {
+      "get": {
+        "tags": [
+          "traces"
+        ],
+        "operationId": "getTrace",
+        "summary": "Read a Trace",
+        "description": "Read one Trace's metadata, Revisions, parent, and child Traces.",
+        "security": [
+          {
+            "adminToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The Trace.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Trace"
+                },
+                "example": {
+                  "id": 42,
+                  "harness": "amp",
+                  "native_trace_id": "T-0198",
+                  "title": "Fix the login redirect",
+                  "title_override": "Fix the login redirect",
+                  "working_directory": "/home/me/app",
+                  "repository": "https://github.com/me/app",
+                  "created_at": "2026-10-01T12:00:00Z",
+                  "updated_at": "2026-10-01T12:40:00Z",
+                  "revisions": [
+                    {
+                      "id": 77,
+                      "digest": "9f2c…",
+                      "collected_at": "2026-10-01T13:00:00Z",
+                      "adapter": "amp",
+                      "status": "normalized",
+                      "normalizer_version": 4
+                    }
+                  ],
+                  "parents": [],
+                  "children": []
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/InvalidID"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/id"
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "traces"
+        ],
+        "operationId": "renameTrace",
+        "summary": "Rename a Trace",
+        "description": "Set the manual title, which wins over collected and generated titles. Send an empty string to clear it. Imports never change it.",
+        "security": [
+          {
+            "adminToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The updated Trace.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Trace"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request. Codes: `invalid_id`, `invalid_json`, `invalid_title`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "api_version": 1,
+                  "error": {
+                    "code": "invalid_title",
+                    "message": "title_override is required; send an empty string to clear it"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "415": {
+            "description": "Body is not JSON. Codes: `content_type`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "api_version": 1,
+                  "error": {
+                    "code": "content_type",
+                    "message": "send JSON with Content-Type: application/json"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/id"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title_override": {
+                    "type": "string",
+                    "description": "New manual title, or an empty string to clear it."
+                  }
+                },
+                "required": [
+                  "title_override"
+                ]
+              },
+              "example": {
+                "title_override": "Fix the login redirect"
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "traces"
+        ],
+        "operationId": "deleteTrace",
+        "summary": "Delete a Trace",
+        "description": "Permanently delete a Trace, its Events, and Source Records no other Trace uses. This cannot be undone. A later upload of the same session imports it again.",
+        "security": [
+          {
+            "adminToken": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted."
+          },
+          "400": {
+            "$ref": "#/components/responses/InvalidID"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/id"
+          }
+        ]
+      }
+    },
+    "/api/v1/traces/{id}/events": {
+      "get": {
+        "tags": [
+          "traces"
+        ],
+        "operationId": "listTraceEvents",
+        "summary": "Read a Trace's Events",
+        "description": "Page through a Trace's Events in conversation order, merged across Revisions.",
+        "security": [
+          {
+            "adminToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of Events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request. Codes: `invalid_id`, `invalid_limit`, `invalid_query`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "api_version": 1,
+                  "error": {
+                    "code": "invalid_query",
+                    "message": "invalid search query: invalid cursor"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/id"
+          },
+          {
+            "name": "key",
+            "in": "query",
+            "description": "Start at the Event with this key instead of the beginning. When set, `cursor` is ignored; page onward with the returned `next_cursor` alone.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/cursor"
+          },
+          {
+            "$ref": "#/components/parameters/limit"
+          }
+        ]
+      }
+    },
+    "/api/v1/events/{id}/sources": {
+      "get": {
+        "tags": [
+          "events"
+        ],
+        "operationId": "listEventSources",
+        "summary": "Read an Event's Source Records",
+        "description": "List every collected observation of an Event, with where it came from in the original files.",
+        "security": [
+          {
+            "adminToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Observations, oldest Revision first.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Source"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/InvalidID"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/id"
+          }
+        ]
+      }
+    },
+    "/api/v1/revisions/{id}/sources": {
+      "get": {
+        "tags": [
+          "revisions"
+        ],
+        "operationId": "listRevisionSources",
+        "summary": "List a Revision's files",
+        "description": "List the original harness files stored for one Revision.",
+        "security": [
+          {
+            "adminToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Stored files.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SourceObject"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/InvalidID"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/id"
+          }
+        ]
+      }
+    },
+    "/api/v1/revisions/{id}/file": {
+      "get": {
+        "tags": [
+          "revisions"
+        ],
+        "operationId": "getRevisionFile",
+        "summary": "Read a Revision's file",
+        "description": "Read one original harness file. With `preview=1` the answer is JSON text (first 1 MiB); otherwise it is the original bytes.",
+        "security": [
+          {
+            "adminToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The file.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourcePreview"
+                }
+              },
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/InvalidID"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/id"
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "required": true,
+            "description": "File path from listRevisionSources.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "preview",
+            "in": "query",
+            "description": "`1` returns a JSON text preview instead of the bytes.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/imports": {
+      "get": {
+        "tags": [
+          "imports"
+        ],
+        "operationId": "listImports",
+        "summary": "List imports",
+        "description": "List Import Reports, newest first.",
+        "security": [
+          {
+            "adminToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of Import Reports.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/InvalidPage"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/cursor"
+          },
+          {
+            "$ref": "#/components/parameters/limit"
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "imports"
+        ],
+        "operationId": "uploadTraceZip",
+        "summary": "Upload a Trace ZIP",
+        "description": "Upload one Trace ZIP made by `traicr collect` and stream its processing as NDJSON. Only one upload runs at a time. Retrying the same ZIP is safe: unchanged Traces are reported as `unchanged`.",
+        "security": [
+          {
+            "adminToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Upload received. One JSON object per line; the last is `complete` or `failed`.",
+            "content": {
+              "application/x-ndjson": {
+                "schema": {
+                  "type": "string",
+                  "description": "Newline-delimited JSON. Each line is one ImportProgress object (see components.schemas.ImportProgress)."
+                },
+                "examples": {
+                  "complete": {
+                    "value": "{\"phase\":\"validating\"}\n{\"phase\":\"normalizing\",\"total\":1}\n{\"phase\":\"normalizing\",\"completed\":1,\"total\":1,\"outcome\":{\"trace_id\":42,\"harness\":\"amp\",\"native_trace_id\":\"T-0198\",\"revision_digest\":\"9f2c…\",\"status\":\"imported\"}}\n{\"phase\":\"complete\",\"completed\":1,\"total\":1,\"report\":{\"id\":12,\"created_at\":\"2026-10-01T13:00:00Z\",\"source_machine\":{\"id\":\"m1\",\"hostname\":\"laptop\",\"os\":\"darwin\",\"arch\":\"arm64\"},\"imported\":1,\"updated\":0,\"unchanged\":0,\"partially_parsed\":0,\"unsupported\":0,\"failed\":0,\"complete\":true,\"traces\":[]}}\n"
+                  },
+                  "failed": {
+                    "value": "{\"phase\":\"validating\"}\n{\"phase\":\"failed\",\"error\":\"archive contains unlisted files\"}\n"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The upload was incomplete or larger than the server allows. Codes: `upload_failed`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "api_version": 1,
+                  "error": {
+                    "code": "upload_failed",
+                    "message": "upload is incomplete or exceeds the configured limit"
+                  }
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Body is not a ZIP. Codes: `content_type`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "api_version": 1,
+                  "error": {
+                    "code": "content_type",
+                    "message": "send a Trace ZIP with Content-Type: application/zip"
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Another upload is running. Retry after the `Retry-After` seconds. Codes: `import_busy`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "api_version": 1,
+                  "error": {
+                    "code": "import_busy",
+                    "message": "another import is running; retry this ZIP"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/zip": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/imports/{id}": {
+      "get": {
+        "tags": [
+          "imports"
+        ],
+        "operationId": "getImport",
+        "summary": "Read an import",
+        "description": "Read one Import Report, including every Trace's outcome.",
+        "security": [
+          {
+            "adminToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The Import Report.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportReport"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/InvalidID"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/id"
+          }
+        ]
+      }
+    },
+    "/api/v1/machines": {
+      "get": {
+        "tags": [
+          "machines"
+        ],
+        "operationId": "listMachines",
+        "summary": "List Source Machines",
+        "description": "List every Source Machine that has uploaded, most recent first.",
+        "security": [
+          {
+            "adminToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Source Machines.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MachineSeen"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        }
+      }
+    },
+    "/api/v1/status": {
+      "get": {
+        "tags": [
+          "status"
+        ],
+        "operationId": "getStatus",
+        "summary": "Check archive health",
+        "description": "One call that answers whether the archive is healthy: each Source Machine's latest import, failed and interrupted imports, Trace and Event totals, the title backlog, and storage size. Uploads rejected before processing are not imports; find them in listLogs as `import rejected`.",
+        "security": [
+          {
+            "adminToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Archive status.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Status"
+                },
+                "example": {
+                  "version": "v0.9.0",
+                  "machines": [
+                    {
+                      "id": "m1",
+                      "hostname": "laptop",
+                      "last_import_at": "2026-10-01T13:00:00Z",
+                      "last_import_id": 12,
+                      "last_import_complete": true,
+                      "last_import_failed_traces": 0
+                    }
+                  ],
+                  "imports": {
+                    "total": 12,
+                    "with_failed_traces": 1,
+                    "incomplete": 0
+                  },
+                  "traces": 2400,
+                  "events": 1800000,
+                  "titles": {
+                    "enabled": true,
+                    "pending": 3
+                  },
+                  "storage": {
+                    "database_bytes": 734003200,
+                    "objects_bytes": 2147483648
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        }
+      }
+    },
+    "/api/v1/logs": {
+      "get": {
+        "tags": [
+          "logs"
+        ],
+        "operationId": "listLogs",
+        "summary": "Read recent server logs",
+        "description": "Read the server's most recent log records (up to 1,000 kept in memory), newest first. They reset when the server restarts. Use `level=warn` to find problems such as `import rejected`, `import failed`, and `trace naming paused`. Secret values never appear.",
+        "security": [
+          {
+            "adminToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of log records.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LogPage"
+                },
+                "example": {
+                  "records": [
+                    {
+                      "seq": 912,
+                      "time": "2026-10-01T13:00:02Z",
+                      "level": "warn",
+                      "message": "import rejected",
+                      "attrs": {
+                        "error": "archive contains unlisted files"
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request. A cursor from before a server restart is `invalid_query`. Codes: `invalid_limit`, `invalid_query`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "api_version": 1,
+                  "error": {
+                    "code": "invalid_query",
+                    "message": "invalid or expired cursor; logs start over when the server restarts"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "parameters": [
+          {
+            "name": "level",
+            "in": "query",
+            "description": "Minimum level. Default `info`.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "info",
+                "warn",
+                "error"
+              ],
+              "default": "info"
+            }
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "description": "Only records at or after this RFC 3339 time.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/cursor"
+          },
+          {
+            "$ref": "#/components/parameters/limit"
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "adminToken": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "The server's TRAICR_ADMIN_TOKEN."
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": {
+          "api_version": {
+            "type": "integer",
+            "const": 1
+          },
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "description": "Stable error code."
+              },
+              "message": {
+                "type": "string",
+                "description": "Human-readable explanation."
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ]
+          }
+        },
+        "required": [
+          "api_version",
+          "error"
+        ]
+      },
+      "Warning": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ]
+      },
+      "TraceRef": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "native_trace_id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "native_trace_id"
+        ]
+      },
+      "Revision": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "digest": {
+            "type": "string"
+          },
+          "native_updated_at": {
+            "type": "string"
+          },
+          "collected_at": {
+            "type": "string"
+          },
+          "adapter": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "description": "Normalizer outcome, such as `normalized` or `partially_parsed`."
+          },
+          "normalizer_version": {
+            "type": "integer"
+          },
+          "diagnostics": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Warning"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "digest",
+          "collected_at",
+          "adapter",
+          "status",
+          "normalizer_version"
+        ]
+      },
+      "Trace": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "harness": {
+            "type": "string"
+          },
+          "native_trace_id": {
+            "type": "string",
+            "description": "The harness's own session ID."
+          },
+          "title": {
+            "type": "string",
+            "description": "Displayed title: the manual title, else the collected title, else the generated title."
+          },
+          "native_title": {
+            "type": "string",
+            "description": "Title collected from the harness."
+          },
+          "title_override": {
+            "type": "string",
+            "description": "Manual title set through renameTrace."
+          },
+          "generated_title": {
+            "type": "string",
+            "description": "Title the server's model generated."
+          },
+          "working_directory": {
+            "type": "string"
+          },
+          "repository": {
+            "type": "string",
+            "description": "Repository remote URL."
+          },
+          "parent_native_trace_id": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          },
+          "revisions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Revision"
+            }
+          },
+          "parents": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TraceRef"
+            }
+          },
+          "children": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TraceRef"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "harness",
+          "native_trace_id",
+          "created_at",
+          "updated_at",
+          "revisions",
+          "parents",
+          "children"
+        ]
+      },
+      "TraceCard": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "title": {
+            "type": "string"
+          },
+          "harness": {
+            "type": "string"
+          },
+          "native_trace_id": {
+            "type": "string"
+          },
+          "repository": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          },
+          "snippet": {
+            "type": "string",
+            "description": "The text that matched `q`, or the first user message."
+          },
+          "event_count": {
+            "type": "integer"
+          },
+          "revision_count": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "harness",
+          "native_trace_id",
+          "updated_at",
+          "event_count",
+          "revision_count"
+        ],
+        "description": "One Trace in a list."
+      },
+      "TraceCardPage": {
+        "type": "object",
+        "properties": {
+          "cards": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TraceCard"
+            }
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "cards"
+        ]
+      },
+      "SearchResult": {
+        "type": "object",
+        "properties": {
+          "event_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "trace_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "trace_title": {
+            "type": "string"
+          },
+          "harness": {
+            "type": "string"
+          },
+          "repository": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "tool": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string"
+          },
+          "snippet": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "event_id",
+          "trace_id",
+          "trace_title",
+          "harness",
+          "kind",
+          "snippet"
+        ]
+      },
+      "SearchPage": {
+        "type": "object",
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SearchResult"
+            }
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "results"
+        ]
+      },
+      "SourceRef": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "line": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "path"
+        ]
+      },
+      "Attachment": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "media_type": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "source_pointer": {
+            "type": "string"
+          },
+          "inline": {
+            "type": "boolean"
+          },
+          "archived_path": {
+            "type": "string"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "Event": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "trace_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "key": {
+            "type": "string",
+            "description": "Stable key within the Trace."
+          },
+          "parent_key": {
+            "type": "string"
+          },
+          "branch": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "description": "Such as `message`, `tool_call`, `tool_result`, `model_change`."
+          },
+          "role": {
+            "type": "string",
+            "description": "Such as `user` or `assistant`."
+          },
+          "model": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "tool": {
+            "type": "string"
+          },
+          "call_id": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "sources": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SourceRef"
+            }
+          },
+          "attachments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Attachment"
+            }
+          },
+          "metadata": {
+            "description": "Harness-specific details, unchanged."
+          },
+          "observation_count": {
+            "type": "integer",
+            "description": "How many collected Revisions contained this Event."
+          },
+          "revision_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "aliases": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "key",
+          "kind",
+          "text",
+          "observation_count"
+        ]
+      },
+      "EventPage": {
+        "type": "object",
+        "properties": {
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Event"
+            }
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "events"
+        ]
+      },
+      "Source": {
+        "type": "object",
+        "properties": {
+          "observation_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "revision_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "revision_digest": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "line": {
+            "type": "integer"
+          },
+          "object_digest": {
+            "type": "string"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "event": {
+            "$ref": "#/components/schemas/Event"
+          }
+        },
+        "required": [
+          "observation_id",
+          "revision_id",
+          "revision_digest",
+          "event"
+        ]
+      },
+      "SourceObject": {
+        "type": "object",
+        "properties": {
+          "revision_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "path": {
+            "type": "string"
+          },
+          "digest": {
+            "type": "string"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "required": [
+          "revision_id",
+          "path",
+          "digest",
+          "size"
+        ]
+      },
+      "SourcePreview": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string",
+            "description": "Up to the first 1 MiB as text, or a note that the file is binary."
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "path",
+          "content",
+          "truncated"
+        ]
+      },
+      "Machine": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "hostname": {
+            "type": "string"
+          },
+          "os": {
+            "type": "string"
+          },
+          "arch": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "hostname",
+          "os",
+          "arch"
+        ]
+      },
+      "MachineSeen": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Machine"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "first_seen": {
+                "type": "string"
+              },
+              "last_seen": {
+                "type": "string",
+                "description": "Start time of the machine's latest import."
+              }
+            },
+            "required": [
+              "first_seen",
+              "last_seen"
+            ]
+          }
+        ]
+      },
+      "TraceOutcome": {
+        "type": "object",
+        "properties": {
+          "trace_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "harness": {
+            "type": "string"
+          },
+          "native_trace_id": {
+            "type": "string"
+          },
+          "revision_digest": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "description": "One of `imported`, `updated`, `unchanged`, `partially_parsed`, `unsupported`, `failed`."
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Warning"
+            }
+          },
+          "error": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "harness",
+          "native_trace_id",
+          "revision_digest",
+          "status"
+        ]
+      },
+      "ImportReport": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "source_machine": {
+            "$ref": "#/components/schemas/Machine"
+          },
+          "imported": {
+            "type": "integer"
+          },
+          "updated": {
+            "type": "integer"
+          },
+          "unchanged": {
+            "type": "integer"
+          },
+          "partially_parsed": {
+            "type": "integer"
+          },
+          "unsupported": {
+            "type": "integer"
+          },
+          "failed": {
+            "type": "integer",
+            "description": "Traces in this import that failed."
+          },
+          "complete": {
+            "type": "boolean",
+            "description": "False while the import runs or after it was interrupted; its counts are then not final."
+          },
+          "traces": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TraceOutcome"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "created_at",
+          "source_machine",
+          "imported",
+          "updated",
+          "unchanged",
+          "partially_parsed",
+          "unsupported",
+          "failed",
+          "complete",
+          "traces"
+        ]
+      },
+      "ImportPage": {
+        "type": "object",
+        "properties": {
+          "imports": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ImportReport"
+            }
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "imports"
+        ]
+      },
+      "ImportProgress": {
+        "type": "object",
+        "properties": {
+          "phase": {
+            "type": "string",
+            "enum": [
+              "validating",
+              "normalizing",
+              "complete",
+              "failed"
+            ]
+          },
+          "completed": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/TraceOutcome"
+          },
+          "report": {
+            "$ref": "#/components/schemas/ImportReport"
+          },
+          "error": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "phase"
+        ],
+        "description": "One line of the upload's NDJSON stream. The last line is `complete` (with `report`) or `failed` (with `error`)."
+      },
+      "Status": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "string",
+            "description": "Server build version."
+          },
+          "running_import_id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Import being processed right now. Absent when none is."
+          },
+          "machines": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "hostname": {
+                  "type": "string"
+                },
+                "last_import_at": {
+                  "type": "string"
+                },
+                "last_import_id": {
+                  "type": "integer",
+                  "format": "int64"
+                },
+                "last_import_complete": {
+                  "type": "boolean"
+                },
+                "last_import_failed_traces": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "id",
+                "hostname",
+                "last_import_at",
+                "last_import_id",
+                "last_import_complete",
+                "last_import_failed_traces"
+              ]
+            }
+          },
+          "imports": {
+            "type": "object",
+            "properties": {
+              "total": {
+                "type": "integer",
+                "format": "int64"
+              },
+              "with_failed_traces": {
+                "type": "integer",
+                "format": "int64",
+                "description": "Imports whose report lists at least one failed Trace."
+              },
+              "incomplete": {
+                "type": "integer",
+                "format": "int64",
+                "description": "Imports that started but never finished, not counting the running one."
+              }
+            },
+            "required": [
+              "total",
+              "with_failed_traces",
+              "incomplete"
+            ]
+          },
+          "traces": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "events": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "titles": {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "type": "boolean",
+                "description": "True when the title worker is configured."
+              },
+              "pending": {
+                "type": "integer",
+                "format": "int64",
+                "description": "Untitled Traces whose latest Revision has not been named yet."
+              }
+            },
+            "required": [
+              "enabled",
+              "pending"
+            ]
+          },
+          "storage": {
+            "type": "object",
+            "properties": {
+              "database_bytes": {
+                "type": "integer",
+                "format": "int64",
+                "description": "SQLite database and write-ahead log."
+              },
+              "objects_bytes": {
+                "type": "integer",
+                "format": "int64",
+                "description": "Recorded size of stored Source Record files."
+              }
+            },
+            "required": [
+              "database_bytes",
+              "objects_bytes"
+            ]
+          }
+        },
+        "required": [
+          "version",
+          "machines",
+          "imports",
+          "traces",
+          "events",
+          "titles",
+          "storage"
+        ]
+      },
+      "LogRecord": {
+        "type": "object",
+        "properties": {
+          "seq": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Increases by one per record since the server started."
+          },
+          "time": {
+            "type": "string"
+          },
+          "level": {
+            "type": "string",
+            "enum": [
+              "info",
+              "warn",
+              "error"
+            ]
+          },
+          "message": {
+            "type": "string"
+          },
+          "attrs": {
+            "type": "object",
+            "description": "Structured fields. Secrets are replaced with `[redacted]`."
+          }
+        },
+        "required": [
+          "seq",
+          "time",
+          "level",
+          "message"
+        ]
+      },
+      "LogPage": {
+        "type": "object",
+        "properties": {
+          "records": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LogRecord"
+            }
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "records"
+        ]
+      }
+    },
+    "parameters": {
+      "id": {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "integer",
+          "format": "int64",
+          "minimum": 1
+        }
+      },
+      "limit": {
+        "name": "limit",
+        "in": "query",
+        "description": "Page size, 1-200. Default 50.",
+        "schema": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200,
+          "default": 50
+        }
+      },
+      "cursor": {
+        "name": "cursor",
+        "in": "query",
+        "description": "`next_cursor` from the previous page.",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "q": {
+        "name": "q",
+        "in": "query",
+        "description": "Text to find. Empty matches everything.",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "mode": {
+        "name": "mode",
+        "in": "query",
+        "description": "`fulltext` (words, default), `exact` (substring), or `regex` (Go RE2 syntax).",
+        "schema": {
+          "type": "string",
+          "enum": [
+            "fulltext",
+            "exact",
+            "regex"
+          ],
+          "default": "fulltext"
+        }
+      },
+      "harness": {
+        "name": "harness",
+        "in": "query",
+        "description": "Harness name, such as `amp` or `claude-code`.",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "model": {
+        "name": "model",
+        "in": "query",
+        "description": "Model name used for an Event.",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "machine": {
+        "name": "machine",
+        "in": "query",
+        "description": "Source Machine ID (from listMachines), not hostname.",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "repository": {
+        "name": "repository",
+        "in": "query",
+        "description": "Repository remote URL or local path.",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "after": {
+        "name": "after",
+        "in": "query",
+        "description": "Only Events at or after this time.",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "before": {
+        "name": "before",
+        "in": "query",
+        "description": "Only Events at or before this time.",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "role": {
+        "name": "role",
+        "in": "query",
+        "description": "Event role, such as `user` or `assistant`.",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "kind": {
+        "name": "kind",
+        "in": "query",
+        "description": "Event kind, such as `message` or `tool_call`.",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "tool": {
+        "name": "tool",
+        "in": "query",
+        "description": "Tool name of a tool call or result.",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    "responses": {
+      "Unauthorized": {
+        "description": "Missing or wrong bearer token. Codes: `unauthorized`.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "api_version": 1,
+              "error": {
+                "code": "unauthorized",
+                "message": "a valid bearer token is required"
+              }
+            }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "No record with that ID. Codes: `not_found`.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "api_version": 1,
+              "error": {
+                "code": "not_found",
+                "message": "record not found"
+              }
+            }
+          }
+        }
+      },
+      "InvalidID": {
+        "description": "Bad request. Codes: `invalid_id`.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "api_version": 1,
+              "error": {
+                "code": "invalid_id",
+                "message": "id must be a positive integer"
+              }
+            }
+          }
+        }
+      },
+      "InvalidPage": {
+        "description": "Bad request. Codes: `invalid_limit`, `invalid_query`.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "api_version": 1,
+              "error": {
+                "code": "invalid_limit",
+                "message": "limit must be between 1 and 200"
+              }
+            }
+          }
+        }
+      },
+      "InvalidSearch": {
+        "description": "Bad request. `invalid_query` covers a bad mode, date, regular expression, full-text syntax, or cursor. Codes: `invalid_limit`, `invalid_query`.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "api_version": 1,
+              "error": {
+                "code": "invalid_query",
+                "message": "invalid search query: mode must be fulltext, exact, or regex"
+              }
+            }
+          }
+        }
+      },
+      "Timeout": {
+        "description": "The search ran longer than 30 seconds or the request was cancelled. Narrow the query. Codes: `cancelled`.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "api_version": 1,
+              "error": {
+                "code": "cancelled",
+                "message": "request cancelled or timed out"
+              }
+            }
+          }
+        }
+      },
+      "Internal": {
+        "description": "Unexpected server failure; details are in the server logs. Codes: `internal_error`.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "api_version": 1,
+              "error": {
+                "code": "internal_error",
+                "message": "request failed; check server diagnostics"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

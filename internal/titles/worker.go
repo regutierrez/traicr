@@ -61,7 +61,12 @@ func (w *Worker) Run(ctx context.Context) {
 				wait = requestErr.RetryAfter
 			}
 			backoff = min(backoff*2, maxBackoff)
-			w.Logger.Error("trace naming paused", "error", err.Error(), "retry_in", wait)
+			// Never log the provider's message: some echo part of the API key.
+			attrs := []any{"error_type", rootErrorType(err), "retry_in", wait}
+			if requestErr != nil {
+				attrs = append(attrs, "status", requestErr.Status)
+			}
+			w.Logger.Error("trace naming paused", attrs...)
 		case named > 0:
 			backoff = minBackoff
 			wait = 0
@@ -128,4 +133,15 @@ func (w *Worker) name(ctx context.Context, traceID int64) (string, error) {
 	}
 	w.accepted = true
 	return title, nil
+}
+
+// rootErrorType names the innermost wrapped error, which says more than a fmt wrapper.
+func rootErrorType(err error) string {
+	for {
+		next := errors.Unwrap(err)
+		if next == nil {
+			return fmt.Sprintf("%T", err)
+		}
+		err = next
+	}
 }

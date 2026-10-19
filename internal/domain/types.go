@@ -105,16 +105,19 @@ type TraceOutcome struct {
 }
 
 type ImportReport struct {
-	ID          int64          `json:"id"`
-	CreatedAt   string         `json:"created_at"`
-	Machine     Machine        `json:"source_machine"`
-	Imported    int            `json:"imported"`
-	Updated     int            `json:"updated"`
-	Unchanged   int            `json:"unchanged"`
-	Partial     int            `json:"partially_parsed"`
-	Unsupported int            `json:"unsupported"`
-	Failed      int            `json:"failed"`
-	Traces      []TraceOutcome `json:"traces"`
+	ID          int64   `json:"id"`
+	CreatedAt   string  `json:"created_at"`
+	Machine     Machine `json:"source_machine"`
+	Imported    int     `json:"imported"`
+	Updated     int     `json:"updated"`
+	Unchanged   int     `json:"unchanged"`
+	Partial     int     `json:"partially_parsed"`
+	Unsupported int     `json:"unsupported"`
+	Failed      int     `json:"failed"`
+	// Complete is false while an import runs or after it was interrupted.
+	// Readers derive it from whether the final report was stored.
+	Complete bool           `json:"complete"`
+	Traces   []TraceOutcome `json:"traces"`
 }
 
 type Progress struct {

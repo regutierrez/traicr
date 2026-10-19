@@ -267,6 +267,7 @@ func (s *Store) Imports(ctx context.Context, encodedCursor string, limit int) (I
 				return ImportPage{}, err
 			}
 		}
+		report.Complete = len(encoded) > 0
 		page.Imports = append(page.Imports, report)
 	}
 	if len(page.Imports) > limit {
@@ -287,6 +288,7 @@ func (s *Store) ImportReport(ctx context.Context, id int64) (domain.ImportReport
 			return domain.ImportReport{}, err
 		}
 	}
+	report.Complete = len(encoded) > 0
 	return report, nil
 }
 

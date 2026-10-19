@@ -22,6 +22,8 @@ const shutdownTimeout = 10 * time.Second
 
 // RunHTTPServer serves requests until cancellation and then shuts down gracefully.
 func RunHTTPServer(ctx context.Context, serverConfig config.ServerConfig, logger *slog.Logger) error {
+	// Background workers log through the same redacting, recording logger as requests.
+	logger, _ = recordLogs(logger, serverConfig)
 	if err := os.MkdirAll(serverConfig.DataDir, 0o700); err != nil {
 		return fmt.Errorf("server data directory: %w", err)
 	}

@@ -345,7 +345,7 @@ Search results identify the logical Event, show a highlighted snippet and surrou
 
 ## HTTP API
 
-The first API is versioned under `/api/v1`:
+The first API is versioned under `/api/v1`. Its full contract, with every parameter, response, and error code, is the OpenAPI document the server serves at `GET /api/v1/openapi.json` (`internal/server/openapi.json`). The table below is an overview.
 
 | Method and path | Purpose |
 | --- | --- |
@@ -356,7 +356,13 @@ The first API is versioned under `/api/v1`:
 | `GET /api/v1/traces/{id}` | Read trace metadata and relationships |
 | `GET /api/v1/traces/{id}/events` | Page through a trace's Events and branches |
 | `GET /api/v1/events/{id}/sources` | Inspect supporting Source Records and observations |
+| `GET /api/v1/cards` | List Traces, one row per Trace, with the same filters as search |
+| `PATCH /api/v1/traces/{id}` | Set or clear a trace's manual title |
 | `DELETE /api/v1/traces/{id}` | Permanently delete a trace and unreferenced source objects |
+| `GET /api/v1/machines` | List Source Machines |
+| `GET /api/v1/status` | Archive health: latest import per machine, failed and interrupted imports, totals, title backlog, storage |
+| `GET /api/v1/logs` | Recent redacted server log records |
+| `GET /api/v1/openapi.json` | The API contract; needs no token |
 | `GET /healthz` | Process liveness |
 
 List endpoints use stable cursor pagination rather than offset pagination. Error responses have a versioned JSON shape and never include Source Record content unless the authenticated caller explicitly requests it.
