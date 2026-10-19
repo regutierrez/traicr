@@ -22,9 +22,9 @@
 
 	const rows: { id: StreamFilter; label: string; icon: ChipIcon; flip?: boolean; count: () => number }[] = [
 		{ id: 'prompts', label: 'Prompts', icon: 'prompt', flip: true, count: () => counts.prompts },
-		{ id: 'responses', label: 'Agent Responses', icon: 'response', count: () => counts.responses },
+		{ id: 'responses', label: 'Agent responses', icon: 'response', count: () => counts.responses },
 		{ id: 'thinking', label: 'Thinking', icon: 'brain', count: () => counts.thinking },
-		{ id: 'tools', label: 'Tool Calls', icon: 'wrench', count: () => counts.tools },
+		{ id: 'tools', label: 'Tool calls', icon: 'wrench', count: () => counts.tools },
 		{ id: 'compaction', label: 'Compaction', icon: 'compaction', count: () => counts.compaction },
 		{ id: 'branches', label: 'Branches', icon: 'branch', count: () => counts.branches }
 	];
@@ -34,7 +34,7 @@
 	<ul>
 		{#each rows as row (row.id)}
 			<li>
-				<button type="button" class={['row', filter === row.id && 'is-current']} onclick={() => onFilter(filter === row.id ? 'all' : row.id)}>
+				<button type="button" class={['row', filter === row.id && 'is-current']} aria-pressed={filter === row.id} onclick={() => onFilter(filter === row.id ? 'all' : row.id)}>
 					<span class="label">
 						<Icon name={row.icon} size={14} flip={row.flip} />
 						<span>{row.label}</span>
@@ -99,7 +99,7 @@
 		justify-content: space-between;
 		gap: 0.75rem;
 		border: 0;
-		border-radius: 2px;
+		border-radius: 6px;
 		background: transparent;
 		color: var(--muted-foreground);
 		padding: 0 0.35rem;
@@ -119,13 +119,15 @@
 	}
 
 	.row:hover,
-	.row:focus-visible,
-	.row.is-current,
-	.leaf:hover,
-	.leaf:focus-visible,
-	.leaf.is-current {
+	.leaf:hover {
 		color: var(--foreground);
 		background: var(--sidebar-accent);
+	}
+
+	.row.is-current,
+	.leaf.is-current {
+		color: var(--primary);
+		background: color-mix(in oklch, var(--primary) 12%, transparent);
 	}
 
 	.count {

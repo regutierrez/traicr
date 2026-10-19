@@ -2,6 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
+	import { count, dateAndTime, shortRepository } from '$lib/format';
 	import type { Trace } from '$lib/types';
 
 	let {
@@ -46,21 +47,25 @@
 
 <header class="head">
 	<div class="titles">
-		<h1>{title}</h1>
+		<h1 title={title}>{title}</h1>
 		<p class="meta">
-			<span>{trace.harness}</span>
-			{#if recordCount}<span>{recordCount} records</span>{/if}
-			{#if trace.working_directory}<span class="cwd" title={trace.working_directory}>{trace.working_directory}</span>{/if}
+			<span class="harness" translate="no" style="--ink: var(--ink-{trace.harness}, var(--muted-foreground))">{trace.harness}</span>
+			{#if model}<span class="chip" translate="no">{model}{#if thinkingLevel}<span class="dim">{thinkingLevel}</span>{/if}</span>{/if}
+			{#if trace.repository || trace.working_directory}
+				<span class="cwd" translate="no" title={trace.working_directory}>{shortRepository(trace.repository || trace.working_directory)}</span>
+			{/if}
+			{#if recordCount}<span>{count(recordCount, 'record')}</span>{/if}
+			<time datetime={trace.updated_at}>{dateAndTime(trace.updated_at)}</time>
 		</p>
 	</div>
 	<div class="actions">
 		{#if trace.harness === 'amp' && tab === 'conversation'}
 			<label class="revision">
-				<span>Archive view</span>
+				<span>View</span>
 				<select name="revision" value={revision} onchange={changeRevision}>
 					<option value="">Merged archive</option>
 					{#each trace.revisions ?? [] as item (item.id)}
-						<option value={String(item.id)}>Revision {item.id} · {item.native_updated_at}</option>
+						<option value={String(item.id)}>Revision {item.id}{item.native_updated_at ? `, ${dateAndTime(item.native_updated_at)}` : ''}</option>
 					{/each}
 				</select>
 			</label>
@@ -88,22 +93,6 @@
 			</div>
 		{/if}
 	</div>
-	{#if model || thinkingLevel}
-		<nav class="facts" aria-label="Session">
-			{#if model}
-				<div class="fact">
-					<span class="fact-label">Model</span>
-					<span class="fact-value">{model}</span>
-				</div>
-			{/if}
-			{#if thinkingLevel}
-				<div class="fact">
-					<span class="fact-label">Thinking</span>
-					<span class="fact-value">{thinkingLevel}</span>
-				</div>
-			{/if}
-		</nav>
-	{/if}
 	<nav class="tabs" aria-label="Trace views">
 		<a
 			class={['tab', tab === 'conversation' && 'is-current']}
@@ -127,8 +116,8 @@
 		top: 0;
 		z-index: 4;
 		display: grid;
-		gap: 0.55rem;
-		padding: 0.75rem 1.25rem 0;
+		gap: 0.75rem;
+		padding: 1rem 1.25rem 0;
 		background: var(--background);
 		border-bottom: 1px solid var(--border);
 	}
@@ -140,8 +129,9 @@
 	h1 {
 		margin: 0;
 		overflow: hidden;
-		font-size: 14px;
+		font-size: 19px;
 		font-weight: 600;
+		letter-spacing: -0.01em;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
@@ -149,17 +139,47 @@
 	.meta {
 		display: flex;
 		flex-wrap: wrap;
-		gap: 0.65rem;
-		margin: 0.2rem 0 0;
+		align-items: center;
+		gap: 0.4rem 1rem;
+		margin: 0.35rem 0 0;
 		color: var(--muted-foreground);
-		font-family: var(--font-mono);
-		font-size: 11px;
+		font-size: 12px;
 		font-variant-numeric: tabular-nums;
+	}
+
+	.harness {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+		color: var(--ink);
+		font-family: var(--font-mono);
+	}
+
+	.harness::before {
+		content: '';
+		width: 6px;
+		height: 6px;
+		border-radius: 999px;
+		background: var(--ink);
+	}
+
+	.chip {
+		display: inline-flex;
+		gap: 0.4rem;
+		padding: 0.1rem 0.45rem;
+		border: 1px solid var(--border);
+		border-radius: 999px;
+		color: var(--foreground);
+	}
+
+	.dim {
+		color: var(--muted-foreground);
 	}
 
 	.cwd {
 		overflow: hidden;
 		max-width: 42ch;
+		font-family: var(--font-mono);
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
@@ -184,6 +204,7 @@
 	}
 
 	select {
+		max-width: 16rem;
 		height: 1.75rem;
 		border: 1px solid var(--input);
 		border-radius: var(--radius);
@@ -205,38 +226,15 @@
 		cursor: pointer;
 	}
 
-	.toggle.is-on,
-	.toggle:hover,
-	.toggle:focus-visible {
+	.toggle:hover {
 		color: var(--foreground);
-		border-color: var(--primary);
+		border-color: var(--input);
 	}
 
-	.facts {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 36px;
-	}
-
-	.fact {
-		display: flex;
-		flex-direction: column;
-		gap: 0.15rem;
-		min-width: 0;
-	}
-
-	.fact-label {
-		color: var(--muted-foreground);
-		font-size: 13px;
-		line-height: 14px;
-	}
-
-	.fact-value {
-		overflow: visible;
-		color: var(--foreground);
-		font-size: 13px;
-		line-height: 14px;
-		white-space: nowrap;
+	.toggle.is-on {
+		background: color-mix(in oklch, var(--primary) 14%, transparent);
+		border-color: color-mix(in oklch, var(--primary) 50%, transparent);
+		color: var(--primary);
 	}
 
 	.tabs {
@@ -245,11 +243,15 @@
 	}
 
 	.tab {
-		padding: 0.35rem 0 0.55rem;
+		padding: 0.35rem 0 0.6rem;
 		color: var(--muted-foreground);
-		font-size: 12px;
+		font-size: 13px;
 		text-decoration: none;
-		border-bottom: 1px solid transparent;
+		border-bottom: 2px solid transparent;
+	}
+
+	.tab:hover {
+		color: var(--foreground);
 	}
 
 	.tab.is-current {
@@ -264,7 +266,6 @@
 			padding: 0.85rem 1.5rem 0;
 		}
 
-		.facts,
 		.tabs {
 			grid-column: 1 / -1;
 		}

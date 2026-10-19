@@ -22,7 +22,7 @@
 			}
 			error = result.message;
 		} catch {
-			error = 'Could not reach the server';
+			error = 'Could not reach the server. Check that it is running, then try again.';
 		} finally {
 			pending = false;
 		}
@@ -34,9 +34,9 @@
 </svelte:head>
 
 <section class="login">
-	<p class="meta">Private archive</p>
-	<h1>Unlock Traicr</h1>
-	<p class="lede">Use the admin token configured on this server. The original records stay yours.</p>
+	<svg class="mark" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M3 14.5 7.5 6l4 7 4.5-8.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="3" cy="14.5" r="1.6" fill="currentColor"/><circle cx="16" cy="4.5" r="1.6" fill="currentColor"/></svg>
+	<h1>Unlock your archive</h1>
+	<p class="lede">Enter the admin token configured on this server.</p>
 	<form class="form" method="post" action="/login" onsubmit={unlock} aria-busy={pending}>
 		<input type="hidden" name="csrf" value={data.csrf} />
 		<label class="label" for="token">Admin token</label>
@@ -59,16 +59,18 @@
 
 <style>
 	.login {
-		width: min(22rem, 100%);
+		width: min(24rem, 100%);
+		padding: 2rem;
+		border: 1px solid var(--border);
+		border-radius: 0.75rem;
+		background: var(--card);
 	}
 
-	.meta {
-		margin: 0 0 0.4rem;
-		color: var(--muted-foreground);
-		font-family: var(--font-mono);
-		font-size: 11px;
-		letter-spacing: 0.08em;
-		text-transform: uppercase;
+	.mark {
+		width: 28px;
+		height: 28px;
+		margin-bottom: 1.25rem;
+		color: var(--primary);
 	}
 
 	h1 {
@@ -80,16 +82,16 @@
 
 	.lede,
 	.hint {
-		margin: 0.55rem 0 0;
+		margin: 0.5rem 0 0;
 		color: var(--muted-foreground);
-		font-size: 12px;
+		font-size: 13px;
 	}
 
 	.form {
 		display: flex;
 		flex-direction: column;
-		gap: 0.55rem;
-		margin-top: 1.15rem;
+		gap: 0.6rem;
+		margin-top: 1.5rem;
 	}
 
 	.label {

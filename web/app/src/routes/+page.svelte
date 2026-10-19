@@ -3,6 +3,7 @@
 	import { resolve } from '$app/paths';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
+	import { clockTime, count, dayLabel, shortRepository } from '$lib/format';
 	import { highlightParts } from '$lib/highlight';
 	import { withQuery } from '$lib/links';
 	import { harnesses, type TranscriptCard } from '$lib/types';
@@ -11,6 +12,20 @@
 	let { data }: PageProps = $props();
 	let query = $derived(page.url.searchParams.get('q') ?? '');
 	let mode = $derived(page.url.searchParams.get('mode') ?? 'fulltext');
+
+	const filterNames = ['harness', 'model', 'machine', 'repository', 'after', 'before', 'role', 'kind', 'tool'];
+	let activeFilters = $derived(filterNames.filter((name) => field(name)).length);
+
+	// Cards arrive newest first; consecutive cards on the same day share a heading.
+	let days = $derived.by(() => {
+		const groups: { label: string; cards: TranscriptCard[] }[] = [];
+		for (const card of data.cards) {
+			const label = dayLabel(card.updated_at);
+			if (groups.at(-1)?.label === label) groups.at(-1)!.cards.push(card);
+			else groups.push({ label, cards: [card] });
+		}
+		return groups;
+	});
 
 	function field(name: string) {
 		return page.url.searchParams.get(name) ?? '';
@@ -28,24 +43,39 @@
 </svelte:head>
 
 <header class="page-head">
-	<div>
-		<p class="meta">Sessions</p>
-		<h1>Your archive</h1>
-	</div>
-	<p class="count">{data.cards.length} on this page</p>
+	<h1>Sessions</h1>
+	<p class="count">
+		{query ? `${count(data.cards.length, 'match', 'matches')} for “${query}”` : `${count(data.cards.length, 'session')} on this page`}
+	</p>
 </header>
 
-<form class="filters" method="GET" action={resolve('/')}>
-	<label class="sr-only" for="query">Search your traces</label>
-	<Input id="query" name="q" type="search" value={query} placeholder="Search sessions" autocomplete="off" />
-	<select class="mode" name="mode" aria-label="Search mode">
-		<option value="fulltext" selected={mode === 'fulltext'}>Full-text</option>
-		<option value="exact" selected={mode === 'exact'}>Exact text</option>
-		<option value="regex" selected={mode === 'regex'}>Regular expression</option>
-	</select>
-	<Button type="submit">Search</Button>
-	<details class="more">
-		<summary>Filters</summary>
+<form class="search" method="GET" action={resolve('/')}>
+	<div class="bar">
+		<svg class="glass" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+			<circle cx="7" cy="7" r="4.5" stroke="currentColor" stroke-width="1.5" />
+			<path d="m10.5 10.5 3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+		</svg>
+		<label class="sr-only" for="query">Search your traces</label>
+		<input
+			id="query"
+			name="q"
+			type="search"
+			value={query}
+			placeholder="Search prompts, answers, and tool output…"
+			autocomplete="off"
+			spellcheck="false"
+		/>
+		<select class="mode" name="mode" aria-label="Search mode">
+			<option value="fulltext" selected={mode === 'fulltext'}>Words</option>
+			<option value="exact" selected={mode === 'exact'}>Exact text</option>
+			<option value="regex" selected={mode === 'regex'}>Regex</option>
+		</select>
+		<Button type="submit" class="search-button">Search</Button>
+	</div>
+	<details class="more" open={activeFilters > 0}>
+		<summary>
+			Filters{#if activeFilters}<span class="badge">{activeFilters}</span>{/if}
+		</summary>
 		<div class="more-grid">
 			<label>Harness
 				<select name="harness">
@@ -56,13 +86,13 @@
 				</select>
 			</label>
 			<label>Model
-				<Input name="model" value={field('model')} placeholder="Model ID" />
+				<Input name="model" value={field('model')} placeholder="claude-opus-5…" autocomplete="off" spellcheck="false" />
 			</label>
 			<label>Machine
-				<Input name="machine" value={field('machine')} placeholder="Machine ID" />
+				<Input name="machine" value={field('machine')} placeholder="Machine ID…" autocomplete="off" spellcheck="false" />
 			</label>
 			<label>Repository
-				<Input name="repository" value={field('repository')} placeholder="Remote URL or local identity" />
+				<Input name="repository" value={field('repository')} placeholder="github.com/you/repo…" autocomplete="off" spellcheck="false" />
 			</label>
 			<label>From
 				<Input type="date" name="after" value={field('after')} />
@@ -71,59 +101,66 @@
 				<Input type="date" name="before" value={field('before')} />
 			</label>
 			<label>Role
-				<Input name="role" value={field('role')} placeholder="user, assistant, tool…" />
+				<Input name="role" value={field('role')} placeholder="user, assistant, tool…" autocomplete="off" />
 			</label>
 			<label>Event kind
-				<Input name="kind" value={field('kind')} placeholder="message, tool_call…" />
+				<Input name="kind" value={field('kind')} placeholder="message, tool_call…" autocomplete="off" />
 			</label>
 			<label>Tool
-				<Input name="tool" value={field('tool')} placeholder="Tool name" />
+				<Input name="tool" value={field('tool')} placeholder="Bash, edit_file…" autocomplete="off" spellcheck="false" />
 			</label>
 		</div>
 	</details>
 </form>
 
-<section aria-live="polite">
+<section>
 	{#if data.error}
 		<p class="error" role="alert">{data.error}</p>
 	{/if}
-	<ul class="sessions">
-		{#each data.cards as card (card.id)}
-			{@render session(card)}
-		{:else}
-			{#if !data.error}
-				<li class="empty">
-					<p class="empty-title">{query ? 'No matching sessions' : 'Your archive starts here'}</p>
-					<p>
-						{query ? 'Try another search mode, remove a filter, or use a shorter phrase.' : 'Collect traces on a source machine, then upload the ZIPs. Your original records stay intact.'}
-					</p>
-				</li>
-			{/if}
-		{/each}
-	</ul>
+	{#each days as day (day.label)}
+		<h2 class="day">{day.label}</h2>
+		<ul class="sessions">
+			{#each day.cards as card (card.id)}
+				{@render session(card)}
+			{/each}
+		</ul>
+	{:else}
+		{#if !data.error}
+			<div class="empty">
+				<p class="empty-title">{query ? 'No matching sessions' : 'Your archive starts here'}</p>
+				<p>
+					{query ? 'Try another search mode, remove a filter, or use a shorter phrase.' : 'Collect traces on a source machine, then upload the ZIPs. Your original records stay intact.'}
+				</p>
+			</div>
+		{/if}
+	{/each}
 	{#if data.next}
-		<Button class="mt-4" variant="outline" href={nextHref(data.next)}>Next results</Button>
+		<Button class="mt-6" variant="outline" href={nextHref(data.next)}>Older sessions</Button>
 	{/if}
 </section>
 
 {#snippet session(card: TranscriptCard)}
-	<li class="session">
-		<a class="session-link" href={resolve('/traces/[id]', { id: String(card.id) })}>
-			<span class="session-title">{card.title || card.native_trace_id}</span>
-			<span class="session-meta">
-				<span>{card.harness}</span>
-				<time datetime={card.updated_at}>{card.updated_at}</time>
-				<span>{card.event_count} records</span>
-				<span>{card.revision_count} revisions</span>
+	<li>
+		<a class="session" href={resolve('/traces/[id]', { id: String(card.id) })} style="--ink: var(--ink-{card.harness}, var(--muted-foreground))">
+			<span class="when">
+				<time datetime={card.updated_at}>{clockTime(card.updated_at)}</time>
+				<span class="harness" translate="no">{card.harness}</span>
 			</span>
-			<span class="session-repo">{card.repository || 'No repository recorded'}</span>
-			{#if card.snippet || query}
-				<span class="session-snippet">
-					{#each highlightParts(card.snippet || 'Open the transcript to explore this session.', query, mode) as part, index (`${index}:${part.mark}:${part.text}`)}
-						{#if part.mark}<mark>{part.text}</mark>{:else}{part.text}{/if}
-					{/each}
-				</span>
-			{/if}
+			<span class="what">
+				<span class="title">{card.title || card.native_trace_id}</span>
+				<span class="repo" translate="no">{card.repository ? shortRepository(card.repository) : 'No repository'}</span>
+				{#if card.snippet}
+					<span class="snippet">
+						{#each highlightParts(card.snippet, query, mode) as part, index (`${index}:${part.mark}:${part.text}`)}
+							{#if part.mark}<mark>{part.text}</mark>{:else}{part.text}{/if}
+						{/each}
+					</span>
+				{/if}
+			</span>
+			<span class="size">
+				{count(card.event_count, 'record')}
+				{#if card.revision_count > 1}<span>{count(card.revision_count, 'revision')}</span>{/if}
+			</span>
 		</a>
 	</li>
 {/snippet}
@@ -134,33 +171,163 @@
 		align-items: baseline;
 		justify-content: space-between;
 		gap: 1rem;
-		margin-bottom: 0.85rem;
-	}
-
-	.meta,
-	.count {
-		margin: 0;
-		color: var(--muted-foreground);
-		font-family: var(--font-mono);
-		font-size: 11px;
-		font-variant-numeric: tabular-nums;
+		margin: 0.5rem 0 1.25rem;
 	}
 
 	h1 {
-		margin: 0.15rem 0 0;
-		font-size: 1.05rem;
+		margin: 0;
+		font-size: 1.75rem;
+		font-weight: 600;
+		letter-spacing: -0.02em;
+		line-height: 1.1;
+	}
+
+	.count {
+		margin: 0;
+		color: var(--muted-foreground);
+		font-size: 13px;
+		font-variant-numeric: tabular-nums;
+	}
+
+	.search {
+		margin-bottom: 1.75rem;
+	}
+
+	.bar {
+		display: flex;
+		align-items: center;
+		gap: 0.25rem;
+		height: 2.75rem;
+		padding: 0 0.3rem 0 0.85rem;
+		border: 1px solid var(--input);
+		border-radius: 0.6rem;
+		background: var(--card);
+	}
+
+	.bar:focus-within {
+		border-color: color-mix(in oklch, var(--primary) 60%, var(--input));
+		box-shadow: 0 0 0 3px color-mix(in oklch, var(--primary) 14%, transparent);
+	}
+
+	.glass {
+		width: 16px;
+		height: 16px;
+		flex-shrink: 0;
+		color: var(--muted-foreground);
+	}
+
+	.bar input {
+		min-width: 0;
+		flex: 1;
+		height: 100%;
+		border: 0;
+		background: transparent;
+		color: var(--foreground);
+		padding: 0 0.4rem;
+		font: inherit;
+		font-size: 15px;
+	}
+
+	.bar input:focus-visible {
+		outline: none;
+	}
+
+	.bar input::placeholder {
+		color: var(--muted-foreground);
+	}
+
+	.mode {
+		height: 2rem;
+		border: 0;
+		border-left: 1px solid var(--border);
+		background: transparent;
+		color: var(--muted-foreground);
+		padding: 0 0.6rem;
+		font: inherit;
+		font-size: 13px;
+		cursor: pointer;
+	}
+
+	.mode option,
+	.more-grid select option {
+		background: var(--popover);
+		color: var(--foreground);
+	}
+
+	.bar :global(.search-button) {
+		height: 2.1rem;
+		padding: 0 0.95rem;
+	}
+
+	.more {
+		margin-top: 0.6rem;
+	}
+
+	.more summary {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+		color: var(--muted-foreground);
+		font-size: 13px;
+		list-style: none;
+		cursor: pointer;
+	}
+
+	.more summary::before {
+		content: '';
+		width: 6px;
+		height: 6px;
+		margin-right: 0.15rem;
+		border-right: 1.5px solid currentColor;
+		border-bottom: 1.5px solid currentColor;
+		transform: rotate(-45deg);
+		transition: transform 120ms ease;
+	}
+
+	.more[open] summary::before {
+		transform: rotate(45deg);
+	}
+
+	.more summary::-webkit-details-marker {
+		display: none;
+	}
+
+	.more summary:hover {
+		color: var(--foreground);
+	}
+
+	.badge {
+		display: inline-grid;
+		place-items: center;
+		min-width: 1.15rem;
+		height: 1.15rem;
+		padding: 0 0.3rem;
+		border-radius: 999px;
+		background: var(--primary);
+		color: var(--primary-foreground);
+		font-size: 11px;
 		font-weight: 600;
 	}
 
-	.filters {
+	.more-grid {
 		display: grid;
-		grid-template-columns: minmax(0, 1fr) auto auto;
-		gap: 0.45rem;
-		align-items: center;
-		margin-bottom: 0.75rem;
+		gap: 0.75rem;
+		grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+		padding: 0.85rem;
+		margin-top: 0.6rem;
+		border: 1px solid var(--border);
+		border-radius: 0.6rem;
+		background: var(--card);
 	}
 
-	.mode,
+	.more-grid label {
+		display: flex;
+		flex-direction: column;
+		gap: 0.3rem;
+		color: var(--muted-foreground);
+		font-size: 12px;
+	}
+
 	.more-grid select {
 		height: 2rem;
 		border: 1px solid var(--input);
@@ -171,111 +338,159 @@
 		font: inherit;
 	}
 
-	.more {
-		grid-column: 1 / -1;
-		border-top: 1px solid var(--border);
-		padding-top: 0.45rem;
-	}
-
-	.more summary {
-		cursor: pointer;
-		color: var(--muted-foreground);
-		font-size: 12px;
-	}
-
-	.more-grid {
-		display: grid;
-		gap: 0.65rem;
-		grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
-		padding-top: 0.65rem;
-	}
-
-	.more-grid label {
-		display: flex;
-		flex-direction: column;
-		gap: 0.3rem;
-		font-size: 12px;
-	}
-
 	.error {
-		margin: 0 0 0.75rem;
+		margin: 0 0 1rem;
 		color: var(--destructive);
-		font-size: 12px;
+		font-size: 13px;
+	}
+
+	.day {
+		position: sticky;
+		top: 0;
+		z-index: 1;
+		margin: 0;
+		padding: 0.6rem 0 0.4rem;
+		background: var(--background);
+		border-bottom: 1px solid var(--border);
+		color: var(--muted-foreground);
+		font-size: 13px;
+		font-weight: 500;
 	}
 
 	.sessions {
 		list-style: none;
-		margin: 0;
+		margin: 0 0 1.5rem;
 		padding: 0;
-		border-top: 1px solid var(--border);
 	}
 
 	.session {
+		display: grid;
+		grid-template-columns: 5.5rem minmax(0, 1fr) auto;
+		gap: 0 1.25rem;
+		padding: 0.85rem 0.75rem 0.9rem 0;
 		border-bottom: 1px solid var(--border);
-	}
-
-	.session-link {
-		display: flex;
-		flex-direction: column;
-		gap: 0.2rem;
-		padding: 0.65rem 0.15rem;
 		color: inherit;
 		text-decoration: none;
 	}
 
-	.session-link:hover,
-	.session-link:focus-visible {
-		background: var(--accent);
+	.session:hover {
+		background: linear-gradient(to right, transparent, var(--accent) 6rem);
 	}
 
-	.session-title {
+	.session:hover .title {
+		color: #fff;
+	}
+
+	.when {
+		display: flex;
+		flex-direction: column;
+		gap: 0.2rem;
+		padding-top: 0.1rem;
+		font-size: 12px;
+		font-variant-numeric: tabular-nums;
+	}
+
+	.when time {
+		color: var(--muted-foreground);
+	}
+
+	.harness {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+		color: var(--ink);
+		font-family: var(--font-mono);
+		font-size: 11px;
+	}
+
+	.harness::before {
+		content: '';
+		width: 6px;
+		height: 6px;
+		border-radius: 999px;
+		background: var(--ink);
+	}
+
+	.what {
+		display: flex;
+		min-width: 0;
+		flex-direction: column;
+		gap: 0.15rem;
+	}
+
+	.title {
 		overflow: hidden;
-		font-weight: 550;
+		font-size: 15px;
+		font-weight: 500;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
 
-	.session-meta,
-	.session-repo,
-	.session-snippet {
+	.repo {
 		color: var(--muted-foreground);
+		font-family: var(--font-mono);
 		font-size: 12px;
 	}
 
-	.session-meta {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.55rem;
-		font-family: var(--font-mono);
-		font-size: 11px;
-		font-variant-numeric: tabular-nums;
-	}
-
-	.session-repo,
-	.session-snippet {
+	.snippet {
 		overflow: hidden;
 		display: -webkit-box;
+		max-width: 75ch;
+		margin-top: 0.25rem;
+		color: color-mix(in oklch, var(--foreground) 72%, var(--background));
+		font-size: 13px;
 		-webkit-box-orient: vertical;
 		line-clamp: 2;
 		-webkit-line-clamp: 2;
 	}
 
-	.empty {
-		padding: 1.5rem 0.15rem;
+	.size {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-end;
+		gap: 0.2rem;
+		padding-top: 0.15rem;
 		color: var(--muted-foreground);
 		font-size: 12px;
+		font-variant-numeric: tabular-nums;
+		white-space: nowrap;
+	}
+
+	.empty {
+		padding: 3rem 0;
+		color: var(--muted-foreground);
+		font-size: 13px;
 	}
 
 	.empty-title {
 		margin: 0 0 0.35rem;
 		color: var(--foreground);
-		font-size: 13px;
-		font-weight: 550;
+		font-size: 15px;
+		font-weight: 500;
 	}
 
 	@media (max-width: 639px) {
-		.filters {
-			grid-template-columns: 1fr;
+		h1 {
+			font-size: 1.4rem;
+		}
+
+		.mode {
+			max-width: 5.5rem;
+		}
+
+		.session {
+			grid-template-columns: minmax(0, 1fr);
+			gap: 0.3rem;
+			padding-right: 0;
+		}
+
+		.when {
+			flex-direction: row;
+			gap: 0.75rem;
+		}
+
+		.size {
+			display: none;
 		}
 	}
 </style>

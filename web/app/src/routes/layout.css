@@ -1,42 +1,56 @@
 @import 'tailwindcss';
+@import '@fontsource/ibm-plex-sans/400.css';
+@import '@fontsource/ibm-plex-sans/500.css';
+@import '@fontsource/ibm-plex-sans/600.css';
+@import '@fontsource/ibm-plex-mono/400.css';
 
 @custom-variant dark (&:is(.dark *));
 
 /*
- * Dark-only Cursor-like tokens. There is no light theme and no prefers-color-scheme
- * flip. Tune the default shadcn-svelte dark palette toward a near-black canvas.
+ * Dark-only "logbook" tokens. Graphite canvas, warm paper text for long reading,
+ * one highlighter accent for search hits, focus, and the current item.
+ * Harness inks identify where a session came from.
  */
 :root {
 	color-scheme: dark;
-	--radius: 0.25rem;
-	--background: #1e1e1e;
-	--foreground: #cccccc;
-	--card: #1e1e1e;
-	--card-foreground: #cccccc;
-	--popover: #252526;
-	--popover-foreground: #cccccc;
-	--primary: #3794ff;
-	--primary-foreground: #f3f3f3;
-	--secondary: #252526;
-	--secondary-foreground: #cccccc;
-	--muted: #252526;
-	--muted-foreground: #8b8b8b;
-	--accent: #2a2d2e;
-	--accent-foreground: #d4d4d4;
-	--destructive: #f14c4c;
-	--border: rgb(255 255 255 / 11%);
-	--input: rgb(255 255 255 / 11%);
-	--ring: #3794ff;
-	--sidebar: #141414;
-	--sidebar-foreground: #cccccc;
-	--sidebar-primary: #3794ff;
-	--sidebar-primary-foreground: #f3f3f3;
-	--sidebar-accent: #1c1c1c;
-	--sidebar-accent-foreground: #d4d4d4;
-	--sidebar-border: rgb(255 255 255 / 11%);
-	--sidebar-ring: #3794ff;
-	--font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
-	--font-mono: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Consolas, monospace;
+	--radius: 0.375rem;
+	--background: #1a1b1f;
+	--foreground: #e7e4dc;
+	--card: #1f2125;
+	--card-foreground: #e7e4dc;
+	--popover: #24262b;
+	--popover-foreground: #e7e4dc;
+	--primary: #f0c454;
+	--primary-foreground: #1a1b1f;
+	--secondary: #24262b;
+	--secondary-foreground: #e7e4dc;
+	--muted: #24262b;
+	--muted-foreground: #9a978e;
+	--accent: #25272c;
+	--accent-foreground: #e7e4dc;
+	--destructive: #ef6b5b;
+	--border: #2d3036;
+	--input: #34373e;
+	--ring: #f0c454;
+	--sidebar: #151619;
+	--sidebar-foreground: #e7e4dc;
+	--sidebar-primary: #f0c454;
+	--sidebar-primary-foreground: #1a1b1f;
+	--sidebar-accent: #22242a;
+	--sidebar-accent-foreground: #e7e4dc;
+	--sidebar-border: #26292e;
+	--sidebar-ring: #f0c454;
+	--font-sans: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+	--font-mono: 'IBM Plex Mono', ui-monospace, Menlo, Consolas, monospace;
+
+	--ink-amp: #f08a5d;
+	--ink-claude-code: #d9a77c;
+	--ink-codex: #7fbfa8;
+	--ink-cursor: #9ea8f7;
+	--ink-cursor-agent: #9ea8f7;
+	--ink-pi: #c995e6;
+	--ink-opencode: #6fb6d6;
+	--ink-grok-build: #b9b9b9;
 }
 
 @theme inline {
@@ -83,9 +97,10 @@
 	body {
 		@apply bg-background text-foreground;
 		font-family: var(--font-sans);
-		font-size: 13px;
-		line-height: 1.45;
+		font-size: 14px;
+		line-height: 1.5;
 		min-height: 100%;
+		-webkit-font-smoothing: antialiased;
 	}
 
 	body {
@@ -93,8 +108,15 @@
 	}
 
 	mark {
-		background: color-mix(in oklch, var(--primary) 28%, transparent);
-		color: inherit;
+		border-radius: 2px;
+		background: color-mix(in oklch, var(--primary) 30%, transparent);
+		box-shadow: 0 0 0 1px color-mix(in oklch, var(--primary) 30%, transparent);
+		color: var(--foreground);
+	}
+
+	:focus-visible {
+		outline: 2px solid var(--ring);
+		outline-offset: 2px;
 	}
 }
 

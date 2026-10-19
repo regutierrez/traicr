@@ -5,6 +5,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
 	import { Input } from '$lib/components/ui/input';
+	import { dateAndTime } from '$lib/format';
 	import { submitGoForm } from '$lib/forms';
 	import WorkspaceHeader from '$lib/components/conversation/WorkspaceHeader.svelte';
 	import { recordsHref, revisionSourcesHref, sourceFileHref, transcriptHref } from '$lib/links';
@@ -43,7 +44,7 @@
 	<p class="text-destructive p-6" role="alert">{data.error || 'Trace not found'}</p>
 {:else}
 	<WorkspaceHeader {trace} tab="details" />
-	<div class="details-grid grid items-start gap-6 px-5 py-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
+	<div class="details-grid grid min-h-0 flex-1 items-start gap-6 overflow-auto px-5 py-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
 		<section class="flex flex-col gap-4" aria-label="Trace events">
 			{#each data.events as event (event.id)}
 				<Card id="event-{event.id}">
@@ -52,7 +53,7 @@
 							{#if event.role}<Badge variant="secondary">{event.role}</Badge>{/if}
 							<strong class="text-foreground">{event.kind}</strong>
 							{#if event.model}<span>{event.model}</span>{/if}
-							{#if event.timestamp}<time>{event.timestamp}</time>{/if}
+							{#if event.timestamp}<time datetime={event.timestamp}>{dateAndTime(event.timestamp)}</time>{/if}
 						</div>
 						<div id="key-{event.key}" class="text-muted-foreground flex flex-wrap gap-3 text-xs">
 							{#if event.parent_key}<a href="{recordsHref(trace.id, { key: event.parent_key })}#key-{event.parent_key}">Parent: {event.parent_key}</a>{/if}
@@ -61,7 +62,7 @@
 							{#if event.tool}<span>Tool: {event.tool}</span>{/if}
 						</div>
 						<pre class="bg-muted overflow-x-auto rounded-lg p-3 font-mono text-xs whitespace-pre-wrap">{event.text}</pre>
-						<a class="text-sm" href={resolve('/events/[id]/sources', { id: String(event.id) })}>Inspect Source Records</a>
+						<a class="text-sm" href={resolve('/events/[id]/sources', { id: String(event.id) })}>Inspect source records</a>
 					</CardContent>
 				</Card>
 			{:else}
@@ -86,7 +87,7 @@
 						{#each trace.revisions ?? [] as revision (revision.id)}
 							<p class="mb-1 text-sm">
 								<a href={sourceFileHref(revision.id, 'source/export.json', { download: true })} data-sveltekit-reload>
-									Revision {revision.id} · {revision.native_updated_at} · Native JSON
+									Revision {revision.id}{revision.native_updated_at ? `, ${dateAndTime(revision.native_updated_at)}` : ''} (JSON)
 								</a>
 							</p>
 						{/each}

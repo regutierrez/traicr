@@ -93,7 +93,7 @@
 {:else}
 	<div class="app-shell">
 		<aside class="rail" aria-label="Main navigation">
-			<a class="rail-brand" href={resolve('/')} aria-label="Traicr home" title="Traicr">t</a>
+			<a class="rail-brand" href={resolve('/')} aria-label="Traicr home" title="Traicr"><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M3 14.5 7.5 6l4 7 4.5-8.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="3" cy="14.5" r="1.6" fill="currentColor"/><circle cx="16" cy="4.5" r="1.6" fill="currentColor"/></svg></a>
 			<nav class="rail-nav">
 				{#each navigation as item (item.href)}
 					{@render railLink(item.href, item.label, item.icon)}
@@ -108,7 +108,7 @@
 		</aside>
 		<div class="workspace">
 			<nav class="mobile-rail" aria-label="Main navigation">
-				<a class="rail-brand" href={resolve('/')} aria-label="Traicr home" title="Traicr">t</a>
+				<a class="rail-brand" href={resolve('/')} aria-label="Traicr home" title="Traicr"><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M3 14.5 7.5 6l4 7 4.5-8.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="3" cy="14.5" r="1.6" fill="currentColor"/><circle cx="16" cy="4.5" r="1.6" fill="currentColor"/></svg></a>
 				{#each navigation as item (item.href)}
 					{@render railLink(item.href, item.label, item.icon)}
 				{/each}
@@ -137,15 +137,15 @@
 
 	.app-shell {
 		display: flex;
-		height: 100vh;
-		min-height: 100vh;
+		height: 100dvh;
+		min-height: 100dvh;
 		overflow: hidden;
 		background: var(--background);
 	}
 
 	.rail {
 		display: none;
-		width: 48px;
+		width: 52px;
 		flex-shrink: 0;
 		flex-direction: column;
 		align-items: center;
@@ -176,7 +176,7 @@
 	.workspace-main {
 		flex: 1;
 		width: 100%;
-		max-width: 72rem;
+		max-width: 60rem;
 		min-height: 0;
 		margin: 0 auto;
 		overflow: auto;
@@ -195,15 +195,21 @@
 	.rail-brand {
 		display: grid;
 		place-items: center;
-		width: 28px;
-		height: 28px;
-		margin: 0.15rem 0 0.35rem;
-		border-radius: 6px;
-		background: var(--sidebar-accent);
-		color: var(--sidebar-foreground);
-		font-size: 12px;
-		font-weight: 650;
+		width: 32px;
+		height: 32px;
+		margin: 0.15rem 0 0.75rem;
+		border-radius: 8px;
+		color: var(--primary);
 		text-decoration: none;
+	}
+
+	.rail-brand :global(svg) {
+		width: 20px;
+		height: 20px;
+	}
+
+	.rail-brand:hover {
+		background: var(--sidebar-accent);
 	}
 
 	.rail-nav {
@@ -221,10 +227,10 @@
 	.rail-link {
 		display: grid;
 		place-items: center;
-		width: 32px;
-		height: 32px;
+		width: 34px;
+		height: 34px;
 		border: 0;
-		border-radius: 6px;
+		border-radius: 8px;
 		background: transparent;
 		color: var(--muted-foreground);
 		cursor: pointer;
@@ -232,8 +238,8 @@
 	}
 
 	.rail-link :global(svg) {
-		width: 16px;
-		height: 16px;
+		width: 17px;
+		height: 17px;
 	}
 
 	.rail-link:hover,
@@ -243,9 +249,8 @@
 	}
 
 	.rail-link.is-current {
-		background: var(--sidebar-accent);
+		background: color-mix(in oklch, var(--primary) 14%, transparent);
 		color: var(--primary);
-		box-shadow: inset 2px 0 0 var(--primary);
 	}
 
 	@media (min-width: 768px) {
@@ -258,7 +263,7 @@
 		}
 
 		.workspace-main {
-			padding: 1.25rem 1.75rem 2.5rem;
+			padding: 2rem 2.5rem 3rem;
 		}
 	}
 </style>

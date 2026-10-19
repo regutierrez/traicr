@@ -355,22 +355,23 @@
 
 	.row {
 		position: relative;
-		max-width: 54rem;
-		padding: 0 0 0 46px;
-		font-size: 14px;
-		line-height: 20px;
+		max-width: 48rem;
+		margin-inline: auto;
+		padding: 0 0 0 40px;
+		font-size: 14.5px;
+		line-height: 1.6;
 	}
 
 	.row.is-user {
-		margin: 0 0 24px;
+		margin-block: 0 20px;
 	}
 
 	.row.is-agent {
-		margin: 24px 0;
+		margin-block: 24px 40px;
 	}
 
 	.row.is-quiet {
-		margin: 0;
+		margin-block: 0;
 	}
 
 	.row.is-target .turn-body {
@@ -388,20 +389,20 @@
 		align-items: center;
 		justify-content: center;
 		border-radius: 999px;
-		background: #1c1c1c;
-		box-shadow: inset 0 0 0 1px rgb(255 255 255 / 14%);
+		background: var(--muted);
+		box-shadow: inset 0 0 0 1px var(--border);
 		color: var(--muted-foreground);
 	}
 
 	.row.is-user .avatar {
-		background: #2a2a2a;
-		color: #d4d4d4;
+		top: 12px;
+		background: var(--primary);
+		box-shadow: none;
+		color: var(--primary-foreground);
 	}
 
 	.row.is-agent .avatar {
-		top: 0.1rem;
-		background: #202020;
-		color: #9a9a9a;
+		top: 0.2rem;
 	}
 
 	.turn-body {
@@ -409,14 +410,13 @@
 	}
 
 	.bubble {
-		margin-left: -10px;
-		padding: 6px 10px;
-		border-radius: 10px;
-		background: #242424;
-		box-shadow:
-			0 0 0 1px rgb(255 255 255 / 8%),
-			0 1px 3px rgb(0 0 0 / 32%),
-			0 1px 2px rgb(0 0 0 / 24%);
+		margin-left: -14px;
+		padding: 10px 14px;
+		border: 1px solid var(--border);
+		border-left: 2px solid var(--primary);
+		border-radius: 4px 10px 10px 4px;
+		background: var(--card);
+		font-size: 15px;
 	}
 
 	.clamp.is-clamped {
@@ -466,7 +466,7 @@
 		padding: 0.55rem 0.65rem;
 		border: 1px solid var(--border);
 		border-radius: var(--radius);
-		background: #181818;
+		background: var(--sidebar);
 		font-family: var(--font-mono);
 		font-size: 12px;
 		white-space: pre-wrap;

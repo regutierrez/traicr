@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { Button } from '$lib/components/ui/button';
+	import { dateAndTime } from '$lib/format';
 	import { withQuery } from '$lib/links';
 	import type { PageProps } from './$types';
 
@@ -10,12 +11,9 @@
 <svelte:head><title>Machines · Traicr</title></svelte:head>
 
 <header class="page-head">
-	<div>
-		<p class="meta">Archive</p>
-		<h1>Source machines</h1>
-	</div>
+	<h1>Machines</h1>
+	<p class="lede">Where your traces were collected. A session seen on two machines is still one session.</p>
 </header>
-<p class="lede">Machine identity tracks provenance. The same trace stays one trace, wherever it was collected.</p>
 
 {#if data.error}
 	<p class="error" role="alert">{data.error}</p>
@@ -24,12 +22,12 @@
 <ul class="machines">
 	{#each data.machines as machine (machine.id)}
 		<li class="machine">
-			<p class="host">{machine.hostname}</p>
-			<p class="meta-row">{machine.os} / {machine.arch}</p>
+			<p class="host" translate="no">{machine.hostname}</p>
+			<p class="meta-row" translate="no">{machine.os} / {machine.arch}</p>
 			<dl>
 				<div><dt>Machine ID</dt><dd>{machine.id}</dd></div>
-				<div><dt>First seen</dt><dd>{machine.first_seen}</dd></div>
-				<div><dt>Last seen</dt><dd>{machine.last_seen}</dd></div>
+				<div><dt>First upload</dt><dd><time datetime={machine.first_seen}>{dateAndTime(machine.first_seen)}</time></dd></div>
+				<div><dt>Last upload</dt><dd><time datetime={machine.last_seen}>{dateAndTime(machine.last_seen)}</time></dd></div>
 			</dl>
 			<Button variant="link" class="h-auto p-0 text-xs" href={withQuery(resolve('/'), { machine: machine.id })}>Search this machine</Button>
 		</li>
@@ -40,10 +38,9 @@
 
 <style>
 	.page-head {
-		margin-bottom: 0.35rem;
+		margin: 0.5rem 0 1.5rem;
 	}
 
-	.meta,
 	.lede,
 	.empty,
 	.error,
@@ -53,21 +50,17 @@
 		font-size: 12px;
 	}
 
-	.meta {
-		font-family: var(--font-mono);
-		font-size: 11px;
-		letter-spacing: 0.06em;
-		text-transform: uppercase;
-	}
-
 	h1 {
-		margin: 0.15rem 0 0;
-		font-size: 1.05rem;
+		margin: 0;
+		font-size: 1.75rem;
 		font-weight: 600;
+		letter-spacing: -0.02em;
+		line-height: 1.1;
 	}
 
 	.lede {
-		margin-bottom: 0.85rem;
+		margin-top: 0.4rem;
+		font-size: 13px;
 	}
 
 	.error {
@@ -76,27 +69,32 @@
 	}
 
 	.machines {
+		display: grid;
+		gap: 0.75rem;
+		grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr));
 		list-style: none;
 		margin: 0;
 		padding: 0;
-		border-top: 1px solid var(--border);
 	}
 
 	.machine,
 	.empty {
-		border-bottom: 1px solid var(--border);
-		padding: 0.7rem 0.15rem;
+		padding: 1rem 1.1rem;
+		border: 1px solid var(--border);
+		border-radius: 0.6rem;
+		background: var(--card);
 	}
 
 	.host {
-		margin: 0 0 0.15rem;
-		font-weight: 550;
+		margin: 0 0 0.1rem;
+		font-size: 15px;
+		font-weight: 600;
 	}
 
 	dl {
 		display: grid;
 		gap: 0.2rem 1rem;
-		margin: 0.45rem 0;
+		margin: 0.85rem 0;
 		grid-template-columns: 6.5rem minmax(0, 1fr);
 	}
 
@@ -111,8 +109,7 @@
 
 	dd {
 		margin: 0;
-		font-family: var(--font-mono);
-		font-size: 11px;
+		font-size: 12px;
 		overflow-wrap: anywhere;
 	}
 
