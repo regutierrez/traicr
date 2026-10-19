@@ -89,10 +89,14 @@ func (s *Store) Import(ctx context.Context, manifest domain.Manifest, sources fs
 	}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	report := domain.ImportReport{CreatedAt: now, Machine: manifest.SourceMachine, Traces: make([]domain.TraceOutcome, 0, len(manifest.Traces))}
-	defer s.activeImport.Store(0)
 	if err := s.beginImport(ctx, &report); err != nil {
 		return report, err
 	}
+	defer func() {
+		s.importMu.Lock()
+		s.runningImport = 0
+		s.importMu.Unlock()
+	}()
 	progress(domain.Progress{Phase: "normalizing", Total: len(manifest.Traces)})
 	for i, descriptor := range manifest.Traces {
 		outcome := s.importTrace(ctx, manifest, descriptor, sources, normalize)
@@ -133,8 +137,13 @@ func (s *Store) beginImport(ctx context.Context, report *domain.ImportReport) er
 		return err
 	}
 	// Mark the import running before its row becomes visible to status readers.
-	s.activeImport.Store(report.ID)
-	return tx.Commit()
+	s.importMu.Lock()
+	defer s.importMu.Unlock()
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	s.runningImport = report.ID
+	return nil
 }
 
 func (s *Store) importTrace(ctx context.Context, manifest domain.Manifest, descriptor domain.Descriptor, sources fs.FS, normalize func(context.Context, domain.Descriptor, fs.FS) (domain.Normalization, error)) domain.TraceOutcome {

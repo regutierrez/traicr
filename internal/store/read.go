@@ -268,6 +268,9 @@ func (s *Store) Imports(ctx context.Context, encodedCursor string, limit int) (I
 			}
 		}
 		report.Complete = len(encoded) > 0
+		if report.Traces == nil {
+			report.Traces = []domain.TraceOutcome{} // an unfinished import has no outcomes yet
+		}
 		page.Imports = append(page.Imports, report)
 	}
 	if len(page.Imports) > limit {
@@ -289,6 +292,9 @@ func (s *Store) ImportReport(ctx context.Context, id int64) (domain.ImportReport
 		}
 	}
 	report.Complete = len(encoded) > 0
+	if report.Traces == nil {
+		report.Traces = []domain.TraceOutcome{} // an unfinished import has no outcomes yet
+	}
 	return report, nil
 }
 

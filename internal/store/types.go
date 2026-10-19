@@ -3,7 +3,7 @@ package store
 import (
 	"database/sql"
 	"encoding/json"
-	"sync/atomic"
+	"sync"
 
 	"github.com/regutierrez/traicr/internal/domain"
 )
@@ -13,8 +13,11 @@ type Store struct {
 	dataDir string
 	objects string
 	writer  chan struct{}
-	// activeImport is the imports row being processed, or 0.
-	activeImport atomic.Int64
+	// importMu orders import start and finish with status reads, so a status
+	// read never sees an import's row without knowing it is running.
+	importMu sync.Mutex
+	// runningImport is the imports row being processed, or 0. Guarded by importMu.
+	runningImport int64
 }
 
 type SearchQuery struct {

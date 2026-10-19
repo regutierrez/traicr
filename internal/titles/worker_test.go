@@ -172,8 +172,11 @@ func TestPausedWorkerNeverLogsTheProvidersMessage(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() { worker.Run(ctx); close(done) }()
-	for !strings.Contains(output.String(), "trace naming paused") {
-		time.Sleep(time.Millisecond)
+	for deadline := time.Now().Add(10 * time.Second); !strings.Contains(output.String(), "trace naming paused"); time.Sleep(time.Millisecond) {
+		if time.Now().After(deadline) {
+			cancel()
+			t.Fatalf("worker never paused: %s", output.String())
+		}
 	}
 	cancel()
 	<-done

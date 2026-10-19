@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/fs"
 	"log/slog"
 	"net/http"
@@ -272,3 +273,145 @@ func TestOpenAPIIsPublicButStatusAndLogsNeedAToken(t *testing.T) {
 }
 
 func itoa(id int64) string { return strconv.FormatInt(id, 10) }
+
+// TestResponsesMatchThePublishedSchemas checks real responses against the
+// required fields and types openapi.json promises, so agents and generated
+// tools can rely on them.
+func TestResponsesMatchThePublishedSchemas(t *testing.T) {
+	handler, database, _ := archiveHandler(t, config.ServerConfig{}, nil)
+	ctx := context.Background()
+	report, err := importOne(ctx, database, "laptop", "readable", false, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	interruptedCtx, interrupt := context.WithCancel(ctx)
+	interrupted, _ := importOne(interruptedCtx, database, "laptop", "cut-off", false, interrupt)
+	traceID := itoa(report.Traces[0].TraceID)
+	var events struct {
+		Events []struct {
+			ID int64 `json:"id"`
+		} `json:"events"`
+	}
+	decode(t, request(handler, http.MethodGet, "/api/v1/traces/"+traceID+"/events", nil, adminToken), &events)
+	if len(events.Events) == 0 {
+		t.Fatal("no events")
+	}
+
+	var doc map[string]any
+	if err := json.Unmarshal(request(handler, http.MethodGet, "/api/v1/openapi.json", nil, "").Body.Bytes(), &doc); err != nil {
+		t.Fatal(err)
+	}
+	for _, check := range []struct{ path, method, target string }{
+		{"/api/v1/cards", "get", "/api/v1/cards"},
+		{"/api/v1/search", "get", "/api/v1/search?q=hello"},
+		{"/api/v1/traces/{id}", "get", "/api/v1/traces/" + traceID},
+		{"/api/v1/traces/{id}/events", "get", "/api/v1/traces/" + traceID + "/events"},
+		{"/api/v1/events/{id}/sources", "get", "/api/v1/events/" + itoa(events.Events[0].ID) + "/sources"},
+		{"/api/v1/imports", "get", "/api/v1/imports"},
+		{"/api/v1/imports/{id}", "get", "/api/v1/imports/" + itoa(interrupted.ID)},
+		{"/api/v1/machines", "get", "/api/v1/machines"},
+		{"/api/v1/status", "get", "/api/v1/status"},
+		{"/api/v1/logs", "get", "/api/v1/logs"},
+	} {
+		response := request(handler, http.MethodGet, check.target, nil, adminToken)
+		var body any
+		if response.Code != http.StatusOK || json.Unmarshal(response.Body.Bytes(), &body) != nil {
+			t.Fatalf("%s: %d %s", check.target, response.Code, response.Body)
+		}
+		operation := doc["paths"].(map[string]any)[check.path].(map[string]any)[check.method].(map[string]any)
+		schema := operation["responses"].(map[string]any)["200"].(map[string]any)["content"].(map[string]any)["application/json"].(map[string]any)["schema"]
+		if problem := conforms(doc, schema, body, "$"); problem != "" {
+			t.Errorf("%s: %s", check.target, problem)
+		}
+	}
+}
+
+// conforms checks types, required properties, and array items, following
+// $ref and allOf. It is not a full JSON Schema validator.
+func conforms(doc map[string]any, schema, value any, at string) string {
+	s := schema.(map[string]any)
+	if ref, ok := s["$ref"].(string); ok {
+		node := any(doc)
+		for _, part := range strings.Split(strings.TrimPrefix(ref, "#/"), "/") {
+			node = node.(map[string]any)[part]
+		}
+		return conforms(doc, node, value, at)
+	}
+	for _, part := range asList(s["allOf"]) {
+		if problem := conforms(doc, part, value, at); problem != "" {
+			return problem
+		}
+	}
+	types := asList(s["type"])
+	if len(types) > 0 && !slicesContainsType(types, value) {
+		return fmt.Sprintf("%s is %T, schema allows %v", at, value, types)
+	}
+	switch v := value.(type) {
+	case map[string]any:
+		for _, name := range asList(s["required"]) {
+			if _, ok := v[name.(string)]; !ok {
+				return fmt.Sprintf("%s is missing required %q", at, name)
+			}
+		}
+		properties, _ := s["properties"].(map[string]any)
+		for name, field := range v {
+			if property, ok := properties[name]; ok {
+				if problem := conforms(doc, property, field, at+"."+name); problem != "" {
+					return problem
+				}
+			}
+		}
+	case []any:
+		if items, ok := s["items"]; ok {
+			for i, item := range v {
+				if problem := conforms(doc, items, item, fmt.Sprintf("%s[%d]", at, i)); problem != "" {
+					return problem
+				}
+			}
+		}
+	}
+	return ""
+}
+
+func asList(value any) []any {
+	switch v := value.(type) {
+	case []any:
+		return v
+	case nil:
+		return nil
+	default:
+		return []any{v}
+	}
+}
+
+func slicesContainsType(types []any, value any) bool {
+	for _, want := range types {
+		switch v := value.(type) {
+		case nil:
+			if want == "null" {
+				return true
+			}
+		case bool:
+			if want == "boolean" {
+				return true
+			}
+		case float64:
+			if want == "number" || (want == "integer" && v == float64(int64(v))) {
+				return true
+			}
+		case string:
+			if want == "string" {
+				return true
+			}
+		case []any:
+			if want == "array" {
+				return true
+			}
+		case map[string]any:
+			if want == "object" {
+				return true
+			}
+		}
+	}
+	return false
+}

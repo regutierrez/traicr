@@ -175,6 +175,10 @@ func (h *logHandler) text(value string) string {
 // arbitrary values become strings so no secret can hide inside them.
 func (h *logHandler) cleanAttr(attr slog.Attr) slog.Attr {
 	value := attr.Value.Resolve()
+	if value.Kind() == slog.KindAny && value.Any() == nil {
+		// Keep slog's meaning: a zero Attr is ignored and a nil value is null.
+		return slog.Attr{Key: attr.Key, Value: value}
+	}
 	switch value.Kind() {
 	case slog.KindString:
 		return slog.String(attr.Key, h.text(value.String()))
@@ -236,6 +240,8 @@ func logValue(value slog.Value) any {
 		return value.Bool()
 	case slog.KindTime:
 		return value.Time().UTC().Format(time.RFC3339Nano)
+	case slog.KindAny:
+		return value.Any() // only nil reaches here; cleanAttr stringifies the rest
 	}
 	return value.String()
 }

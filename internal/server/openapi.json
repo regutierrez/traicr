@@ -88,11 +88,11 @@
           "400": {
             "$ref": "#/components/responses/InvalidSearch"
           },
-          "408": {
-            "$ref": "#/components/responses/Timeout"
-          },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "408": {
+            "$ref": "#/components/responses/Timeout"
           },
           "500": {
             "$ref": "#/components/responses/Internal"
@@ -168,11 +168,11 @@
           "400": {
             "$ref": "#/components/responses/InvalidSearch"
           },
-          "408": {
-            "$ref": "#/components/responses/Timeout"
-          },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "408": {
+            "$ref": "#/components/responses/Timeout"
           },
           "500": {
             "$ref": "#/components/responses/Internal"
@@ -271,11 +271,14 @@
           "400": {
             "$ref": "#/components/responses/InvalidID"
           },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
-          "401": {
-            "$ref": "#/components/responses/Unauthorized"
+          "408": {
+            "$ref": "#/components/responses/Timeout"
           },
           "500": {
             "$ref": "#/components/responses/Internal"
@@ -327,8 +330,14 @@
               }
             }
           },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
+          },
+          "408": {
+            "$ref": "#/components/responses/Timeout"
           },
           "415": {
             "description": "Body is not JSON. Codes: `content_type`.",
@@ -346,9 +355,6 @@
                 }
               }
             }
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthorized"
           },
           "500": {
             "$ref": "#/components/responses/Internal"
@@ -401,11 +407,14 @@
           "400": {
             "$ref": "#/components/responses/InvalidID"
           },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
-          "401": {
-            "$ref": "#/components/responses/Unauthorized"
+          "408": {
+            "$ref": "#/components/responses/Timeout"
           },
           "500": {
             "$ref": "#/components/responses/Internal"
@@ -459,11 +468,14 @@
               }
             }
           },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
-          "401": {
-            "$ref": "#/components/responses/Unauthorized"
+          "408": {
+            "$ref": "#/components/responses/Timeout"
           },
           "500": {
             "$ref": "#/components/responses/Internal"
@@ -520,11 +532,14 @@
           "400": {
             "$ref": "#/components/responses/InvalidID"
           },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
-          "401": {
-            "$ref": "#/components/responses/Unauthorized"
+          "408": {
+            "$ref": "#/components/responses/Timeout"
           },
           "500": {
             "$ref": "#/components/responses/Internal"
@@ -567,11 +582,14 @@
           "400": {
             "$ref": "#/components/responses/InvalidID"
           },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
-          "401": {
-            "$ref": "#/components/responses/Unauthorized"
+          "408": {
+            "$ref": "#/components/responses/Timeout"
           },
           "500": {
             "$ref": "#/components/responses/Internal"
@@ -617,11 +635,14 @@
           "400": {
             "$ref": "#/components/responses/InvalidID"
           },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
-          "401": {
-            "$ref": "#/components/responses/Unauthorized"
+          "408": {
+            "$ref": "#/components/responses/Timeout"
           },
           "500": {
             "$ref": "#/components/responses/Internal"
@@ -683,6 +704,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "408": {
+            "$ref": "#/components/responses/Timeout"
           },
           "500": {
             "$ref": "#/components/responses/Internal"
@@ -827,11 +851,14 @@
           "400": {
             "$ref": "#/components/responses/InvalidID"
           },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
-          "401": {
-            "$ref": "#/components/responses/Unauthorized"
+          "408": {
+            "$ref": "#/components/responses/Timeout"
           },
           "500": {
             "$ref": "#/components/responses/Internal"
@@ -873,6 +900,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "408": {
+            "$ref": "#/components/responses/Timeout"
           },
           "500": {
             "$ref": "#/components/responses/Internal"
@@ -934,6 +964,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "408": {
+            "$ref": "#/components/responses/Timeout"
           },
           "500": {
             "$ref": "#/components/responses/Internal"
@@ -1459,7 +1492,7 @@
           },
           "observation_count": {
             "type": "integer",
-            "description": "How many collected Revisions contained this Event."
+            "description": "How many collected Revisions contained this Event. Present on listTraceEvents; absent on the Event inside listEventSources."
           },
           "revision_id": {
             "type": "integer",
@@ -1475,8 +1508,7 @@
         "required": [
           "key",
           "kind",
-          "text",
-          "observation_count"
+          "text"
         ]
       },
       "EventPage": {
@@ -2160,7 +2192,7 @@
         }
       },
       "Timeout": {
-        "description": "The search ran longer than 30 seconds or the request was cancelled. Narrow the query. Codes: `cancelled`.",
+        "description": "The request was cancelled, or a search ran longer than 30 seconds; narrow the query. Codes: `cancelled`.",
         "content": {
           "application/json": {
             "schema": {

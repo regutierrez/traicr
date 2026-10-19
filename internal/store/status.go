@@ -77,20 +77,15 @@ func (s *Store) Status(ctx context.Context) (Status, error) {
 	if err != nil {
 		return Status{}, err
 	}
-	// Read the running import on both sides of the query, so an import that
-	// starts or finishes meanwhile is never counted as interrupted.
-	before := s.activeImport.Load()
-	unfinished, err := s.unfinishedImports(ctx)
+	// Under importMu no import can start or finish, so every unfinished row
+	// except the running one was interrupted.
+	s.importMu.Lock()
+	status.RunningImportID = s.runningImport
+	err = s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM imports WHERE report_json IS NULL AND id<>?", s.runningImport).Scan(&status.Imports.Incomplete)
+	s.importMu.Unlock()
 	if err != nil {
 		return Status{}, err
 	}
-	after := s.activeImport.Load()
-	for _, id := range unfinished {
-		if id != before && id != after {
-			status.Imports.Incomplete++
-		}
-	}
-	status.RunningImportID = after
 	err = s.db.QueryRowContext(ctx, `SELECT (SELECT COUNT(*) FROM traces),(SELECT COUNT(*) FROM events),
 		(SELECT COUNT(*) FROM traces t WHERE t.title_override='' AND t.title=''
 			AND (SELECT MAX(r.id) FROM trace_revisions r WHERE r.trace_id=t.id)>t.generated_title_revision_id),
@@ -109,22 +104,4 @@ func (s *Store) Status(ctx context.Context) (Status, error) {
 		status.Storage.DatabaseBytes += info.Size()
 	}
 	return status, nil
-}
-
-// unfinishedImports lists imports with no stored report: running or interrupted.
-func (s *Store) unfinishedImports(ctx context.Context) ([]int64, error) {
-	rows, err := s.db.QueryContext(ctx, "SELECT id FROM imports WHERE report_json IS NULL")
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var ids []int64
-	for rows.Next() {
-		var id int64
-		if err := rows.Scan(&id); err != nil {
-			return nil, err
-		}
-		ids = append(ids, id)
-	}
-	return ids, rows.Err()
 }

@@ -44,6 +44,35 @@ func TestOpenAPIDocumentsExactlyTheAPIRoutes(t *testing.T) {
 			}
 		}
 	}
+	// Every $ref must resolve inside the document.
+	var root any
+	if err := json.Unmarshal(openAPIDocument, &root); err != nil {
+		t.Fatal(err)
+	}
+	var walk func(any)
+	walk = func(node any) {
+		switch v := node.(type) {
+		case map[string]any:
+			if ref, ok := v["$ref"].(string); ok {
+				target := root
+				for _, part := range strings.Split(strings.TrimPrefix(ref, "#/"), "/") {
+					object, _ := target.(map[string]any)
+					target = object[part]
+				}
+				if target == nil {
+					t.Errorf("$ref %s does not resolve", ref)
+				}
+			}
+			for _, child := range v {
+				walk(child)
+			}
+		case []any:
+			for _, child := range v {
+				walk(child)
+			}
+		}
+	}
+	walk(root)
 	registered := map[string]bool{}
 	for _, route := range (&application{}).apiRoutes() {
 		registered[route.pattern] = true

@@ -2,12 +2,14 @@ package server
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -45,6 +47,25 @@ func TestLogHandlerRedactsSecretsWhereverTheyAppear(t *testing.T) {
 	got, _ := json.Marshal(page.Records[0].Attrs)
 	if string(got) != string(want) || page.Records[0].Message != "saw [redacted]" {
 		t.Fatalf("buffered attrs %s, message %q; stdout attrs %s", got, page.Records[0].Message, want)
+	}
+}
+
+func TestLogHandlerKeepsEmptyAndNilAttributesLikeSlog(t *testing.T) {
+	var plain, wrapped bytes.Buffer
+	log := func(logger *slog.Logger) {
+		logger.WithGroup("g").With(slog.Attr{}).Info("m", slog.Attr{}, "missing", nil)
+		logger.With(slog.Attr{}).WithGroup("empty").Info("n")
+	}
+	log(slog.New(slog.NewJSONHandler(&plain, nil)))
+	logger, buffer := recordLogs(slog.New(slog.NewJSONHandler(&wrapped, nil)), config.ServerConfig{AdminToken: "token"})
+	log(logger)
+	strip := regexp.MustCompile(`"time":"[^"]*",`)
+	if got, want := strip.ReplaceAllString(wrapped.String(), ""), strip.ReplaceAllString(plain.String(), ""); got != want {
+		t.Fatalf("stdout changed:\n got %s\nwant %s", got, want)
+	}
+	records := buffer.page(slog.LevelInfo, time.Time{}, 0, 10).Records
+	if got, _ := json.Marshal([]any{records[1].Attrs, records[0].Attrs}); string(got) != `[{"g":{"missing":null}},{}]` {
+		t.Fatalf("buffered attrs = %s", got)
 	}
 }
 
@@ -94,6 +115,12 @@ func TestLogsPageThroughTheWholeBufferOnce(t *testing.T) {
 		}
 	}
 
+	// A last page that is exactly full has no cursor to an empty page.
+	var exact logPage
+	if err := json.Unmarshal(get("limit=200&cursor="+encodeCursor(buffer.instance, written-logCapacity+201)).Body.Bytes(), &exact); err != nil || len(exact.Records) != 200 || exact.NextCursor != "" {
+		t.Fatalf("exactly full last page: %d records, cursor %q, %v", len(exact.Records), exact.NextCursor, err)
+	}
+
 	_, restarted := recordLogs(slog.New(slog.NewJSONHandler(io.Discard, nil)), config.ServerConfig{AdminToken: "token"})
 	restarted.add(logRecord{Message: "after restart", level: slog.LevelInfo})
 	staleApp := &application{logBuffer: restarted}
@@ -102,4 +129,9 @@ func TestLogsPageThroughTheWholeBufferOnce(t *testing.T) {
 	if response.Code != http.StatusBadRequest || !strings.Contains(response.Body.String(), "invalid_query") {
 		t.Fatalf("cursor from another process: %d %s", response.Code, response.Body)
 	}
+}
+
+func encodeCursor(instance string, before int64) string {
+	encoded, _ := json.Marshal(logCursor{Instance: instance, Before: before})
+	return base64.RawURLEncoding.EncodeToString(encoded)
 }

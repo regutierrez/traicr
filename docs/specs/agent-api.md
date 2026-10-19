@@ -104,13 +104,13 @@ The response is one JSON object, built from cheap queries. It does not walk the 
 
 - `version` comes from `version.CurrentBuildInfo()`.
 - `running_import_id` is the `imports` row the store is processing right now. It is omitted when no row is active.
-  - The store records this ID after `beginImport` commits the row and clears it when `Import` returns.
+  - The store sets this ID when `beginImport` commits the row and clears it when `Import` returns. One lock covers both steps and the status read.
   - The upload slot alone cannot be used, because it is also held while a ZIP is still being received and validated, before any row exists.
 - `machines[].last_import_*` comes from each machine's newest `imports` row: group by `machine_id`, take `MAX(id)`, then join. Do it in one grouped query, not one query per machine.
 - `imports.with_failed_traces` counts reports whose `failed` is greater than 0.
   - Read it with `json_extract(CAST(report_json AS TEXT), '$.failed')`. The column holds JSON text stored as a BLOB, and the cast makes that explicit, so SQLite cannot mistake it for JSONB.
 - `imports.incomplete` counts rows without `report_json`, except the active row.
-  - Read the active ID both before and after the count query, and exclude either one. That way an import that starts or finishes during the read is never counted as interrupted.
+  - Read the active ID and count under the same lock that covers import start and finish. Reading the ID before and after the count is not enough: an import can start and finish entirely between the two reads.
   - An older interrupted row still counts while a new upload is running.
 - Uploads rejected during validation never create an `imports` row. They show up only in logs (below).
 - `titles.enabled` is true when `TRAICR_TITLE_API_URL` is set.
