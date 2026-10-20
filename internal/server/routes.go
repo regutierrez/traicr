@@ -188,7 +188,9 @@ func writeJSON(w http.ResponseWriter, value any) {
 func writeError(w http.ResponseWriter, status int, code, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(map[string]any{"api_version": 1, "error": map[string]string{"code": code, "message": message}})
+	// _tag and message repeat the code and message at the top level, where
+	// OpenAPI clients such as Executor read a documented error.
+	_ = json.NewEncoder(w).Encode(map[string]any{"api_version": 1, "_tag": code, "message": message, "error": map[string]string{"code": code, "message": message}})
 }
 
 func (app *application) failure(w http.ResponseWriter, err error) {

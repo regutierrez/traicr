@@ -9,9 +9,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -314,15 +316,53 @@ func TestResponsesMatchThePublishedSchemas(t *testing.T) {
 		{"/api/v1/logs", "get", "/api/v1/logs"},
 	} {
 		response := request(handler, http.MethodGet, check.target, nil, adminToken)
-		var body any
-		if response.Code != http.StatusOK || json.Unmarshal(response.Body.Bytes(), &body) != nil {
+		if response.Code != http.StatusOK {
 			t.Fatalf("%s: %d %s", check.target, response.Code, response.Body)
 		}
-		operation := doc["paths"].(map[string]any)[check.path].(map[string]any)[check.method].(map[string]any)
-		schema := operation["responses"].(map[string]any)["200"].(map[string]any)["content"].(map[string]any)["application/json"].(map[string]any)["schema"]
-		if problem := conforms(doc, schema, body, "$"); problem != "" {
-			t.Errorf("%s: %s", check.target, problem)
+		checkDocumented(t, doc, check.path, check.method, response)
+	}
+
+	// Errors must match their documented schema exactly, including the
+	// top-level _tag that OpenAPI clients such as Executor match on.
+	for _, check := range []struct{ path, method, target, body, token string }{
+		{"/api/v1/traces/{id}", "get", "/api/v1/traces/999999", "", adminToken},
+		{"/api/v1/traces/{id}", "get", "/api/v1/traces/0", "", adminToken},
+		{"/api/v1/traces/{id}", "patch", "/api/v1/traces/" + traceID, `{"other":1}`, adminToken},
+		{"/api/v1/cards", "get", "/api/v1/cards?after=not-a-date", "", adminToken},
+		{"/api/v1/logs", "get", "/api/v1/logs?cursor=stale", "", adminToken},
+		{"/api/v1/status", "get", "/api/v1/status", "", ""},
+	} {
+		var body io.Reader
+		if check.body != "" {
+			body = strings.NewReader(check.body)
 		}
+		response := request(handler, strings.ToUpper(check.method), check.target, body, check.token)
+		if response.Code < 400 {
+			t.Fatalf("%s %s: %d, want an error", check.method, check.target, response.Code)
+		}
+		checkDocumented(t, doc, check.path, check.method, response)
+	}
+}
+
+// checkDocumented checks a response against the schema openapi.json
+// documents for its status code.
+func checkDocumented(t *testing.T, doc map[string]any, path, method string, response *httptest.ResponseRecorder) {
+	t.Helper()
+	var body any
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+		t.Fatalf("%s %s: %v", method, path, err)
+	}
+	operation := doc["paths"].(map[string]any)[path].(map[string]any)[method].(map[string]any)
+	documented, ok := operation["responses"].(map[string]any)[strconv.Itoa(response.Code)].(map[string]any)
+	if !ok {
+		t.Fatalf("%s %s: status %d is not documented", method, path, response.Code)
+	}
+	if ref, ok := documented["$ref"].(string); ok {
+		documented = doc["components"].(map[string]any)["responses"].(map[string]any)[strings.TrimPrefix(ref, "#/components/responses/")].(map[string]any)
+	}
+	schema := documented["content"].(map[string]any)["application/json"].(map[string]any)["schema"]
+	if problem := conforms(doc, schema, body, "$"); problem != "" {
+		t.Errorf("%s %s (%d): %s", method, path, response.Code, problem)
 	}
 }
 
@@ -336,6 +376,20 @@ func conforms(doc map[string]any, schema, value any, at string) string {
 			node = node.(map[string]any)[part]
 		}
 		return conforms(doc, node, value, at)
+	}
+	if variants := asList(s["anyOf"]); len(variants) > 0 {
+		problems := []string{}
+		for _, variant := range variants {
+			problem := conforms(doc, variant, value, at)
+			if problem == "" {
+				return ""
+			}
+			problems = append(problems, problem)
+		}
+		return fmt.Sprintf("%s matches no anyOf variant: %s", at, strings.Join(problems, "; "))
+	}
+	if want, ok := s["const"]; ok && want != value {
+		return fmt.Sprintf("%s is %v, schema requires %v", at, value, want)
 	}
 	for _, part := range asList(s["allOf"]) {
 		if problem := conforms(doc, part, value, at); problem != "" {

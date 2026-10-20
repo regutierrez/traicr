@@ -3,7 +3,7 @@
   "info": {
     "title": "Traicr API",
     "version": "1",
-    "description": "The Trace Archive API. Traicr stores one person's AI coding Traces collected from several Source Machines. Use it to find, read, rename, and delete Traces, check imports, and read the server's recent logs.\n\n## Auth\nSend `Authorization: Bearer <TRAICR_ADMIN_TOKEN>` on every request. Without a valid token the server answers `401`, except for a `GET` or `HEAD` that carries a valid browser session cookie. This document itself (`GET /api/v1/openapi.json`) needs no token.\n\n## Pagination\nThese operations page: `listTraces`, `searchEvents`, `listTraceEvents`, `listImports`, `listLogs`. They take `limit` (1-200, default 50) and an opaque `cursor`. A response includes `next_cursor` only when another page exists; pass it back unchanged as `cursor`. A cursor keeps its snapshot: rows added after the first page do not appear in later pages. `listMachines`, `listEventSources`, and `listRevisionSources` return plain arrays.\n\n## Errors\nEvery error response has the shape `{\"api_version\":1,\"error\":{\"code\":\"...\",\"message\":\"...\"}}`. The `code` is stable and meant for programs; the `message` is for people. Each operation lists the codes it can return. `POST /api/v1/imports` is the exception after its upload is received: it answers `200` and reports failures inside its NDJSON stream.\n\n## Dates\n`after` and `before` accept `YYYY-MM-DD` (a whole UTC day, inclusive) or an RFC 3339 timestamp.\n\n## Words\nA **Trace** is one native harness session. An **Event** is a searchable message, tool call, tool result, or model change derived from a Trace. A **Source Record** is the lossless harness-specific data an Event came from. A **Revision** is one collected state of a Trace. An **Import** processes one uploaded Trace ZIP. A **Source Machine** is a computer the Traces were collected on. A **Harness** is the coding tool that produced the Trace, such as `amp`, `claude-code`, `codex`, `cursor`, or `pi`."
+    "description": "The Trace Archive API. Traicr stores one person's AI coding Traces collected from several Source Machines. Use it to find, read, rename, and delete Traces, check imports, and read the server's recent logs.\n\n## Auth\nSend `Authorization: Bearer <TRAICR_ADMIN_TOKEN>` on every request. Without a valid token the server answers `401`, except for a `GET` or `HEAD` that carries a valid browser session cookie. This document itself (`GET /api/v1/openapi.json`) needs no token.\n\n## Pagination\nThese operations page: `listTraces`, `searchEvents`, `listTraceEvents`, `listImports`, `listLogs`. They take `limit` (1-200, default 50) and an opaque `cursor`. A response includes `next_cursor` only when another page exists; pass it back unchanged as `cursor`. A cursor keeps its snapshot: rows added after the first page do not appear in later pages. `listMachines`, `listEventSources`, and `listRevisionSources` return plain arrays.\n\n## Errors\nEvery error response has the shape `{\"api_version\":1,\"_tag\":\"...\",\"message\":\"...\",\"error\":{\"code\":\"...\",\"message\":\"...\"}}`. `error.code` (repeated as `_tag`) is stable and meant for programs; `error.message` (repeated as `message`) is for people. Each operation lists the codes it can return. `POST /api/v1/imports` is the exception after its upload is received: it answers `200` and reports failures inside its NDJSON stream.\n\n## Dates\n`after` and `before` accept `YYYY-MM-DD` (a whole UTC day, inclusive) or an RFC 3339 timestamp.\n\n## Words\nA **Trace** is one native harness session. An **Event** is a searchable message, tool call, tool result, or model change derived from a Trace. A **Source Record** is the lossless harness-specific data an Event came from. A **Revision** is one collected state of a Trace. An **Import** processes one uploaded Trace ZIP. A **Source Machine** is a computer the Traces were collected on. A **Harness** is the coding tool that produced the Trace, such as `amp`, `claude-code`, `codex`, `cursor`, or `pi`."
   },
   "servers": [
     {
@@ -318,10 +318,22 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Error"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/InvalidIdError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/InvalidJsonError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/InvalidTitleError"
+                    }
+                  ]
                 },
                 "example": {
                   "api_version": 1,
+                  "_tag": "invalid_title",
+                  "message": "title_override is required; send an empty string to clear it",
                   "error": {
                     "code": "invalid_title",
                     "message": "title_override is required; send an empty string to clear it"
@@ -344,10 +356,12 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Error"
+                  "$ref": "#/components/schemas/ContentTypeError"
                 },
                 "example": {
                   "api_version": 1,
+                  "_tag": "content_type",
+                  "message": "send JSON with Content-Type: application/json",
                   "error": {
                     "code": "content_type",
                     "message": "send JSON with Content-Type: application/json"
@@ -456,10 +470,22 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Error"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/InvalidIdError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/InvalidLimitError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/InvalidQueryError"
+                    }
+                  ]
                 },
                 "example": {
                   "api_version": 1,
+                  "_tag": "invalid_query",
+                  "message": "invalid search query: invalid cursor",
                   "error": {
                     "code": "invalid_query",
                     "message": "invalid search query: invalid cursor"
@@ -758,10 +784,12 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Error"
+                  "$ref": "#/components/schemas/UploadFailedError"
                 },
                 "example": {
                   "api_version": 1,
+                  "_tag": "upload_failed",
+                  "message": "upload is incomplete or exceeds the configured limit",
                   "error": {
                     "code": "upload_failed",
                     "message": "upload is incomplete or exceeds the configured limit"
@@ -775,10 +803,12 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Error"
+                  "$ref": "#/components/schemas/ContentTypeError"
                 },
                 "example": {
                   "api_version": 1,
+                  "_tag": "content_type",
+                  "message": "send a Trace ZIP with Content-Type: application/zip",
                   "error": {
                     "code": "content_type",
                     "message": "send a Trace ZIP with Content-Type: application/zip"
@@ -792,10 +822,12 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Error"
+                  "$ref": "#/components/schemas/ImportBusyError"
                 },
                 "example": {
                   "api_version": 1,
+                  "_tag": "import_busy",
+                  "message": "another import is running; retry this ZIP",
                   "error": {
                     "code": "import_busy",
                     "message": "another import is running; retry this ZIP"
@@ -1016,10 +1048,19 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Error"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/InvalidLimitError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/InvalidQueryError"
+                    }
+                  ]
                 },
                 "example": {
                   "api_version": 1,
+                  "_tag": "invalid_query",
+                  "message": "invalid or expired cursor; logs start over when the server restarts",
                   "error": {
                     "code": "invalid_query",
                     "message": "invalid or expired cursor; logs start over when the server restarts"
@@ -1077,36 +1118,6 @@
       }
     },
     "schemas": {
-      "Error": {
-        "type": "object",
-        "properties": {
-          "api_version": {
-            "type": "integer",
-            "const": 1
-          },
-          "error": {
-            "type": "object",
-            "properties": {
-              "code": {
-                "type": "string",
-                "description": "Stable error code."
-              },
-              "message": {
-                "type": "string",
-                "description": "Human-readable explanation."
-              }
-            },
-            "required": [
-              "code",
-              "message"
-            ]
-          }
-        },
-        "required": [
-          "api_version",
-          "error"
-        ]
-      },
       "Warning": {
         "type": "object",
         "properties": {
@@ -1978,6 +1989,359 @@
         "required": [
           "records"
         ]
+      },
+      "ErrorDetail": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Stable error code."
+          },
+          "message": {
+            "type": "string",
+            "description": "Human-readable explanation."
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ]
+      },
+      "CancelledError": {
+        "type": "object",
+        "description": "Error `cancelled`.",
+        "required": [
+          "api_version",
+          "_tag",
+          "message",
+          "error"
+        ],
+        "properties": {
+          "api_version": {
+            "type": "integer",
+            "const": 1
+          },
+          "_tag": {
+            "type": "string",
+            "const": "cancelled",
+            "description": "The error code, repeated from `error.code`."
+          },
+          "message": {
+            "type": "string",
+            "description": "The message, repeated from `error.message`."
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorDetail"
+          }
+        }
+      },
+      "ContentTypeError": {
+        "type": "object",
+        "description": "Error `content_type`.",
+        "required": [
+          "api_version",
+          "_tag",
+          "message",
+          "error"
+        ],
+        "properties": {
+          "api_version": {
+            "type": "integer",
+            "const": 1
+          },
+          "_tag": {
+            "type": "string",
+            "const": "content_type",
+            "description": "The error code, repeated from `error.code`."
+          },
+          "message": {
+            "type": "string",
+            "description": "The message, repeated from `error.message`."
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorDetail"
+          }
+        }
+      },
+      "ImportBusyError": {
+        "type": "object",
+        "description": "Error `import_busy`.",
+        "required": [
+          "api_version",
+          "_tag",
+          "message",
+          "error"
+        ],
+        "properties": {
+          "api_version": {
+            "type": "integer",
+            "const": 1
+          },
+          "_tag": {
+            "type": "string",
+            "const": "import_busy",
+            "description": "The error code, repeated from `error.code`."
+          },
+          "message": {
+            "type": "string",
+            "description": "The message, repeated from `error.message`."
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorDetail"
+          }
+        }
+      },
+      "InternalErrorError": {
+        "type": "object",
+        "description": "Error `internal_error`.",
+        "required": [
+          "api_version",
+          "_tag",
+          "message",
+          "error"
+        ],
+        "properties": {
+          "api_version": {
+            "type": "integer",
+            "const": 1
+          },
+          "_tag": {
+            "type": "string",
+            "const": "internal_error",
+            "description": "The error code, repeated from `error.code`."
+          },
+          "message": {
+            "type": "string",
+            "description": "The message, repeated from `error.message`."
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorDetail"
+          }
+        }
+      },
+      "InvalidIdError": {
+        "type": "object",
+        "description": "Error `invalid_id`.",
+        "required": [
+          "api_version",
+          "_tag",
+          "message",
+          "error"
+        ],
+        "properties": {
+          "api_version": {
+            "type": "integer",
+            "const": 1
+          },
+          "_tag": {
+            "type": "string",
+            "const": "invalid_id",
+            "description": "The error code, repeated from `error.code`."
+          },
+          "message": {
+            "type": "string",
+            "description": "The message, repeated from `error.message`."
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorDetail"
+          }
+        }
+      },
+      "InvalidJsonError": {
+        "type": "object",
+        "description": "Error `invalid_json`.",
+        "required": [
+          "api_version",
+          "_tag",
+          "message",
+          "error"
+        ],
+        "properties": {
+          "api_version": {
+            "type": "integer",
+            "const": 1
+          },
+          "_tag": {
+            "type": "string",
+            "const": "invalid_json",
+            "description": "The error code, repeated from `error.code`."
+          },
+          "message": {
+            "type": "string",
+            "description": "The message, repeated from `error.message`."
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorDetail"
+          }
+        }
+      },
+      "InvalidLimitError": {
+        "type": "object",
+        "description": "Error `invalid_limit`.",
+        "required": [
+          "api_version",
+          "_tag",
+          "message",
+          "error"
+        ],
+        "properties": {
+          "api_version": {
+            "type": "integer",
+            "const": 1
+          },
+          "_tag": {
+            "type": "string",
+            "const": "invalid_limit",
+            "description": "The error code, repeated from `error.code`."
+          },
+          "message": {
+            "type": "string",
+            "description": "The message, repeated from `error.message`."
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorDetail"
+          }
+        }
+      },
+      "InvalidQueryError": {
+        "type": "object",
+        "description": "Error `invalid_query`.",
+        "required": [
+          "api_version",
+          "_tag",
+          "message",
+          "error"
+        ],
+        "properties": {
+          "api_version": {
+            "type": "integer",
+            "const": 1
+          },
+          "_tag": {
+            "type": "string",
+            "const": "invalid_query",
+            "description": "The error code, repeated from `error.code`."
+          },
+          "message": {
+            "type": "string",
+            "description": "The message, repeated from `error.message`."
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorDetail"
+          }
+        }
+      },
+      "InvalidTitleError": {
+        "type": "object",
+        "description": "Error `invalid_title`.",
+        "required": [
+          "api_version",
+          "_tag",
+          "message",
+          "error"
+        ],
+        "properties": {
+          "api_version": {
+            "type": "integer",
+            "const": 1
+          },
+          "_tag": {
+            "type": "string",
+            "const": "invalid_title",
+            "description": "The error code, repeated from `error.code`."
+          },
+          "message": {
+            "type": "string",
+            "description": "The message, repeated from `error.message`."
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorDetail"
+          }
+        }
+      },
+      "NotFoundError": {
+        "type": "object",
+        "description": "Error `not_found`.",
+        "required": [
+          "api_version",
+          "_tag",
+          "message",
+          "error"
+        ],
+        "properties": {
+          "api_version": {
+            "type": "integer",
+            "const": 1
+          },
+          "_tag": {
+            "type": "string",
+            "const": "not_found",
+            "description": "The error code, repeated from `error.code`."
+          },
+          "message": {
+            "type": "string",
+            "description": "The message, repeated from `error.message`."
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorDetail"
+          }
+        }
+      },
+      "UnauthorizedError": {
+        "type": "object",
+        "description": "Error `unauthorized`.",
+        "required": [
+          "api_version",
+          "_tag",
+          "message",
+          "error"
+        ],
+        "properties": {
+          "api_version": {
+            "type": "integer",
+            "const": 1
+          },
+          "_tag": {
+            "type": "string",
+            "const": "unauthorized",
+            "description": "The error code, repeated from `error.code`."
+          },
+          "message": {
+            "type": "string",
+            "description": "The message, repeated from `error.message`."
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorDetail"
+          }
+        }
+      },
+      "UploadFailedError": {
+        "type": "object",
+        "description": "Error `upload_failed`.",
+        "required": [
+          "api_version",
+          "_tag",
+          "message",
+          "error"
+        ],
+        "properties": {
+          "api_version": {
+            "type": "integer",
+            "const": 1
+          },
+          "_tag": {
+            "type": "string",
+            "const": "upload_failed",
+            "description": "The error code, repeated from `error.code`."
+          },
+          "message": {
+            "type": "string",
+            "description": "The message, repeated from `error.message`."
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorDetail"
+          }
+        }
       }
     },
     "parameters": {
@@ -2111,10 +2475,12 @@
         "content": {
           "application/json": {
             "schema": {
-              "$ref": "#/components/schemas/Error"
+              "$ref": "#/components/schemas/UnauthorizedError"
             },
             "example": {
               "api_version": 1,
+              "_tag": "unauthorized",
+              "message": "a valid bearer token is required",
               "error": {
                 "code": "unauthorized",
                 "message": "a valid bearer token is required"
@@ -2128,10 +2494,12 @@
         "content": {
           "application/json": {
             "schema": {
-              "$ref": "#/components/schemas/Error"
+              "$ref": "#/components/schemas/NotFoundError"
             },
             "example": {
               "api_version": 1,
+              "_tag": "not_found",
+              "message": "record not found",
               "error": {
                 "code": "not_found",
                 "message": "record not found"
@@ -2145,10 +2513,12 @@
         "content": {
           "application/json": {
             "schema": {
-              "$ref": "#/components/schemas/Error"
+              "$ref": "#/components/schemas/InvalidIdError"
             },
             "example": {
               "api_version": 1,
+              "_tag": "invalid_id",
+              "message": "id must be a positive integer",
               "error": {
                 "code": "invalid_id",
                 "message": "id must be a positive integer"
@@ -2162,10 +2532,19 @@
         "content": {
           "application/json": {
             "schema": {
-              "$ref": "#/components/schemas/Error"
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/InvalidLimitError"
+                },
+                {
+                  "$ref": "#/components/schemas/InvalidQueryError"
+                }
+              ]
             },
             "example": {
               "api_version": 1,
+              "_tag": "invalid_limit",
+              "message": "limit must be between 1 and 200",
               "error": {
                 "code": "invalid_limit",
                 "message": "limit must be between 1 and 200"
@@ -2179,10 +2558,19 @@
         "content": {
           "application/json": {
             "schema": {
-              "$ref": "#/components/schemas/Error"
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/InvalidLimitError"
+                },
+                {
+                  "$ref": "#/components/schemas/InvalidQueryError"
+                }
+              ]
             },
             "example": {
               "api_version": 1,
+              "_tag": "invalid_query",
+              "message": "invalid search query: mode must be fulltext, exact, or regex",
               "error": {
                 "code": "invalid_query",
                 "message": "invalid search query: mode must be fulltext, exact, or regex"
@@ -2196,10 +2584,12 @@
         "content": {
           "application/json": {
             "schema": {
-              "$ref": "#/components/schemas/Error"
+              "$ref": "#/components/schemas/CancelledError"
             },
             "example": {
               "api_version": 1,
+              "_tag": "cancelled",
+              "message": "request cancelled or timed out",
               "error": {
                 "code": "cancelled",
                 "message": "request cancelled or timed out"
@@ -2213,10 +2603,12 @@
         "content": {
           "application/json": {
             "schema": {
-              "$ref": "#/components/schemas/Error"
+              "$ref": "#/components/schemas/InternalErrorError"
             },
             "example": {
               "api_version": 1,
+              "_tag": "internal_error",
+              "message": "request failed; check server diagnostics",
               "error": {
                 "code": "internal_error",
                 "message": "request failed; check server diagnostics"

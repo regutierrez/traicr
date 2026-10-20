@@ -48,12 +48,14 @@ The `traicr` CLI subcommands are a later consumer of the same contract and are n
 - Document the shared conventions once, in the document's `info.description`:
   - **Auth:** `Authorization: Bearer <TRAICR_ADMIN_TOKEN>`. Without a valid token, the request gets `401`. The one exception: a `GET` or `HEAD` that carries a valid browser session.
   - **Pagination:** only `listTraces`, `searchEvents`, `listTraceEvents`, `listImports`, and `listLogs` page. They take `limit` (1–200, default 50) and an opaque `cursor`, and return `next_cursor` only when there is another page. `listMachines`, `listEventSources`, and `listRevisionSources` return plain arrays.
-  - **Errors:** `{"api_version":1,"error":{"code":"…","message":"…"}}`. List the codes per operation: `invalid_id`, `invalid_limit`, `invalid_query`, `invalid_json`, `invalid_title`, `content_type`, `not_found`, `transcript_changed`, `import_busy`, `upload_failed`, `cancelled`, `internal_error`, `unauthorized`.
+  - **Errors:** `{"api_version":1,"_tag":"…","message":"…","error":{"code":"…","message":"…"}}`. List the codes per operation: `invalid_id`, `invalid_limit`, `invalid_query`, `invalid_json`, `invalid_title`, `content_type`, `not_found`, `transcript_changed`, `import_busy`, `upload_failed`, `cancelled`, `internal_error`, `unauthorized`.
   - **Upload stream:** after the body is received, `POST /api/v1/imports` answers `200` with NDJSON progress records: `validating`, then `normalizing` records, then exactly one final record.
     - The final record is either `complete`, which carries the Import Report (that report can still list failed Traces), or `failed`, which carries an `error` string.
     - Validation and import failures arrive as this `failed` record, not as the error envelope.
   - **Dates:** `after` and `before` accept `YYYY-MM-DD` or RFC 3339.
-- Keep the existing error shape. The collector and the web UI already read it.
+- Keep the existing `error` object. The collector and the web UI already read it.
+- Repeat the code as a top-level `_tag` and the message as a top-level `message`. Executor matches a documented error only when the response body carries a `_tag` equal to the documented code; otherwise it shows a generic "HTTP 404" failure. A description in the document alone does not help, because Executor checks the body against the documented schema.
+- Document each code as its own schema whose `_tag` is a `const`. A status with several codes lists them with `anyOf`.
 
 ### Existing endpoints, now documented
 
@@ -218,7 +220,7 @@ No changes. All of this uses the existing `api()` middleware: the admin bearer t
 - Per-Trace processing logs or a persisted log table.
 - Recording rejected uploads as `imports` rows.
 - Title-worker pause state in `status` (use logs).
-- Changing the error envelope, or renaming `/cards`.
+- Removing or renaming fields of the error envelope, or renaming `/cards`.
 
 ## Further Notes
 
@@ -232,6 +234,6 @@ Implementation order:
 To confirm before step 4:
 
 - Executor must be able to reach the Traicr origin, the same way it reaches the other homelab apps.
-- Executor's OpenAPI error mapping reads a top-level `message`. Check how it surfaces our nested `error.message`. If it only shows the generic failure, add `description` text to each documented error response rather than changing the envelope.
+- Executor's OpenAPI error mapping needs a top-level `_tag` and `message` (settled above; checked with Executor's own matcher from `apps@0.0.1-beta.92`).
 
 Issue: #38. ADR: 0011. Glossary: Trace, Event, Source Record, Source Machine, Import, Import Report, Harness, Repository.
