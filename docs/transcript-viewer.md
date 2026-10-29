@@ -66,8 +66,11 @@ Shared stream, when the Event has the data:
   tool call and its output and exit code.
 - Skill blocks (`<skill>` in Pi user text, Amp `skill` tool) stay a chip plus
   the user remainder.
-- Child traces (`create_thread`, `fromExecutorThreadID`, leftover children)
-  stay one quiet row that opens the child or says it was never collected.
+- Child traces (`create_thread`, `fromExecutorThreadID`, the Claude Code `Agent`
+  call that names the subagent's `agentId`, leftover children) stay one quiet
+  row that opens the child or says it was never collected. A child's header
+  links back to its parent. The session list shows a child under its top
+  collected ancestor; a search match inside it says which subagent matched.
 - Unknown native types and uncommon stop reasons stay a note plus JSON/text.
 Amp-only today:
 

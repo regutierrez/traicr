@@ -22,6 +22,10 @@ type TranscriptCard struct {
 	Preview       string
 	EventCount    int
 	RevisionCount int
+	// MatchedChild is the Child Trace whose Events matched, when the match was not in
+	// the Trace itself. Child Traces are listed under their top ancestor.
+	MatchedChildID    int64
+	MatchedChildTitle string
 }
 
 // TranscriptPage uses session-level cursors so repeated matches cannot duplicate cards.
@@ -57,15 +61,27 @@ func (s *Store) TranscriptCards(ctx context.Context, query SearchQuery) (Transcr
 	} else if err := s.db.QueryRowContext(ctx, "SELECT COALESCE(MAX(id),0) FROM traces").Scan(&position.MaxID); err != nil {
 		return TranscriptPage{}, err
 	}
-	joins := " FROM traces t LEFT JOIN repositories repo ON repo.id=t.repository_id"
-	where := []string{"t.id<=?"}
-	args := []any{position.MaxID}
+	// Each Trace belongs to the card of its top collected ancestor (r). A child whose
+	// parent was never collected, or whose parents form a loop, keeps its own card.
+	// The walk goes up from children so every step is a (harness, native_trace_id) lookup.
+	const lineage = `WITH RECURSIVE up(id,ancestor) AS (
+		SELECT c.id,p.id FROM traces c JOIN traces p ON p.harness=c.harness AND p.native_trace_id=c.parent_native_trace_id WHERE c.parent_native_trace_id<>''
+		UNION SELECT u.id,p.id FROM up u JOIN traces a ON a.id=u.ancestor JOIN traces p ON p.harness=a.harness AND p.native_trace_id=a.parent_native_trace_id WHERE a.parent_native_trace_id<>''),
+	lineage(id,root) AS (SELECT u.id,u.ancestor FROM up u JOIN traces a ON a.id=u.ancestor
+		WHERE NOT EXISTS(SELECT 1 FROM traces p WHERE p.harness=a.harness AND p.native_trace_id=a.parent_native_trace_id)) `
+	joins := " FROM traces t LEFT JOIN lineage l ON l.id=t.id JOIN traces r ON r.id=COALESCE(l.root,t.id) LEFT JOIN repositories repo ON repo.id=r.repository_id"
+	where := []string{"r.id<=?", "t.id<=?"}
+	args := []any{position.MaxID, position.MaxID}
 	if position.ID != 0 {
-		where = append(where, "(t.updated_at<? OR (t.updated_at=? AND t.id<?))")
+		where = append(where, "(r.updated_at<? OR (r.updated_at=? AND r.id<?))")
 		args = append(args, position.Updated, position.Updated, position.ID)
 	}
 	text := "''"
 	needsEvents := query.Query != "" || query.Model != "" || query.Role != "" || query.Kind != "" || query.Tool != "" || query.After != "" || query.Before != ""
+	if !needsEvents {
+		// Browsing lists top-level Traces; their children open from the parent.
+		where = append(where, "t.id=r.id")
+	}
 	if needsEvents {
 		joins += " JOIN events e ON e.trace_id=t.id JOIN event_observations o ON o.event_id=e.id JOIN observation_revisions ox ON ox.observation_id=o.id"
 		text = "ox.searchable_text"
@@ -94,7 +110,8 @@ func (s *Store) TranscriptCards(ctx context.Context, query SearchQuery) (Transcr
 		}
 		args = append(args, query.Machine)
 	}
-	rows, err := s.db.QueryContext(ctx, "SELECT t.id,"+displayTitle+",t.harness,t.native_trace_id,COALESCE(repo.remote,repo.root,''),t.updated_at,"+text+joins+" WHERE "+strings.Join(where, " AND ")+" ORDER BY t.updated_at DESC,t.id DESC", args...)
+	const rootTitle = "COALESCE(NULLIF(r.title_override,''),NULLIF(r.title,''),r.generated_title)"
+	rows, err := s.db.QueryContext(ctx, lineage+"SELECT r.id,"+rootTitle+",r.harness,r.native_trace_id,COALESCE(repo.remote,repo.root,''),r.updated_at,"+text+",t.id,"+displayTitle+joins+" WHERE "+strings.Join(where, " AND ")+" ORDER BY r.updated_at DESC,r.id DESC,t.id=r.id DESC", args...)
 	if err != nil {
 		return TranscriptPage{}, err
 	}
@@ -103,8 +120,9 @@ func (s *Store) TranscriptCards(ctx context.Context, query SearchQuery) (Transcr
 	var lastID int64
 	for rows.Next() {
 		var card TranscriptCard
-		var matchedText string
-		if err := rows.Scan(&card.ID, &card.Title, &card.Harness, &card.NativeTraceID, &card.Repository, &card.UpdatedAt, &matchedText); err != nil {
+		var matchedText, matchedTitle string
+		var matchedID int64
+		if err := rows.Scan(&card.ID, &card.Title, &card.Harness, &card.NativeTraceID, &card.Repository, &card.UpdatedAt, &matchedText, &matchedID, &matchedTitle); err != nil {
 			rows.Close()
 			return TranscriptPage{}, err
 		}
@@ -112,6 +130,9 @@ func (s *Store) TranscriptCards(ctx context.Context, query SearchQuery) (Transcr
 			continue
 		}
 		lastID = card.ID
+		if matchedID != card.ID {
+			card.MatchedChildID, card.MatchedChildTitle = matchedID, matchedTitle
+		}
 		if query.Query != "" {
 			if prepared.expression != nil {
 				location := prepared.expression.FindStringIndex(matchedText)

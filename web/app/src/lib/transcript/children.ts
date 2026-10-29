@@ -1,5 +1,5 @@
 import type { TraceRef } from '../types';
-import { ampThreadURL, normalizeThreadID } from './tools';
+import { ampThreadURL, normalizeThreadID, resultText } from './tools';
 import type { ToolCallBlock, TranscriptEntry } from './types';
 
 export type ChildCard = {
@@ -20,7 +20,7 @@ export function childCards(
 ): ChildCard[] {
 	const ids = new Set<string>();
 	const cards: ChildCard[] = [];
-	const consider = (raw: string | undefined, label: string) => {
+	const consider = (raw: string | undefined, label: string, fallbackTitle = '') => {
 		if (!raw) return;
 		const id = normalizeThreadID(raw);
 		if (!id || ids.has(id)) return;
@@ -28,7 +28,7 @@ export function childCards(
 		const match = children.find((child) => child.native_trace_id === id);
 		cards.push({
 			id,
-			title: match?.title || id,
+			title: match?.title || fallbackTitle || id,
 			collected: Boolean(match),
 			traceId: match?.id,
 			originalHref: ampThreadURL(id) || undefined,
@@ -45,6 +45,12 @@ export function childCards(
 	const payload = result?.message?.run?.result;
 	if (typeof payload?.threadID === 'string') {
 		consider(payload.threadID, call?.name === 'create_thread' ? 'Spawned thread' : 'Referenced thread');
+	}
+	// Claude Code's Agent tool names the subagent it started; that ID is the Child Trace's.
+	if (call && ['Agent', 'Task'].includes(call.name)) {
+		const agent = resultText(result).match(/\bagentId: ([0-9a-f]{8,})\b/);
+		const description = call.arguments?.description;
+		if (agent) consider(agent[1], 'Subagent', typeof description === 'string' ? description : '');
 	}
 	const from = entry.message?.nativeDetails?.message_meta?.fromExecutorThreadID;
 	if (from) consider(from, 'From thread');

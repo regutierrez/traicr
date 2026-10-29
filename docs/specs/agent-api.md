@@ -61,7 +61,7 @@ The `traicr` CLI subcommands are a later consumer of the same contract and are n
 
 | Tag | Operation | Route | Notes for the doc |
 | --- | --- | --- | --- |
-| traces | `listTraces` | `GET /api/v1/cards` | One row per Trace, newest `updated_at` first. Filters: `q`, `mode`, `harness`, `model`, `machine` (Source Machine ID), `repository` (remote or local path), `after`, `before`, `role`, `kind`, `tool`. A date filter matches Traces with any Event in the range. |
+| traces | `listTraces` | `GET /api/v1/cards` | One row per Trace, newest `updated_at` first. Filters: `q`, `mode`, `harness`, `model`, `machine` (Source Machine ID), `repository` (remote or local path), `after`, `before`, `role`, `kind`, `tool`. A date filter matches Traces with any Event in the range. A Child Trace is listed under its top collected ancestor; a match in it sets `matched_child`. |
 | traces | `getTrace` | `GET /api/v1/traces/{id}` | Includes revisions, parents, children. |
 | traces | `listTraceEvents` | `GET /api/v1/traces/{id}/events` | `cursor` or `key` (start at an Event key), `limit`. |
 | traces | `renameTrace` | `PATCH /api/v1/traces/{id}` | Body `{"title_override": "…"}`. An empty string clears it. |

@@ -63,3 +63,50 @@ func TestTranscriptCardsDeduplicateMatchesAndPageBySession(t *testing.T) {
 		t.Fatalf("invalid regex: %v", err)
 	}
 }
+
+func TestTranscriptCardsListChildTracesUnderTheirTopAncestor(t *testing.T) {
+	ctx := context.Background()
+	s := openStore(t)
+	// Imported newest first so a child's own updated_at would sort it above its parent.
+	for i, trace := range []struct{ id, parent, title, text string }{
+		{"root", "", "Plan the release", "write the changelog"},
+		{"child", "root", "Review subagent", "check the migration order"},
+		{"grandchild", "child", "", "nested needle"},
+		{"orphan", "never-collected", "Lost subagent", "orphan needle"},
+		{"other", "", "Unrelated", "nothing here"},
+	} {
+		events := []domain.Event{{Key: "message:" + trace.id, Kind: "message", Role: "user", Text: trace.text, Timestamp: "2026-09-06T10:00:00Z"}}
+		input := traceInput("machine", trace.id, fmt.Sprintf("2026-09-0%dT12:00:00Z", 9-i), trace.title, events)
+		input.manifest.Traces[0].NativeTraceID = trace.id
+		input.manifest.Traces[0].ParentNativeTraceID = trace.parent
+		if _, err := s.Import(ctx, input.manifest, input.files, normalizer(events, "normalized", 1), nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	titles := func(page store.TranscriptPage) []string {
+		var found []string
+		for _, card := range page.Cards {
+			found = append(found, card.NativeTraceID+">"+card.MatchedChildTitle)
+		}
+		return found
+	}
+	browse, err := s.TranscriptCards(ctx, store.SearchQuery{})
+	if got := fmt.Sprint(titles(browse)); err != nil || got != "[root> orphan> other>]" {
+		t.Fatalf("browse = %s, %v; want top-level traces and the orphan", got, err)
+	}
+	for query, want := range map[string]string{
+		"migration": "[root>Review subagent]", // a child match shows the parent card
+		"nested":    "[root>]",                // grandchild has no title of any kind
+		"changelog": "[root>]",                // a match in the parent itself names no child
+		"orphan":    "[orphan>]",              // an uncollected parent leaves the child its own card
+	} {
+		page, err := s.TranscriptCards(ctx, store.SearchQuery{Query: query})
+		if got := fmt.Sprint(titles(page)); err != nil || got != want {
+			t.Errorf("search %q = %s, %v; want %s", query, got, err, want)
+		}
+	}
+	page, err := s.TranscriptCards(ctx, store.SearchQuery{Query: "needle"})
+	if err != nil || len(page.Cards) != 2 || page.Cards[0].NativeTraceID != "root" || page.Cards[0].MatchedChildID == 0 {
+		t.Fatalf("grandchild match = %+v, %v; want the root card pointing at the grandchild", page.Cards, err)
+	}
+}

@@ -149,6 +149,9 @@
 			<span class="what">
 				<span class="title">{card.title || card.native_trace_id}</span>
 				<span class="repo" translate="no">{card.repository ? shortRepository(card.repository) : 'No repository'}</span>
+				{#if card.matched_child}
+					<span class="child">Matched in subagent: {card.matched_child.title || 'untitled'}</span>
+				{/if}
 				{#if card.snippet}
 					<span class="snippet">
 						{#each highlightParts(card.snippet, query, mode) as part, index (`${index}:${part.mark}:${part.text}`)}
@@ -429,6 +432,11 @@
 	.repo {
 		color: var(--muted-foreground);
 		font-family: var(--font-mono);
+		font-size: 12px;
+	}
+
+	.child {
+		color: var(--muted-foreground);
 		font-size: 12px;
 	}
 

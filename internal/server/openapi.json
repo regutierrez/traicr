@@ -52,7 +52,7 @@
         ],
         "operationId": "listTraces",
         "summary": "List Traces",
-        "description": "List Traces newest first, one row per Trace. Every filter is optional. Event filters (`q`, `model`, `role`, `kind`, `tool`, `after`, `before`) keep a Trace when at least one of its Events matches all of them together; `after` and `before` therefore match Traces with any Event in the range, not their update time.",
+        "description": "List Traces newest first, one row per Trace. A Child Trace whose parent is collected has no row of its own: browsing skips it, and a match in it returns its top ancestor's row with `matched_child`. Every filter is optional. Event filters (`q`, `model`, `role`, `kind`, `tool`, `after`, `before`) keep a Trace when at least one of its Events matches all of them together; `after` and `before` therefore match Traces with any Event in the range, not their update time.",
         "security": [
           {
             "adminToken": []
@@ -1412,6 +1412,22 @@
           },
           "revision_count": {
             "type": "integer"
+          },
+          "matched_child": {
+            "type": "object",
+            "description": "Set when `q` or an Event filter matched a Child Trace of this Trace. Child Traces whose parent is collected are listed under their top ancestor, not on their own.",
+            "properties": {
+              "id": {
+                "type": "integer",
+                "format": "int64"
+              },
+              "title": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id"
+            ]
           }
         },
         "required": [

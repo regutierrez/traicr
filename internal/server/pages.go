@@ -54,6 +54,13 @@ type transcriptCard struct {
 	Snippet       string `json:"snippet,omitempty"`
 	EventCount    int    `json:"event_count"`
 	RevisionCount int    `json:"revision_count"`
+	// MatchedChild is set when the search matched a Child Trace of this Trace.
+	MatchedChild *traceRef `json:"matched_child,omitempty"`
+}
+
+type traceRef struct {
+	ID    int64  `json:"id"`
+	Title string `json:"title,omitempty"`
 }
 
 type transcriptCardPage struct {
@@ -66,11 +73,15 @@ func newTranscriptCard(item store.TranscriptCard) transcriptCard {
 	if snippet == "" {
 		snippet = item.Preview
 	}
-	return transcriptCard{
+	card := transcriptCard{
 		ID: item.ID, Title: item.Title, Harness: item.Harness, NativeTraceID: item.NativeTraceID,
 		Repository: item.Repository, UpdatedAt: item.UpdatedAt, Snippet: snippet,
 		EventCount: item.EventCount, RevisionCount: item.RevisionCount,
 	}
+	if item.MatchedChildID != 0 {
+		card.MatchedChild = &traceRef{ID: item.MatchedChildID, Title: item.MatchedChildTitle}
+	}
+	return card
 }
 
 func (app *application) cards(w http.ResponseWriter, r *http.Request) {

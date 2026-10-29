@@ -50,6 +50,11 @@
 		<h1 title={title}>{title}</h1>
 		<p class="meta">
 			<span class="harness" translate="no" style="--ink: var(--ink-{trace.harness}, var(--muted-foreground))">{trace.harness}</span>
+			{#each trace.parents ?? [] as parent (parent.id)}
+				<a class="parent" href={resolve('/traces/[id]', { id: String(parent.id) })}>Subagent of {parent.title || parent.native_trace_id}</a>
+			{:else}
+				{#if trace.parent_native_trace_id}<span>Subagent · parent never collected</span>{/if}
+			{/each}
 			{#if model}<span class="chip" translate="no">{model}{#if thinkingLevel}<span class="dim">{thinkingLevel}</span>{/if}</span>{/if}
 			{#if trace.repository || trace.working_directory}
 				<span class="cwd" translate="no" title={trace.working_directory}>{shortRepository(trace.repository || trace.working_directory)}</span>
@@ -174,6 +179,14 @@
 
 	.dim {
 		color: var(--muted-foreground);
+	}
+
+	.parent {
+		overflow: hidden;
+		max-width: 42ch;
+		color: var(--foreground);
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
 	.cwd {

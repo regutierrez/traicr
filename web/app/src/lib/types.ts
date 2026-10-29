@@ -8,6 +8,8 @@ export type TranscriptCard = {
 	snippet?: string;
 	event_count: number;
 	revision_count: number;
+	/** Set when the search matched a Child Trace listed under this Trace. */
+	matched_child?: { id: number; title?: string };
 };
 
 export type TranscriptCardPage = {
@@ -74,6 +76,7 @@ export type Trace = {
 	created_at: string;
 	updated_at: string;
 	revisions: Revision[];
+	parent_native_trace_id?: string;
 	parents?: TraceRef[];
 	children?: TraceRef[];
 };

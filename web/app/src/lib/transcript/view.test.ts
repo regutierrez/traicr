@@ -1,7 +1,7 @@
 import { expect, test } from 'vitest';
 import { attachmentView } from './attachments';
 import { renderMarkdown, sanitizeMarkdownUrl } from './markdown';
-import { leftoverCards } from './children';
+import { childCards, leftoverCards } from './children';
 import { parseSkillBlock } from './skill';
 import { buildTranscriptSession } from './session';
 import { isStructuredOutput, requestedEdit, resultText, toolChipLabel, toolChipParts, toolStatus, toolSummary } from './tools';
@@ -377,4 +377,27 @@ test('leftover child traces stay unplaced when no visible card consumes them', (
 			kids
 		)
 	).toEqual([]);
+});
+
+test('a Claude Code subagent card sits on the Agent call that started it', () => {
+	const kids = [
+		{ id: 9, native_trace_id: 'a06a6831ff92a4124', title: 'Review the migration' },
+		{ id: 10, native_trace_id: 'b17b7942ee03b5235', title: 'Other subagent' }
+	];
+	const call: ToolCallBlock = { type: 'toolCall', id: 'toolu_1', name: 'Agent', arguments: { prompt: 'review it' } };
+	const entry: TranscriptEntry = { id: '1', parentId: null, type: 'message', message: { role: 'assistant', content: [call] } };
+	const result = (text: string): TranscriptEntry => ({ id: '2', parentId: '1', type: 'message', message: { role: 'toolResult', toolCallId: 'toolu_1', content: [{ type: 'text', text }] } });
+	const launched = result('Async agent launched successfully.\nagentId: a06a6831ff92a4124 (internal ID - do not mention to user.)');
+	expect(childCards(entry, call, launched, kids)).toEqual([
+		expect.objectContaining({ id: 'a06a6831ff92a4124', title: 'Review the migration', collected: true, traceId: 9, meta: 'Subagent' })
+	]);
+	// The second child has no Agent call that names it, so it stays a parent-level card.
+	expect(leftoverCards([entry], new Map([['toolu_1', launched]]), kids)).toEqual([kids[1]]);
+	// An ID the archive never received still gets a card that says so, named by the call.
+	const described = { ...call, arguments: { description: 'Build looks 05 and 09' } };
+	expect(childCards(entry, described, result('agentId: ffffffff0000aaaa1'), kids)).toEqual([
+		expect.objectContaining({ collected: false, title: 'Build looks 05 and 09' })
+	]);
+	// Other tools that print agentId are not subagent launches.
+	expect(childCards(entry, { ...call, name: 'Bash' }, launched, kids)).toEqual([]);
 });
