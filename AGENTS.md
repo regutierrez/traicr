@@ -33,6 +33,14 @@ It reads the same pages the transcript page reads (`/api/v1/traces/{id}/transcri
 
 Anomaly kinds are defined in `AnomalyKind` in `web/app/src/lib/transcript/types.ts`. In the browser, add `?debug=1` to a trace URL to show the same timing and anomalies above the transcript.
 
+## Find broken traces across the archive
+
+```sh
+cd web/app && npm run --silent audit-traces -- [--harness <name>] [--limit <n>] [<trace-id>...] > /tmp/audit.jsonl
+```
+
+It runs the same adapter over every trace (or the ones you name) and prints one JSON line per trace: title and working directory present, normalization status, event and branch counts, path length, empty or repeated rows, tool results the page hides, anomalies, and timings. The last line is a summary per harness. Run it against two servers, one with the old build and one with the new, to compare a parser or adapter change across real traces.
+
 ## Take a screenshot of the UI
 
 With `agent-browser` and a named session:
@@ -47,7 +55,7 @@ agent-browser wait '.stream .row' --timeout 120000
 agent-browser screenshot /tmp/trace.png
 ```
 
-`agent-browser eval "Math.round(performance.now())"` after the wait gives the time from navigation to the rendered transcript.
+`agent-browser eval "Math.round(performance.now())"` after the wait gives the time from navigation to the first painted rows. Big transcripts paint their first 150 rows at once and add the rest in chunks on later frames, so wait until `document.querySelectorAll('.stream .row').length` stops growing before you search the page or count rows.
 
 ## Measure transcript loading at scale
 
