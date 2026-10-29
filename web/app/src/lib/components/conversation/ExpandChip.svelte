@@ -20,11 +20,15 @@
 		onToggle?: (open: boolean) => void;
 		children?: Snippet;
 	} = $props();
+
+	// Whether the details element is open, including when no onToggle tracks it.
+	let shown = $state(false);
 </script>
 
 <details
 	class="chip"
 	bind:open={() => open, (value) => {
+		shown = value;
 		if (value !== open) onToggle?.(value);
 	}}
 >
@@ -39,7 +43,9 @@
 			<span class="status">{status}</span>
 		{/if}
 	</summary>
-	{#if children}
+	<!-- Render the body only once opened: highlighting every collapsed tool
+	     output made large sessions take tens of seconds to display. -->
+	{#if children && (open || shown)}
 		<div class="body">
 			{@render children()}
 		</div>

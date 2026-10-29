@@ -65,12 +65,15 @@ export function getPath(entries: TranscriptEntry[], targetId: string) {
 	return path.reverse();
 }
 
-function collectLeaves(node: TreeNode, leaves: TreeNode[]) {
-	if (!node.children.length) {
-		leaves.push(node);
-		return;
+// Iterative, because a long session is one chain thousands of entries deep and
+// recursion overflowed the stack.
+function collectLeaves(start: TreeNode, leaves: TreeNode[]) {
+	const pending = [start];
+	while (pending.length) {
+		const node = pending.pop() as TreeNode;
+		if (!node.children.length) leaves.push(node);
+		for (let i = node.children.length - 1; i >= 0; i--) pending.push(node.children[i]);
 	}
-	for (const child of node.children) collectLeaves(child, leaves);
 }
 
 function preferredLeaf(entries: TranscriptEntry[], leaves: TranscriptEntry[]) {

@@ -18,6 +18,7 @@ type Store struct {
 	importMu sync.Mutex
 	// runningImport is the imports row being processed, or 0. Guarded by importMu.
 	runningImport int64
+	orders        transcriptOrders
 }
 
 type SearchQuery struct {

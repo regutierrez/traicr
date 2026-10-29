@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"slices"
 	"testing"
 
 	"github.com/regutierrez/traicr/internal/domain"
@@ -144,5 +145,20 @@ func TestTranscriptPagesPreserveNativeOrderAndSelectedRevision(t *testing.T) {
 	}
 	if _, err := database.TranscriptEvents(ctx, traceID, 98765, "", 10); err == nil {
 		t.Fatal("accepted a revision outside this trace")
+	}
+	// The newest revision drops the answer. Reading the merged view first must
+	// not give its order to the newest revision, which has the same generation.
+	input = traceInput("machine", "newest", "2026-09-16T12:00:00Z", "History", events[:1])
+	if _, err := database.Import(ctx, input.manifest, input.files, normalizer(events[:1], "normalized", 3), nil); err != nil {
+		t.Fatal(err)
+	}
+	if merged, err := database.TranscriptEvents(ctx, traceID, 0, "", 10); err != nil || len(merged.Events) != 2 {
+		t.Fatalf("merged after newest: %+v %v", merged, err)
+	}
+	trace, _ = database.Trace(ctx, traceID)
+	newest := slices.IndexFunc(trace.Revisions, func(revision store.Revision) bool { return revision.Digest == "newest" })
+	latest, err := database.TranscriptEvents(ctx, traceID, trace.Revisions[newest].ID, "", 10)
+	if err != nil || len(latest.Events) != 1 || latest.Events[0].Text != "first" {
+		t.Fatalf("newest revision: %+v %v", latest, err)
 	}
 }

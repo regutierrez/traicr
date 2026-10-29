@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -159,6 +160,103 @@ func TestArchiveImportSearchAndDeleteAtScale(t *testing.T) {
 	t.Logf("disk_before_delete=%d disk_after_delete=%d objects_before_delete=%d objects_after_delete=%d database=%d wal=%d", diskBeforeDelete, diskAfterDelete, objectsBeforeDelete, objectsAfterDelete, fileBytes(t, filepath.Join(dataDir, "traicr.db")), fileBytes(t, filepath.Join(dataDir, "traicr.db-wal")))
 	t.Logf("go_heap_alloc=%d go_heap_sys=%d peak_go_heap_alloc=%d", memory.HeapAlloc, memory.HeapSys, peakHeap)
 	t.Logf("search_latency fulltext=%s exact=%s regex=%s", latencies["fulltext"], latencies["exact"], latencies["regex"])
+}
+
+// TestAmpTranscriptLoadAtScale pages through one large Amp transcript the way
+// the transcript page does. Run it alone with -run TestAmpTranscriptLoadAtScale.
+func TestAmpTranscriptLoadAtScale(t *testing.T) {
+	target := envInt(t, "TRAICR_SCALE_TRANSCRIPT_EVENTS", 10_000)
+	directory := filepath.Join(t.TempDir(), "trace")
+	if err := os.MkdirAll(filepath.Join(directory, "source"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	// Each round is a prompt, a reply with thinking and a tool call, and a tool
+	// result, with outputs about the size of real ones (a few KB).
+	output := strings.Repeat("realistic tool output line for transcript scale verification\n", 64)
+	var messages []any
+	for round := 0; len(messages)/3*4 < target; round++ {
+		call := fmt.Sprintf("tool-%06d", round)
+		messages = append(messages,
+			map[string]any{"messageId": len(messages), "role": "user", "content": []any{map[string]any{"type": "text", "text": fmt.Sprintf("prompt %d", round)}}},
+			map[string]any{"messageId": len(messages) + 1, "role": "assistant", "content": []any{
+				map[string]any{"type": "thinking", "thinking": "plan the next step"},
+				map[string]any{"type": "tool_use", "id": call, "name": "Bash", "input": map[string]any{"cmd": fmt.Sprintf("echo %d", round)}, "complete": true},
+			}},
+			map[string]any{"messageId": len(messages) + 2, "role": "user", "content": []any{map[string]any{"type": "tool_result", "toolUseID": call, "run": map[string]any{"status": "done", "result": map[string]any{"output": output, "exitCode": 0}}}}},
+		)
+	}
+	export, err := json.Marshal(map[string]any{"id": "T-scale-transcript", "title": "Scale transcript", "created": 1789552800000, "messages": messages})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(directory, "source", "export.json"), export, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	input := archive.Input{Directory: directory, Descriptor: domain.Descriptor{Harness: "amp", Adapter: "amp-thread-export", NativeTraceID: "T-scale-transcript"}}
+	if input.Descriptor, err = archive.Describe(t.Context(), input); err != nil {
+		t.Fatal(err)
+	}
+	manifest := domain.Manifest{CollectorVersion: "scale-test", SourceMachine: domain.Machine{ID: "scale-machine", Hostname: "scale-host", OS: "linux", Arch: "amd64"}}
+	archives, err := archive.Write(t.Context(), filepath.Join(t.TempDir(), "archives"), manifest, []archive.Input{input}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	database, err := store.Open(filepath.Join(t.TempDir(), "data"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer database.Close()
+	file, err := os.Open(archives[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil {
+		t.Fatal(err)
+	}
+	validated, err := archive.Validate(t.Context(), file, info.Size(), archive.DefaultLimits())
+	if err != nil {
+		t.Fatal(err)
+	}
+	report, err := database.Import(t.Context(), validated.Manifest, validated.ZIP, normalize.Run, nil)
+	if err != nil || report.Failed != 0 {
+		t.Fatalf("import: %+v %v", report, err)
+	}
+
+	traceID := report.Traces[0].TraceID
+	var events, pages int
+	var first, slowest time.Duration
+	cursor := ""
+	started := time.Now()
+	for {
+		pageStarted := time.Now()
+		page, err := database.TranscriptEvents(t.Context(), traceID, 0, cursor, 200)
+		if err != nil {
+			t.Fatal(err)
+		}
+		elapsed := time.Since(pageStarted)
+		if pages == 0 {
+			first = elapsed
+		}
+		slowest = max(slowest, elapsed)
+		events += len(page.Events)
+		pages++
+		if page.NextCursor == "" {
+			break
+		}
+		cursor = page.NextCursor
+	}
+	total := time.Since(started)
+	if events < target {
+		t.Fatalf("transcript has %d events; want at least %d", events, target)
+	}
+	t.Logf("transcript_load events=%d pages=%d total=%s first_page=%s slowest_page=%s", events, pages, total, first, slowest)
+	// The first page sorts the trace once. If every page sorted it again,
+	// reading the whole transcript would cost about pages × first page.
+	if total > 5*first {
+		t.Fatalf("reading %d pages took %s, more than 5 × the first page (%s): later pages are re-sorting the trace", pages, total, first)
+	}
 }
 
 func loadConfig(t *testing.T) scaleConfig {
