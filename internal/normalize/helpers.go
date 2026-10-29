@@ -143,6 +143,28 @@ func readJSONL(source fs.FS, path string) ([]sourceRecord, []domain.Warning, err
 	return records, warnings, nil
 }
 
+// chainInFileOrder gives each event without a parent the event before it as parent.
+// The viewer orders parentless events without timestamps by database ID, so without a
+// chain an event that a newer normalizer adds or renames would move to the end.
+// A record written twice unchanged shares its key with the first copy and is stored as
+// one event, so the copy keeps the first parent and the next event follows the event
+// before the copy; otherwise the events in between would become a hidden branch.
+func chainInFileOrder(events []domain.Event) {
+	parents := map[string]string{}
+	previous := ""
+	for index := range events {
+		if parent, repeated := parents[events[index].Key]; repeated {
+			events[index].ParentKey = parent
+			continue
+		}
+		if events[index].ParentKey == "" {
+			events[index].ParentKey = previous
+		}
+		parents[events[index].Key] = events[index].ParentKey
+		previous = events[index].Key
+	}
+}
+
 func complete(events []domain.Event, warnings []domain.Warning) domain.Normalization {
 	status := "normalized"
 	if len(warnings) > 0 {

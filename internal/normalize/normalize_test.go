@@ -115,7 +115,7 @@ func TestCursorMCPToolResultStaysWithItsCall(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.Version != 3 {
+	if result.Version != 4 {
 		t.Fatalf("cursor normalizer version = %d", result.Version)
 	}
 	var guideCall, guideResult, pendingCall, legacyCall, legacyResult *domain.Event
@@ -360,6 +360,38 @@ func TestRunKeepsAllHumanTextFields(t *testing.T) {
 	}
 }
 
+func TestCodexShowsCommandsSearchesAndFileChangesAsTools(t *testing.T) {
+	data := []byte(`{"thread":{"turns":[{"id":"turn-1","items":[
+		{"type":"commandExecution","id":"exec-1","command":"/usr/bin/zsh -lc 'go test ./...'","cwd":"/repo","status":"completed","aggregatedOutput":"FAIL store","exitCode":1},
+		{"type":"webSearch","id":"ws-1","query":"codex usage","action":{"type":"search","query":"codex usage"},"results":null},
+		{"type":"fileChange","id":"patch-1","changes":[{"path":"/repo/a.go","kind":{"type":"add"},"diff":"package a"}],"status":"completed"}
+	]}]}}`)
+	result, err := Run(context.Background(), domain.Descriptor{Harness: "codex", Adapter: "codex-app-server"}, fstest.MapFS{"source/thread.json": {Data: data}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Warnings) != 0 || len(result.Events) != 4 {
+		t.Fatalf("warnings = %#v events = %#v", result.Warnings, result.Events)
+	}
+	command, output, search, patch := result.Events[0], result.Events[1], result.Events[2], result.Events[3]
+	if command.Tool != "shell" || command.Text != `{"command":"/usr/bin/zsh -lc 'go test ./...'","cwd":"/repo"}` {
+		t.Fatalf("command = %#v", command)
+	}
+	if output.Kind != "tool_result" || output.CallID != command.CallID || output.Text != "FAIL store" || string(output.Metadata) != `{"run":{"result":{"exitCode":1},"status":"error"}}` {
+		t.Fatalf("command output = %#v metadata %s", output, output.Metadata)
+	}
+	if search.Tool != "web_search" || search.Text != `{"query":"codex usage","type":"search"}` {
+		t.Fatalf("search = %#v", search)
+	}
+	if patch.Kind != "tool_call" || patch.Tool != "apply_patch" || !strings.Contains(patch.Text, `"path":"/repo/a.go"`) || !slices.Equal(patch.LegacyKeys, []string{"file_change:patch-1"}) {
+		t.Fatalf("patch = %#v", patch)
+	}
+	// Items have no timestamps; without a parent chain a renamed item would sort last.
+	if command.ParentKey != "" || output.ParentKey != command.Key || search.ParentKey != output.Key || patch.ParentKey != search.Key {
+		t.Fatalf("parents = %q %q %q %q, want each item under the one before it", command.ParentKey, output.ParentKey, search.ParentKey, patch.ParentKey)
+	}
+}
+
 func TestPiUsesParentGraphOrder(t *testing.T) {
 	result, err := Run(context.Background(), domain.Descriptor{Harness: "pi", Adapter: "pi-jsonl"}, recordsFS(piV3Records))
 	if err != nil {
@@ -437,6 +469,7 @@ func TestPiCustomSidecarIsNormalized(t *testing.T) {
 func TestPiNormalizesUserCommandsAndSectionedSystemPrompt(t *testing.T) {
 	data := strings.Join([]string{
 		`{"type":"session","version":3,"id":"fixture"}`,
+		`{"type":"session","version":3,"id":"fixture"}`,
 		`{"type":"message","id":"system","parentId":null,"message":{"role":"system","content":"","sections":{"zeta":"<zeta>z</zeta>","cwd":"<cwd>/repo</cwd>","alpha":"<alpha>a</alpha>","preamble":"You are a fixture.","tools":" "},"toolsAdded":[{"name":"read","description":"Read a file"}],"toolsRemoved":[{"name":"grep"}]}}`,
 		`{"type":"message","id":"bang","parentId":"system","message":{"role":"bashExecution","command":"make test","output":"FAIL fixture","exitCode":2,"cancelled":false,"truncated":false,"timestamp":1}}`,
 		`{"type":"message","id":"after","parentId":"bang","message":{"role":"user","content":"why did it fail?"}}`,
@@ -474,6 +507,103 @@ func TestPiNormalizesUserCommandsAndSectionedSystemPrompt(t *testing.T) {
 	}
 	if drop, swap := events["context_edit:drop"], events["context_edit:swap"]; drop.Text != "" || drop.ParentKey != "message:failed:0" || swap.Text != "[collapsed]" || swap.ParentKey != drop.Key {
 		t.Fatalf("context edits = %#v %#v", drop, swap)
+	}
+}
+
+func TestClaudeKeepsOneConversationChainThroughBookkeepingRecords(t *testing.T) {
+	data := strings.Join([]string{
+		`{"type":"ai-title","aiTitle":"Generated name"}`,
+		`{"type":"user","uuid":"u1","parentUuid":null,"timestamp":"2026-09-06T10:00:00Z","message":{"role":"user","content":"Fix the build"}}`,
+		`{"type":"attachment","uuid":"att","parentUuid":"u1","attachment":{"type":"total_tokens_reminder"}}`,
+		`{"type":"api-request-blob","hash":"h1","message":{"role":"user","content":[{"type":"text","text":"Fix the build"}]}}`,
+		`{"type":"api-request-blob","hash":"h2","message":{"role":"system","content":[{"type":"text","text":"You are Claude Code."}]}}`,
+		`{"type":"api-request","id":"req"}`,
+		`{"type":"assistant","uuid":"a1","parentUuid":"att","effort":"high","message":{"role":"assistant","content":[{"type":"tool_use","id":"call-a","name":"Bash","input":{"command":"make"}}]}}`,
+		`{"type":"assistant","uuid":"a2","parentUuid":"a1","effort":"high","message":{"role":"assistant","content":[{"type":"tool_use","id":"call-b","name":"Bash","input":{"command":"go vet"}}]}}`,
+		`{"type":"user","uuid":"r2","parentUuid":"a2","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"call-b","content":"vet ok"}]}}`,
+		`{"type":"user","uuid":"r1","parentUuid":"a1","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"call-a","content":"build failed"}]}}`,
+		`{"type":"api-request-blob","hash":"h2","message":{"role":"system","content":[{"type":"text","text":"You are Claude Code."}]}}`,
+		`{"type":"user","uuid":"meta","parentUuid":"r1","isMeta":true,"message":{"role":"user","content":"Base directory for this skill"}}`,
+		`{"type":"system","subtype":"api_error","uuid":"err","parentUuid":"meta","error":{"formatted":"529 overloaded"}}`,
+		`{"type":"system","subtype":"turn_duration","uuid":"dur","parentUuid":"err","durationMs":5}`,
+		`{"type":"assistant","uuid":"a3","parentUuid":"dur","effort":"low","message":{"role":"assistant","content":[{"type":"text","text":"The build fails in make."}]}}`,
+		`{"type":"system","subtype":"compact_boundary","uuid":"cb","parentUuid":null,"logicalParentUuid":"a3","content":"Conversation compacted"}`,
+		`{"type":"custom-title","customTitle":"Build fix"}`,
+		`{"type":"brand-new-record","uuid":"x"}`,
+	}, "\n") + "\n"
+	result, err := Run(context.Background(), domain.Descriptor{Harness: "claude-code", Adapter: "claude-code-jsonl"}, fstest.MapFS{"source/records.jsonl": {Data: []byte(data)}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Title != "Build fix" {
+		t.Fatalf("title = %q, want the custom title over the generated one", result.Title)
+	}
+	if len(result.Warnings) != 1 || !strings.Contains(result.Warnings[0].Message, "line 18: unknown Claude record brand-new-record") {
+		t.Fatalf("warnings = %#v, want only the unknown record", result.Warnings)
+	}
+	// Each event's parent is the event before it: one chain, no side branches, no copies.
+	want := []struct{ key, kind, role, text string }{
+		{"message:u1:0", "message", "user", "Fix the build"},
+		{"message:prompt:h2", "message", "system", "You are Claude Code."},
+		{"thinking_level_change:effort:a1", "thinking_level_change", "", "high"},
+		{"tool_call:a1:0", "tool_call", "assistant", `{"command":"make"}`},
+		{"tool_call:a2:0", "tool_call", "assistant", `{"command":"go vet"}`},
+		{"tool_result:r2:0", "tool_result", "user", "vet ok"},
+		{"tool_result:r1:0", "tool_result", "user", "build failed"},
+		{"message:meta:0", "message", "system", "Base directory for this skill"},
+		{"message:err:0", "message", "system", "API error: 529 overloaded"},
+		{"thinking_level_change:effort:a3", "thinking_level_change", "", "low"},
+		{"message:a3:0", "message", "assistant", "The build fails in make."},
+		{"compaction:cb:0", "compaction", "", "Conversation compacted"},
+	}
+	if len(result.Events) != len(want) {
+		t.Fatalf("got %d events, want %d: %#v", len(result.Events), len(want), result.Events)
+	}
+	parent := ""
+	for index, event := range result.Events {
+		w := want[index]
+		if event.Key != w.key || event.Kind != w.kind || event.Role != w.role || event.Text != w.text || event.ParentKey != parent {
+			t.Fatalf("event %d = %q %s/%s %q parent %q, want %q %s/%s %q parent %q", index, event.Key, event.Kind, event.Role, event.Text, event.ParentKey, w.key, w.kind, w.role, w.text, parent)
+		}
+		parent = event.Key
+	}
+}
+
+func TestCursorAgentShowsStoppedTurnsInOrder(t *testing.T) {
+	data := strings.Join([]string{
+		`{"role":"user","message":{"content":[{"type":"text","text":"rename the flag"}]}}`,
+		`{"role":"assistant","message":{"content":[{"type":"text","text":"Renaming it."},{"type":"tool_use","name":"Edit","input":{"path":"flags.go"}}]}}`,
+		`{"type":"turn_ended","status":"success"}`,
+		`{"role":"user","message":{"content":[{"type":"text","text":"also the docs"}]}}`,
+		`{"role":"user","message":{"content":[{"type":"text","text":"<available_subagent_types>"}]}}`,
+		`{"role":"user","message":{"content":[{"type":"text","text":"also the docs"}]}}`,
+		`{"role":"assistant","message":{"content":[{"type":"text","text":"Updating the docs."}]}}`,
+		`{"type":"turn_ended","status":"aborted","error":"User aborted/interrupted manually."}`,
+	}, "\n") + "\n"
+	result, err := Run(context.Background(), domain.Descriptor{Harness: "cursor-agent", Adapter: "cursor-agent-jsonl"}, fstest.MapFS{"source/records.jsonl": {Data: []byte(data)}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Warnings) != 0 || len(result.Events) != 8 {
+		t.Fatalf("warnings = %#v, events = %d, want none and 8", result.Warnings, len(result.Events))
+	}
+	stopped := result.Events[7]
+	if stopped.Role != "assistant" || string(stopped.Metadata) != `{"state":{"errorMessage":"User aborted/interrupted manually.","stopReason":"aborted"}}` {
+		t.Fatalf("stopped turn = %#v metadata %s", stopped, stopped.Metadata)
+	}
+	for index := 1; index < 5; index++ {
+		if result.Events[index].ParentKey != result.Events[index-1].Key {
+			t.Fatalf("event %d parent = %q, want the event before it %q", index, result.Events[index].ParentKey, result.Events[index-1].Key)
+		}
+	}
+	// The repeated prompt is stored with its first copy, so it must not start a branch:
+	// the reply follows the injected row, and both copies are identical.
+	prompt, injected, repeated, reply := result.Events[3], result.Events[4], result.Events[5], result.Events[6]
+	if repeated.Key != prompt.Key || repeated.ParentKey != prompt.ParentKey {
+		t.Fatalf("repeated prompt = %q under %q, want a copy of %q under %q", repeated.Key, repeated.ParentKey, prompt.Key, prompt.ParentKey)
+	}
+	if reply.ParentKey != injected.Key || stopped.ParentKey != reply.Key {
+		t.Fatalf("reply parent = %q, stopped parent = %q; want %q and %q", reply.ParentKey, stopped.ParentKey, injected.Key, reply.Key)
 	}
 }
 

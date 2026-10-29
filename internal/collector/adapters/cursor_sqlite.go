@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/regutierrez/traicr/internal/archive"
@@ -183,6 +184,11 @@ func groupCursorRows(rows []cursorRow) []cursorTrace {
 		if strings.Contains(lowerKey, "composerdata") {
 			trace := cursorTrace{ID: cursorRowID(row), Title: cursorComposerName(row.Value), Rows: []cursorRow{row}}
 			ids := referencedBubbleIDs(row.Value)
+			// A composer without messages is an unused chat, or an agent chat whose messages
+			// are in its Cursor Agent transcript; archiving it adds an empty trace.
+			if len(ids) == 0 && strings.HasPrefix(row.Key, "composerData:") {
+				continue
+			}
 			for _, candidate := range rows {
 				if !strings.Contains(strings.ToLower(candidate.Key), "bubble") {
 					continue
@@ -264,4 +270,66 @@ func referencedBubbleIDs(value string) map[string]bool {
 	}
 	visit(decoded)
 	return ids
+}
+
+// cursorComposer is what Cursor records about an agent chat outside its
+// transcript: the chat name and the workspace folder it ran in.
+type cursorComposer struct {
+	Name   string
+	Folder string
+}
+
+var (
+	cursorComposerMu    sync.Mutex
+	cursorComposerCache = map[string]map[string]cursorComposer{}
+)
+
+// cursorComposerInfo looks a Cursor Agent transcript up in Cursor's global
+// state database. Agent transcripts carry neither a title nor a working
+// directory; the editor keeps both under the same composer ID.
+func cursorComposerInfo(ctx context.Context, id string) cursorComposer {
+	path := filepath.Join(cursorConfigRoot(), "globalStorage", "state.vscdb")
+	cursorComposerMu.Lock()
+	defer cursorComposerMu.Unlock()
+	composers, ok := cursorComposerCache[path]
+	if !ok {
+		composers = readCursorComposers(ctx, path)
+		cursorComposerCache[path] = composers
+	}
+	return composers[id]
+}
+
+func readCursorComposers(ctx context.Context, path string) map[string]cursorComposer {
+	composers := map[string]cursorComposer{}
+	if _, err := os.Stat(path); err != nil {
+		return composers
+	}
+	uri := &url.URL{Scheme: "file", Path: filepath.ToSlash(path), RawQuery: "mode=ro"}
+	database, err := sql.Open("sqlite", uri.String())
+	if err != nil {
+		return composers
+	}
+	defer database.Close()
+	// Names live on composerData; the workspace folder on composerHeaders, which older Cursor versions lack.
+	if rows, err := database.QueryContext(ctx, `SELECT substr(key, 14), COALESCE(json_extract(value, '$.name'), '') FROM cursorDiskKV WHERE key LIKE 'composerData:%' AND json_valid(value)`); err == nil {
+		for rows.Next() {
+			var id, name string
+			if rows.Scan(&id, &name) == nil {
+				composers[id] = cursorComposer{Name: strings.TrimSpace(name)}
+			}
+		}
+		rows.Close()
+	}
+	if rows, err := database.QueryContext(ctx, `SELECT composerId, COALESCE(json_extract(value, '$.workspaceIdentifier.uri.fsPath'), '') FROM composerHeaders WHERE json_valid(value)`); err == nil {
+		for rows.Next() {
+			var id, folder string
+			if rows.Scan(&id, &folder) == nil && filepath.IsAbs(folder) {
+				composer := composers[id]
+				composer.Folder = folder
+				composers[id] = composer
+			}
+		}
+		rows.Close()
+	}
+	return composers
 }

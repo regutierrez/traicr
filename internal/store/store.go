@@ -527,6 +527,9 @@ func (s *Store) commitRevision(ctx context.Context, manifest domain.Manifest, de
 	if err != nil {
 		return 0, false, nil, err
 	}
+	if _, err = tx.ExecContext(ctx, "UPDATE traces SET title=? WHERE id=? AND title='' AND ?<>''", normalization.Title, traceID, normalization.Title); err != nil {
+		return 0, false, nil, err
+	}
 	diagnostics, _ := json.Marshal(append(normalization.Warnings, conflicts...))
 	_, err = tx.ExecContext(ctx, "INSERT INTO normalizer_runs(revision_id,version,status,diagnostics_json,created_at) VALUES(?,?,?,?,?)", revisionID, normalization.Version, normalization.Status, diagnostics, now)
 	if err != nil {

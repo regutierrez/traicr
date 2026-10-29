@@ -77,6 +77,10 @@ func orderPiEntries(ctx context.Context, records []sourceRecord) ([]*piEntry, []
 			return nil, warnings, err
 		}
 		id := stringValue(record.Value["id"])
+		// Some writers repeat the session header; it is not an entry.
+		if stringValue(record.Value["type"]) == "session" && record.Value["parentId"] == nil {
+			continue
+		}
 		if id == "" {
 			warnings = append(warnings, unknown(record, "entry has no native id"))
 			continue

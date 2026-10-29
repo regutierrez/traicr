@@ -242,6 +242,9 @@ func (s *Store) replaceRevisionEvents(ctx context.Context, traceID, revisionID i
 	if _, err = tx.ExecContext(ctx, "UPDATE traces SET generated_title_revision_id=0 WHERE id=? AND generated_title=''", traceID); err != nil {
 		return nil, err
 	}
+	if _, err = tx.ExecContext(ctx, "UPDATE traces SET title=? WHERE id=? AND title='' AND ?<>''", normalization.Title, traceID, normalization.Title); err != nil {
+		return nil, err
+	}
 	if _, err = tx.ExecContext(ctx, "DELETE FROM observation_revisions WHERE revision_id=?", revisionID); err != nil {
 		return nil, err
 	}

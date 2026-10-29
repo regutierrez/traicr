@@ -449,6 +449,7 @@ func jsonlMetadata(harness, snapshot, source string) (traceMetadata, []domain.Wa
 		metadata := traceMetadata{ID: fallback}
 		subagent := filepath.Base(filepath.Dir(source)) == "subagents" && strings.HasPrefix(filepath.Base(source), "agent-")
 		foundIdentity := false
+		customTitle := ""
 		for {
 			line, readErr := reader.ReadBytes('\n')
 			if readErr != nil && !errors.Is(readErr, io.EOF) {
@@ -463,6 +464,7 @@ func jsonlMetadata(harness, snapshot, source string) (traceMetadata, []domain.Wa
 				CWD       string `json:"cwd"`
 				Type      string `json:"type"`
 				AITitle   string `json:"aiTitle"`
+				Custom    string `json:"customTitle"`
 			}
 			if json.Unmarshal(line, &record) != nil {
 				continue
@@ -478,9 +480,16 @@ func jsonlMetadata(harness, snapshot, source string) (traceMetadata, []domain.Wa
 			if metadata.CWD == "" && filepath.IsAbs(strings.TrimSpace(record.CWD)) {
 				metadata.CWD = strings.TrimSpace(record.CWD)
 			}
+			// A name the user set with /rename wins over the generated one.
+			if record.Type == "custom-title" && strings.TrimSpace(record.Custom) != "" {
+				customTitle = strings.TrimSpace(record.Custom)
+			}
 			if record.Type == "ai-title" && strings.TrimSpace(record.AITitle) != "" {
 				metadata.Title = strings.TrimSpace(record.AITitle)
 			}
+		}
+		if customTitle != "" {
+			metadata.Title = customTitle
 		}
 		if foundIdentity {
 			return metadata, nil
@@ -488,6 +497,8 @@ func jsonlMetadata(harness, snapshot, source string) (traceMetadata, []domain.Wa
 		return metadata, []domain.Warning{warning("unknown_schema", "Claude JSONL has no top-level sessionId; filename identity was used")}
 	case "cursor-agent":
 		metadata := traceMetadata{ID: fallback}
+		composer := cursorComposerInfo(context.Background(), fallback)
+		metadata.Title, metadata.CWD = composer.Name, composer.Folder
 		if filepath.Base(filepath.Dir(source)) == "subagents" {
 			metadata.ParentID = filepath.Base(filepath.Dir(filepath.Dir(source)))
 		}

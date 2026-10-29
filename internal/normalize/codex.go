@@ -2,6 +2,7 @@ package normalize
 
 import (
 	"context"
+	"encoding/json"
 	"io/fs"
 
 	"github.com/regutierrez/traicr/internal/domain"
@@ -36,10 +37,11 @@ func normalizeCodex(ctx context.Context, adapter string, sourceFS fs.FS) (domain
 			}
 			events = append(events, event)
 			if event.Kind == "tool_call" {
-				if output := firstValue(item, "output", "result", "error"); output != nil {
+				if output := firstValue(item, "output", "result", "error", "aggregatedOutput", "results"); output != nil {
 					result := event
 					result.Kind, result.Text = "tool_result", contentText(output)
 					result.Key = nativeKey(result.Kind, stringValue(item["id"]), item)
+					result.Metadata = codexRun(item)
 					events = append(events, result)
 				}
 			}
@@ -51,6 +53,8 @@ func normalizeCodex(ctx context.Context, adapter string, sourceFS fs.FS) (domain
 	if len(objects(thread["turns"])) == 0 {
 		warnings = append(warnings, warning("unsupported_version", "Codex thread/read result has no turns"))
 	}
+	// thread/read items carry no timestamps, so their order is only the order they are listed in.
+	chainInFileOrder(events)
 	return complete(events, warnings), nil
 }
 
@@ -67,7 +71,17 @@ func codexItem(item map[string]any, turnID, path string, line int) (domain.Event
 		event.Kind, event.Role, event.Text = "message", "assistant", contentText(firstValue(item, "content", "text"))
 	case "reasoning":
 		event.Kind, event.Role, event.Text = "reasoning", "assistant", contentText(firstValue(item, "summary", "content", "text"))
-	case "functionCall", "commandExecution", "mcpToolCall", "dynamicToolCall", "collabAgentToolCall":
+	case "commandExecution":
+		// The command is a shell string, not arguments; show it the way other harnesses show shell calls.
+		event.Kind, event.Tool, event.CallID = "tool_call", "shell", firstString(item, "callId", "call_id", "id")
+		event.Text = readableJSON(map[string]any{"command": stringValue(item["command"]), "cwd": stringValue(item["cwd"])})
+	case "fileChange":
+		event.Kind, event.Tool, event.CallID = "tool_call", "apply_patch", id
+		event.Text = readableJSON(map[string]any{"changes": item["changes"]})
+	case "webSearch":
+		event.Kind, event.Tool, event.CallID = "tool_call", "web_search", id
+		event.Text = readableJSON(firstValue(item, "action", "query"))
+	case "functionCall", "mcpToolCall", "dynamicToolCall", "collabAgentToolCall":
 		event.Kind, event.Tool = "tool_call", firstString(item, "name", "tool", "command")
 		event.CallID = firstString(item, "callId", "call_id", "id")
 		event.Text = readableJSON(firstValue(item, "arguments", "input", "command"))
@@ -75,14 +89,15 @@ func codexItem(item map[string]any, turnID, path string, line int) (domain.Event
 		event.Kind, event.Tool = "tool_result", firstString(item, "name", "tool")
 		event.CallID = firstString(item, "callId", "call_id", "id")
 		event.Text = contentText(firstValue(item, "output", "content"))
-	case "fileChange":
-		event.Kind, event.Text = "file_change", contentText(firstValue(item, "changes", "diff"))
 	case "plan", "contextCompaction":
 		event.Kind, event.Text = kind, contentText(item)
 	default:
 		return domain.Event{}, false
 	}
 	event.Key = nativeKey(event.Kind, id, map[string]any{"turn": turnID, "item": item})
+	if kind == "fileChange" {
+		event.LegacyKeys = []string{nativeKey("file_change", id, map[string]any{"turn": turnID, "item": item})}
+	}
 	return event, true
 }
 
@@ -147,4 +162,26 @@ func codexRolloutItem(payload map[string]any, model string, record sourceRecord)
 	}
 	event.Key = nativeKey(event.Kind, stringValue(payload["id"]), payload)
 	return event, true
+}
+
+// codexRun keeps a command's exit code and status so the page can mark failures.
+func codexRun(item map[string]any) json.RawMessage {
+	run := map[string]any{}
+	switch stringValue(item["status"]) {
+	case "failed", "declined":
+		run["status"] = "error"
+	case "completed":
+		run["status"] = "done"
+	}
+	if code, ok := wholeNumber(item["exitCode"]); ok {
+		run["result"] = map[string]any{"exitCode": code}
+		if code != 0 {
+			run["status"] = "error"
+		}
+	}
+	if len(run) == 0 {
+		return nil
+	}
+	metadata, _ := json.Marshal(map[string]any{"run": run})
+	return metadata
 }

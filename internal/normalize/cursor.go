@@ -60,7 +60,12 @@ func normalizeCursor(ctx context.Context, sourceFS fs.FS) (domain.Normalization,
 		if err := ctx.Err(); err != nil {
 			return domain.Normalization{}, err
 		}
-		for _, header := range objects(composer.Value["fullConversationHeadersOnly"]) {
+		headers := objects(composer.Value["fullConversationHeadersOnly"])
+		if len(headers) == 0 {
+			// Say why the trace is empty instead of failing silently.
+			warnings = append(warnings, warning("empty_conversation", "Cursor composer "+stringValue(composer.Value["composerId"])+" has no messages in the editor database; an agent chat keeps them in its Cursor Agent transcript instead"))
+		}
+		for _, header := range headers {
 			if err := ctx.Err(); err != nil {
 				return domain.Normalization{}, err
 			}

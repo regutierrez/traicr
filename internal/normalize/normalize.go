@@ -12,10 +12,12 @@ func Version(harness string) int {
 	case "amp":
 		return 5
 	case "pi":
-		return 3
+		return 4
 	case "cursor":
-		return 3
-	case "claude-code", "cursor-agent", "opencode", "codex", "grok-build":
+		return 4
+	case "claude-code", "cursor-agent", "codex":
+		return 2
+	case "opencode", "grok-build":
 		return 1
 	default:
 		return 0
@@ -28,7 +30,8 @@ func Run(ctx context.Context, descriptor domain.Descriptor, source fs.FS) (domai
 	}
 
 	limit := int64(maxSourceBytes)
-	if descriptor.Harness == "amp" {
+	// Long Claude Code sessions pass 64 MiB too; they get the Amp export budget.
+	if descriptor.Harness == "amp" || descriptor.Harness == "claude-code" {
 		limit = domain.MaxAmpExportBytes
 	}
 	source = newLimitedFS(ctx, source, limit)

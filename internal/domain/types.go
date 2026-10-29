@@ -92,6 +92,9 @@ type Normalization struct {
 	Status   string    `json:"status"`
 	Events   []Event   `json:"events"`
 	Warnings []Warning `json:"warnings,omitempty"`
+	// Title is a name the harness recorded in the session itself. It fills an
+	// empty trace title; it never replaces one the collector supplied.
+	Title string `json:"title,omitempty"`
 }
 
 type TraceOutcome struct {
