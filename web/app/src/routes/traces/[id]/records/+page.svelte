@@ -9,10 +9,39 @@
 	import { submitGoForm } from '$lib/forms';
 	import WorkspaceHeader from '$lib/components/conversation/WorkspaceHeader.svelte';
 	import { recordsHref, revisionSourcesHref, sourceFileHref, transcriptHref } from '$lib/links';
+	import type { SessionNative } from '$lib/transcript/types';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
 	let trace = $derived(data.trace);
+	let sessionFacts = $derived(ampSessionFacts(data.session));
+
+	// What the Amp export says about where and how the thread ran. Missing values are left out.
+	function ampSessionFacts(session: SessionNative | null) {
+		if (!session) return [];
+		const record = (value: unknown) => (value && typeof value === 'object' ? (value as Record<string, unknown>) : {});
+		const text = (value: unknown) => (typeof value === 'string' || typeof value === 'number' ? String(value) : '');
+		const list = (value: unknown) => (Array.isArray(value) ? value.map((item) => text(item) || text(record(item).name)).filter(Boolean).join(', ') : '');
+		const initial = record(record(session.env).initial);
+		const platform = record(initial.platform);
+		const meta = record(session.meta);
+		const tree = record(Array.isArray(initial.trees) ? initial.trees[0] : undefined);
+		const repository = record(tree.repository);
+		const created = typeof session.created === 'number' ? new Date(session.created).toISOString() : text(session.created);
+		const facts: [string, string][] = [
+			['Agent mode', text(session.agentMode)],
+			['Repository', text(repository.url)],
+			['Ref', text(repository.ref).replace(/^refs\/heads\//, '')],
+			['Commit', text(repository.sha).slice(0, 12)],
+			['Client', [text(platform.client), text(platform.clientVersion), text(platform.os)].filter(Boolean).join(' · ')],
+			['Executor', [text(meta.executorType), text(initial.runnerID) || text(initial.hostname)].filter(Boolean).join(' · ')],
+			['Features', list(meta.features)],
+			['Skills', list(session.activatedSkills)],
+			['Created', created ? dateAndTime(created) : ''],
+			['Archived in Amp', session.archived === undefined ? '' : session.archived ? 'yes' : 'no']
+		];
+		return facts.filter(([, value]) => value);
+	}
 	let cursor = $derived(page.url.searchParams.get('cursor') ?? '');
 	let deleteError = $state('');
 	let deleting = $state(false);
@@ -80,6 +109,16 @@
 					<dt class="text-muted-foreground">Directory</dt><dd class="break-all">{trace.working_directory}</dd>
 					<dt class="text-muted-foreground">Repository</dt><dd class="break-all">{trace.repository}</dd>
 				</dl>
+				{#if sessionFacts.length}
+					<div>
+						<h2 class="mb-2 font-medium">Amp session</h2>
+						<dl class="grid grid-cols-[7rem_1fr] gap-2">
+							{#each sessionFacts as [label, value] (label)}
+								<dt class="text-muted-foreground">{label}</dt><dd class="break-all">{value}</dd>
+							{/each}
+						</dl>
+					</div>
+				{/if}
 				{#if trace.harness === 'amp'}
 					<div>
 						<h2 class="mb-2 font-medium">Native Amp export</h2>

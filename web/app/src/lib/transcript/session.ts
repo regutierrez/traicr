@@ -170,7 +170,9 @@ export function buildTranscriptSession(events: TranscriptEvent[], metadata: Sess
 							input: details.usage.inputTokens,
 							output: details.usage.outputTokens,
 							cacheRead: details.usage.cacheReadInputTokens,
-							cacheWrite: details.usage.cacheCreationInputTokens
+							cacheWrite: details.usage.cacheCreationInputTokens,
+							context: details.usage.totalInputTokens,
+							contextWindow: details.usage.maxInputTokens
 						};
 					}
 					messageEntry = append({

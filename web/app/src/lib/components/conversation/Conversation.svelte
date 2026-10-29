@@ -22,6 +22,7 @@
 	import ExpandChip from './ExpandChip.svelte';
 	import Icon from './Icon.svelte';
 	import Markdown from './Markdown.svelte';
+	import MessageDetails from './MessageDetails.svelte';
 	import ToolRow from './ToolRow.svelte';
 	import TraceIndex from './TraceIndex.svelte';
 	import WorkspaceHeader from './WorkspaceHeader.svelte';
@@ -277,6 +278,7 @@
 						{@const error = message.nativeDetails?.state?.errorMessage}
 						<p class="note error">Recorded response state: {message.stopReason}{error ? ` · ${error}` : ''}</p>
 					{/if}
+					<MessageDetails {entry} />
 				</article>
 			{:else if entry.type === 'compaction' || entry.type === 'branch_summary'}
 				<div id="entry-{entry.id}">

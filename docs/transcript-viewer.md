@@ -101,9 +101,17 @@ onto the existing kind list rather than adding a per-harness pane.
 
 ## Amp exports
 
-Amp normalizer version 4 retains numeric message identity, native block order,
+Amp normalizer version 6 keys each message by its `protocolMessageID`. Amp's
+numeric `messageId` is only the message's position, so it moves when a later
+export inserts or removes a message. Tool results are keyed by their call ID and
+other blocks by their number among blocks of the same kind, because later exports
+can drop thinking blocks. Keys from earlier versions stay as aliases. The
+normalizer retains native block order,
 tool answers and errors, summary blocks, image references, usage, timing, execution
-state, origin, phase, and environment metadata. Unknown content has a visible
+state, origin, phase, and environment metadata. A written reply has a collapsed
+line labeled Commentary, Final answer, or Details with its model, time, tokens,
+and context use. The Details tab lists the session's agent mode, repository ref
+and commit, client, executor, features, and skills. Unknown content has a visible
 JSON fallback. Hidden context, summaries, tool answers, diffs, and arguments
 can be expanded independently. Source inspection remains in Details.
 Reasoning signatures are not interpreted as plaintext. Tool status describes the

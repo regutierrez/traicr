@@ -38,7 +38,8 @@
 
 	let status = $derived(toolStatus(call, result));
 	let chip = $derived(toolChipParts(call));
-	let statusLabel = $derived(status !== 'unknown' && status !== 'done' ? status : '');
+	// An export is a snapshot: a process running then may have finished long ago.
+	let statusLabel = $derived(status === 'running' ? 'still running when recorded' : status !== 'unknown' && status !== 'done' ? status : '');
 	let args = $derived(call.arguments || {});
 	let command = $derived(toolCommand(args));
 	let path = $derived(toolPath(args));

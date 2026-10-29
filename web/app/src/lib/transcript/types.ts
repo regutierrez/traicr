@@ -10,6 +10,8 @@ export type EventMetadata = {
 		outputTokens?: number;
 		cacheReadInputTokens?: number;
 		cacheCreationInputTokens?: number;
+		totalInputTokens?: number;
+		maxInputTokens?: number;
 	};
 	hidden?: boolean;
 	run?: ToolRun;
@@ -98,6 +100,9 @@ export type Usage = {
 	output?: number;
 	cacheRead?: number;
 	cacheWrite?: number;
+	/** Tokens the model read for this reply, cached or not, and the most it could read. */
+	context?: number;
+	contextWindow?: number;
 };
 
 export type TextBlock = { type: 'text'; text: string };
