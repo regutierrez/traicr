@@ -249,6 +249,8 @@ test('reports what the page cannot show as recorded, and nothing else', () => {
 			{ id: 6, key: 'message:v:0', parent_key: 'message:missing:0', kind: 'message', role: 'user', text: 'Again', timestamp: at(6) },
 			{ id: 7, key: 'tool_call:b:0', parent_key: 'message:v:0', kind: 'tool_call', role: 'assistant', tool: 'list', call_id: 'call-2', text: 'null', timestamp: at(7) },
 			{ id: 8, key: 'custom_message:c:0', parent_key: 'tool_call:b:0', kind: 'custom_message', text: 'note', timestamp: at(8) },
+			{ id: 10, key: 'message:sys', parent_key: 'custom_message:c:0', kind: 'message', role: 'system', text: '# Environment', timestamp: at(9) },
+			{ id: 11, key: 'context_edit:e', parent_key: 'message:sys', kind: 'context_edit', text: '', timestamp: at(10) },
 			// An older sibling reply: a real fork, so it is off the newest path.
 			{ id: 9, key: 'message:w:0', parent_key: 'message:u:0', kind: 'message', role: 'assistant', text: 'Earlier try', timestamp: '2026-09-06T10:01:30Z' }
 		],
@@ -263,6 +265,11 @@ test('reports what the page cannot show as recorded, and nothing else', () => {
 	});
 	expect(data.anomalies.find((anomaly) => anomaly.kind === 'unrendered_event')?.message).toContain('unknown/assistant (1)');
 	expect(data.entries.find((entry) => entry.id === '2')?.message?.content[0]).toMatchObject({ arguments: { raw: 'ls -la' } });
+	expect(data.entries.find((entry) => entry.id === '10')?.message).toMatchObject({
+		role: 'system',
+		content: [{ type: 'hidden', text: '# Environment' }]
+	});
+	expect(customNote(data.entries.find((entry) => entry.id === '11')!)).toEqual({ title: 'Removed an earlier entry from model context', body: '' });
 });
 
 test('Pi custom sidecars keep the extension name instead of the custom kind', () => {

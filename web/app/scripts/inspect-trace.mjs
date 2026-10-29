@@ -88,7 +88,8 @@ function describe(entry) {
 	} else if (message) {
 		for (const block of message.content) {
 			if (block.type === 'text') lines.push(`${message.role}: ${clip(block.text)}`);
-			else if (block.type === 'hidden') lines.push(`hidden context: ${clip(block.text)}`);
+			else if (block.type === 'hidden')
+				lines.push(`${message.role === 'system' ? 'system message' : 'hidden context'}: ${clip(block.text)}`);
 			else if (block.type === 'thinking') lines.push(`thought: ${clip(block.thinking) || '(text not exported)'}`);
 			else if (block.type === 'attachment') lines.push(`attachment: ${block.name || block.path || block.url || ''}`);
 			else if (block.type === 'toolCall') {
@@ -98,7 +99,8 @@ function describe(entry) {
 			}
 		}
 		if (message.stopReason && !['stop', 'toolUse', 'complete'].includes(message.stopReason)) {
-			lines.push(`response state: ${message.stopReason}`);
+			const error = message.nativeDetails?.state?.errorMessage;
+			lines.push(`response state: ${message.stopReason}${error ? ` · ${clip(error)}` : ''}`);
 		}
 	} else if (entry.type === 'compaction' || entry.type === 'branch_summary') {
 		lines.push(`${entry.type}: ${clip(entry.summary)}`);

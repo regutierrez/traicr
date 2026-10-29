@@ -230,7 +230,7 @@
 								<Markdown text={block.text} />
 							{/if}
 						{:else if block.type === 'hidden'}
-							<ExpandChip icon="compaction" verb="Hidden context">
+							<ExpandChip icon="compaction" verb={message.role === 'system' ? 'System message' : 'Hidden context'}>
 								<pre>{block.text}</pre>
 							</ExpandChip>
 						{:else if block.type === 'thinking'}
@@ -259,7 +259,8 @@
 						{/if}
 					{/each}
 					{#if message.stopReason && !['stop', 'toolUse', 'complete'].includes(message.stopReason)}
-						<p class="note error">Recorded response state: {message.stopReason}</p>
+						{@const error = message.nativeDetails?.state?.errorMessage}
+						<p class="note error">Recorded response state: {message.stopReason}{error ? ` · ${error}` : ''}</p>
 					{/if}
 				</article>
 			{:else if entry.type === 'compaction' || entry.type === 'branch_summary'}

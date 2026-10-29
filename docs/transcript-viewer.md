@@ -60,7 +60,10 @@ chip or should stay as a quiet note.
 
 Shared stream, when the Event has the data:
 
-- Compaction and hidden context expand in place as chips.
+- Compaction, hidden context, and `system` role messages (Pi system prompts,
+  Claude Code injected context) expand in place as chips.
+- Pi user-run commands (`bashExecution`) render as a user row with a `bash`
+  tool call and its output and exit code.
 - Skill blocks (`<skill>` in Pi user text, Amp `skill` tool) stay a chip plus
   the user remainder.
 - Child traces (`create_thread`, `fromExecutorThreadID`, leftover children)

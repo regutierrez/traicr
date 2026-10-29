@@ -12,7 +12,7 @@ func Version(harness string) int {
 	case "amp":
 		return 5
 	case "pi":
-		return 2
+		return 3
 	case "cursor":
 		return 3
 	case "claude-code", "cursor-agent", "opencode", "codex", "grok-build":

@@ -4,7 +4,7 @@ export type EventMetadata = {
 	transcript_order?: number;
 	transcript_parent?: string;
 	session?: SessionNative;
-	state?: { type?: string; stopReason?: string };
+	state?: { type?: string; stopReason?: string; errorMessage?: string };
 	usage?: {
 		inputTokens?: number;
 		outputTokens?: number;
@@ -115,7 +115,7 @@ export type AttachmentBlock = Attachment & { type: 'attachment'; revisionId?: nu
 export type ContentBlock = TextBlock | HiddenBlock | ThinkingBlock | ToolCallBlock | AttachmentBlock;
 
 export type Message = {
-	role: 'user' | 'assistant' | 'toolResult';
+	role: 'user' | 'assistant' | 'system' | 'toolResult';
 	content: ContentBlock[];
 	model?: string;
 	provider?: string;

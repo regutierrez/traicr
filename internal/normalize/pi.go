@@ -2,9 +2,12 @@ package normalize
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io/fs"
+	"slices"
 	"sort"
+	"strings"
 
 	"github.com/regutierrez/traicr/internal/domain"
 )
@@ -157,6 +160,9 @@ func decodePiRecord(ctx context.Context, entry *piEntry) ([]domain.Event, []doma
 			event.Text = contentText(value)
 		case "custom":
 			event.Text = stringValue(value["customType"])
+		case "context_edit":
+			// Changes only what the model sees next; the target entry stays in history. Null replacement omits it.
+			event.Text = contentText(value["replacement"])
 		default:
 			return nil, []domain.Warning{unknown(entry.record, "unknown Pi entry type "+kind)}, nil
 		}
@@ -171,8 +177,17 @@ func decodePiRecord(ctx context.Context, entry *piEntry) ([]domain.Event, []doma
 	if explicit := stringValue(message["provider"]); explicit != "" {
 		base.Provider = explicit
 	}
+	if role == "bashExecution" {
+		return piBashExecution(base, entry.id, value, message), nil, nil
+	}
 	content, structured := message["content"].([]any)
 	if !structured {
+		if role == "system" && contentText(message["content"]) == "" {
+			event := base
+			event.Kind, event.Role, event.Text = "message", role, piSystemPrompt(message)
+			event.Key = nativeKey(event.Kind, entry.id, value)
+			return []domain.Event{event}, nil, nil
+		}
 		event := base
 		event.Kind, event.Role, event.Text = "message", role, contentText(message["content"])
 		event.CallID, event.Tool = stringValue(message["toolCallId"]), stringValue(message["toolName"])
@@ -181,6 +196,22 @@ func decodePiRecord(ctx context.Context, entry *piEntry) ([]domain.Event, []doma
 		}
 		event.Key = nativeKey(event.Kind, entry.id, value)
 		return []domain.Event{event}, nil, nil
+	}
+
+	// Failed and aborted replies often have no content; keep them so the page can show what happened.
+	stopReason, errorMessage := stringValue(message["stopReason"]), stringValue(message["errorMessage"])
+	if role == "assistant" && (errorMessage != "" || stopReason != "" && stopReason != "stop" && stopReason != "toolUse") {
+		if stopReason == "" {
+			stopReason = "error"
+		}
+		state := map[string]any{"stopReason": stopReason}
+		if errorMessage != "" {
+			state["errorMessage"] = errorMessage
+		}
+		base.Metadata, _ = json.Marshal(map[string]any{"state": state})
+		if len(content) == 0 {
+			content = []any{map[string]any{"type": "text", "text": ""}}
+		}
 	}
 
 	var events []domain.Event
@@ -216,4 +247,72 @@ func decodePiRecord(ctx context.Context, entry *piEntry) ([]domain.Event, []doma
 		events = append(events, event)
 	}
 	return events, warnings, nil
+}
+
+// A user-run "!command" stores the command and its output on one message, so it becomes a call and its result.
+func piBashExecution(base domain.Event, id string, value, message map[string]any) []domain.Event {
+	call := base
+	call.Kind, call.Role, call.Tool, call.CallID = "tool_call", "user", "bash", "bash:"+id
+	call.Text = readableJSON(map[string]any{"command": stringValue(message["command"])})
+	call.Key = nativeKey(call.Kind, indexedID(id, 0), value)
+	call.LegacyKeys = []string{nativeKey("message", id, value)}
+
+	result := base
+	result.Kind, result.Role, result.Tool, result.CallID = "tool_result", "user", "bash", call.CallID
+	result.Text = stringValue(message["output"])
+	result.Key = nativeKey(result.Kind, indexedID(id, 1), value)
+	run := map[string]any{"status": "done"}
+	if code, ok := wholeNumber(message["exitCode"]); ok {
+		run["result"] = map[string]any{"exitCode": code}
+		if code != 0 {
+			run["status"] = "error"
+		}
+	}
+	if cancelled, _ := message["cancelled"].(bool); cancelled {
+		run["status"] = "cancelled"
+	}
+	result.Metadata, _ = json.Marshal(map[string]any{"run": run})
+	return []domain.Event{call, result}
+}
+
+// Pi bridges that build their own system prompt store it as named sections and leave content empty.
+// Later system records are updates: they carry only the sections that changed, "" for a cleared
+// section, and the tools added or removed.
+var piSystemSectionOrder = []string{"preamble", "tools", "rules", "docs", "addendum", "skills", "cwd", "mcp_servers"}
+
+func piSystemPrompt(message map[string]any) string {
+	sections := object(message["sections"])
+	names := make([]string, 0, len(sections))
+	for name := range sections {
+		if !slices.Contains(piSystemSectionOrder, name) {
+			names = append(names, name)
+		}
+	}
+	sort.Strings(names)
+	var parts, cleared []string
+	for _, name := range append(slices.Clone(piSystemSectionOrder), names...) {
+		if _, present := sections[name]; !present {
+			continue
+		}
+		if text := strings.TrimSpace(stringValue(sections[name])); text != "" {
+			parts = append(parts, text)
+		} else {
+			cleared = append(cleared, name)
+		}
+	}
+	if len(cleared) > 0 {
+		parts = append(parts, "Cleared sections: "+strings.Join(cleared, ", "))
+	}
+	for _, change := range []struct{ field, label string }{{"toolsAdded", "Tools added: "}, {"toolsRemoved", "Tools removed: "}} {
+		var tools []string
+		for _, tool := range objects(message[change.field]) {
+			if name := stringValue(tool["name"]); name != "" {
+				tools = append(tools, name)
+			}
+		}
+		if len(tools) > 0 {
+			parts = append(parts, change.label+strings.Join(tools, ", "))
+		}
+	}
+	return strings.Join(parts, "\n\n")
 }

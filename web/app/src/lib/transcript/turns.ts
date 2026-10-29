@@ -197,6 +197,10 @@ export function customNote(entry: TranscriptEntry): CustomNote | null {
 	}
 	if (entry.type !== 'custom_message') return null;
 	if (entry.customType === 'unknown') return { title: 'Unsupported', body: entry.content || '' };
+	if (entry.customType === 'context_edit') {
+		const title = entry.content ? 'Replaced an earlier entry in model context' : 'Removed an earlier entry from model context';
+		return { title, body: entry.content || '' };
+	}
 	return { title: (entry.customType || '').trim() || entry.type, body: entry.content || '' };
 }
 

@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -430,6 +431,49 @@ func TestPiCustomSidecarIsNormalized(t *testing.T) {
 	}
 	if !foundCustom || !foundUser {
 		t.Fatalf("missing custom or user event: %#v", result.Events)
+	}
+}
+
+func TestPiNormalizesUserCommandsAndSectionedSystemPrompt(t *testing.T) {
+	data := strings.Join([]string{
+		`{"type":"session","version":3,"id":"fixture"}`,
+		`{"type":"message","id":"system","parentId":null,"message":{"role":"system","content":"","sections":{"zeta":"<zeta>z</zeta>","cwd":"<cwd>/repo</cwd>","alpha":"<alpha>a</alpha>","preamble":"You are a fixture.","tools":" "},"toolsAdded":[{"name":"read","description":"Read a file"}],"toolsRemoved":[{"name":"grep"}]}}`,
+		`{"type":"message","id":"bang","parentId":"system","message":{"role":"bashExecution","command":"make test","output":"FAIL fixture","exitCode":2,"cancelled":false,"truncated":false,"timestamp":1}}`,
+		`{"type":"message","id":"after","parentId":"bang","message":{"role":"user","content":"why did it fail?"}}`,
+		`{"type":"message","id":"failed","parentId":"after","message":{"role":"assistant","content":[],"stopReason":"error","errorMessage":"Request timed out."}}`,
+		`{"type":"context_edit","id":"drop","parentId":"failed","targetId":"failed","replacement":null}`,
+		`{"type":"context_edit","id":"swap","parentId":"drop","targetId":"after","replacement":[{"type":"text","text":"[collapsed]"}]}`,
+	}, "\n") + "\n"
+	result, err := Run(context.Background(), domain.Descriptor{Harness: "pi", Adapter: "pi-jsonl"}, fstest.MapFS{"source/records.jsonl": {Data: []byte(data)}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Warnings) != 0 {
+		t.Fatalf("warnings = %#v", result.Warnings)
+	}
+	events := make(map[string]domain.Event)
+	for _, event := range result.Events {
+		events[event.Key] = event
+	}
+	system := events["message:system"]
+	if want := "You are a fixture.\n\n<cwd>/repo</cwd>\n\n<alpha>a</alpha>\n\n<zeta>z</zeta>\n\nCleared sections: tools\n\nTools added: read\n\nTools removed: grep"; system.Role != "system" || system.Text != want {
+		t.Fatalf("system = %q %q, want %q", system.Role, system.Text, want)
+	}
+	call, output := events["tool_call:bang:0"], events["tool_result:bang:1"]
+	if call.Role != "user" || call.Tool != "bash" || call.Text != `{"command":"make test"}` || !slices.Equal(call.LegacyKeys, []string{"message:bang"}) {
+		t.Fatalf("command call = %#v", call)
+	}
+	if output.CallID != call.CallID || output.Text != "FAIL fixture" || string(output.Metadata) != `{"run":{"result":{"exitCode":2},"status":"error"}}` {
+		t.Fatalf("command result = %#v metadata %s", output, output.Metadata)
+	}
+	if events["message:after"].ParentKey != call.Key {
+		t.Fatalf("next prompt parent = %q, want %q", events["message:after"].ParentKey, call.Key)
+	}
+	if failed := events["message:failed:0"]; failed.Role != "assistant" || string(failed.Metadata) != `{"state":{"errorMessage":"Request timed out.","stopReason":"error"}}` {
+		t.Fatalf("failed reply = %#v metadata %s", failed, failed.Metadata)
+	}
+	if drop, swap := events["context_edit:drop"], events["context_edit:swap"]; drop.Text != "" || drop.ParentKey != "message:failed:0" || swap.Text != "[collapsed]" || swap.ParentKey != drop.Key {
+		t.Fatalf("context edits = %#v %#v", drop, swap)
 	}
 }
 

@@ -135,9 +135,9 @@ export function buildTranscriptSession(events: TranscriptEvent[], metadata: Sess
 			let entry: TranscriptEntry;
 			if (
 				['message', 'reasoning', 'tool_call', 'attachment'].includes(event.kind) &&
-				(!event.role || ['user', 'assistant'].includes(event.role) || event.kind === 'tool_call')
+				(!event.role || ['user', 'assistant'].includes(event.role) || event.kind === 'tool_call' || (event.kind === 'message' && event.role === 'system'))
 			) {
-				const role = event.role === 'user' ? 'user' : 'assistant';
+				const role = event.role === 'user' || event.role === 'system' ? event.role : 'assistant';
 				if (!messageEntry || messageEntry.message?.role !== role) {
 					const stopReason = stopReasonFor(details, metadata.harness);
 					const message: Message = {
@@ -187,7 +187,7 @@ export function buildTranscriptSession(events: TranscriptEvent[], metadata: Sess
 							revisionId: event.revision_id
 						}))
 					);
-				} else content.push({ type: details.hidden ? 'hidden' : 'text', text });
+				} else content.push({ type: details.hidden || role === 'system' ? 'hidden' : 'text', text });
 			} else if (event.kind === 'tool_result') {
 				const existing = added.find((item) => item.message?.role === 'toolResult' && item.message.toolCallId === event.call_id);
 				entry =
@@ -263,8 +263,8 @@ export function buildTranscriptSession(events: TranscriptEvent[], metadata: Sess
 						content: ''
 					});
 				} else {
-					// Pi's own custom_message records are meant to render as notes.
-					if (event.kind !== 'custom_message') {
+					// Pi's own custom_message and context_edit records are meant to render as notes.
+					if (event.kind !== 'custom_message' && event.kind !== 'context_edit') {
 						anomalies.add('unrendered_event', event.id, event.role ? `${event.kind}/${event.role}` : event.kind);
 					}
 					entry = append({

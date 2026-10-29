@@ -202,6 +202,7 @@ export function treeLabel(entry: TranscriptEntry) {
 		if (tools.length) return `assistant · ${tools.join(', ')}`;
 		return 'assistant';
 	}
+	if (message?.role === 'system') return 'system';
 	if (message?.role === 'toolResult') return `tool · ${message.toolName || 'result'}`;
 	if (entry.type === 'model_change') return `model · ${[entry.provider, entry.modelId].filter(Boolean).join('/')}`;
 	if (entry.type === 'compaction') return 'compaction';
