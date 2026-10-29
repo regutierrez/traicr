@@ -66,7 +66,11 @@ func TestCollectStatusLeavesOneLinePerHarness(t *testing.T) {
 
 func TestUploadStatusShowsServerImportProgress(t *testing.T) {
 	var stderr bytes.Buffer
-	status := &uploadStatus{statusLine: statusLine{out: &stderr}}
+	clock := time.Unix(0, 0)
+	status := &uploadStatus{statusLine: statusLine{out: &stderr}, now: func() time.Time { return clock }}
+	status.report(collector.UploadStatus{File: "/tmp/a.zip", Phase: "checking"})
+	clock = clock.Add(1234 * time.Millisecond)
+	status.report(collector.UploadStatus{File: "/tmp/a.zip", Phase: "checked", Completed: 2326, Total: 2326})
 	status.report(collector.UploadStatus{File: "/tmp/a.zip", Phase: "sending", Sent: 50, Size: 100})
 	status.report(collector.UploadStatus{File: "/tmp/a.zip", Phase: "sending", Sent: 100, Size: 100})
 	status.report(collector.UploadStatus{File: "/tmp/a.zip", Phase: "validating"})
@@ -74,6 +78,8 @@ func TestUploadStatusShowsServerImportProgress(t *testing.T) {
 	status.report(collector.UploadStatus{File: "/tmp/a.zip", Phase: "complete", Completed: 2326, Total: 2326})
 	out := stderr.String()
 	for _, frame := range []string{
+		"\ra.zip: checking archive before upload...",
+		"\ra.zip: checked 2326 traces before upload (1.234s)\n",
 		"\ra.zip: uploading 50/100 bytes (50.0%)",
 		"\ra.zip: uploading 100/100 bytes (100.0%)",
 		"\ra.zip: server validating archive...",
@@ -86,8 +92,8 @@ func TestUploadStatusShowsServerImportProgress(t *testing.T) {
 	if strings.Contains(out, "indexing") {
 		t.Fatalf("progress listed dead indexing phase: %q", out)
 	}
-	if strings.Count(out, "\n") != 1 || !strings.HasSuffix(out, "\n") {
-		t.Fatalf("expected one line ending after completion: %q", out)
+	if strings.Count(out, "\n") != 2 || !strings.HasSuffix(out, "\n") {
+		t.Fatalf("expected one persisted check line and one line ending after completion: %q", out)
 	}
 }
 

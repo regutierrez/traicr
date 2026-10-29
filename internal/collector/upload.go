@@ -17,7 +17,9 @@ import (
 	"github.com/regutierrez/traicr/internal/domain"
 )
 
-// UploadStatus describes one step of uploading an archive. Phase "sending"
+// UploadStatus describes one step of uploading an archive. Client phases
+// "checking" and "checked" bracket local validation before any byte is sent;
+// "checked" reports the archive's trace count in Total. Phase "sending"
 // reports Sent of Size bytes; server phases "validating" and "normalizing"
 // report Completed of Total traces; "complete" marks the import report.
 // The server does not emit an "indexing" phase; unknown phases error.
@@ -88,10 +90,13 @@ func uploadOne(ctx context.Context, client *http.Client, endpoint, token, filePa
 	if err != nil {
 		return domain.ImportReport{}, domain.Manifest{}, err
 	}
+	progress.report(UploadStatus{File: filePath, Phase: "checking"})
 	validated, err := archive.Validate(ctx, file, info.Size(), archive.DefaultLimits())
 	if err != nil {
 		return domain.ImportReport{}, domain.Manifest{}, fmt.Errorf("validate %s before upload: %w", filePath, err)
 	}
+	traces := len(validated.Manifest.Traces)
+	progress.report(UploadStatus{File: filePath, Phase: "checked", Completed: traces, Total: traces})
 	if _, err := file.Seek(0, io.SeekStart); err != nil {
 		return domain.ImportReport{}, domain.Manifest{}, err
 	}

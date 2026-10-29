@@ -232,11 +232,21 @@ func count(completed, total int) string {
 
 type uploadStatus struct {
 	statusLine
+	started time.Time
+	now     func() time.Time
 }
 
 func (s *uploadStatus) report(u collector.UploadStatus) {
+	if s.now == nil {
+		s.now = time.Now
+	}
 	name := filepath.Base(u.File)
 	switch u.Phase {
+	case "checking":
+		s.started = s.now()
+		s.rewrite(name + ": checking archive before upload...")
+	case "checked":
+		s.persist(fmt.Sprintf("%s: checked %d traces before upload (%s)", name, u.Total, s.now().Sub(s.started).Round(time.Millisecond)))
 	case "sending":
 		s.rewrite(fmt.Sprintf("%s: uploading %d/%d bytes (%.1f%%)", name, u.Sent, u.Size, float64(u.Sent)*100/float64(u.Size)))
 	case "validating":

@@ -306,7 +306,7 @@ func TestUploadAdvancesOnlyAcknowledgedOutcomes(t *testing.T) {
 	if _, err := collector.Upload(context.Background(), server.Client(), &cfg, configPath, collected.Archives, progress); err != nil {
 		t.Fatal(err)
 	}
-	if size == 0 || lastSent != size || strings.Join(phases, ",") != "validating 0/0,normalizing 2/5,complete 5/5" {
+	if size == 0 || lastSent != size || strings.Join(phases, ",") != "checking 0/0,checked 5/5,validating 0/0,normalizing 2/5,complete 5/5" {
 		t.Fatalf("upload progress: sent %d/%d, phases %v", lastSent, size, phases)
 	}
 	if len(cfg.State) != 3 {
