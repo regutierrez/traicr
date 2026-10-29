@@ -2,6 +2,7 @@ import { afterEach, test, expect } from 'vitest';
 import { buildTranscriptSession } from './session';
 import { loadTranscriptSession } from './load';
 import { customNote } from './turns';
+import { getPath } from './tree';
 import type { SessionMetadata, TranscriptEvent } from './types';
 
 const metadata: SessionMetadata = {
@@ -235,6 +236,21 @@ test('cycles cannot trap the viewer parent traversal', () => {
 	);
 	expect(data.entries.some((entry) => entry.parentId === null)).toBe(true);
 	expect(data.anomalies.map((anomaly) => anomaly.kind)).toContain('parent_cycle');
+});
+
+test('a root written after its children stays the root instead of forming a cycle', () => {
+	// Claude Code wrote this session caveat 5 ms after the /clear it parents.
+	const data = buildTranscriptSession(
+		[
+			{ id: 1, key: 'message:clear:0', parent_key: 'message:caveat:0', kind: 'message', role: 'user', text: '/clear', timestamp: '2026-09-06T10:00:00.491Z' },
+			{ id: 2, key: 'message:stdout:0', parent_key: 'message:clear:0', kind: 'message', role: 'system', text: 'stdout', timestamp: '2026-09-06T10:00:00.495Z' },
+			{ id: 3, key: 'message:caveat:0', kind: 'message', role: 'system', text: 'caveat', timestamp: '2026-09-06T10:00:00.496Z' },
+			{ id: 4, key: 'message:ask:0', parent_key: 'message:stdout:0', kind: 'message', role: 'user', text: 'look at the issues', timestamp: '2026-09-06T10:05:00Z' }
+		],
+		metadata
+	);
+	expect(data.anomalies).toEqual([]);
+	expect(getPath(data.entries, data.leafId ?? '').map((entry) => entry.id)).toEqual(['3', '1', '2', '4']);
 });
 
 test('reports what the page cannot show as recorded, and nothing else', () => {

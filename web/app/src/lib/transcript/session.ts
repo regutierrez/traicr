@@ -97,7 +97,7 @@ export function buildTranscriptSession(events: TranscriptEvent[], metadata: Sess
 		if (group) group.push(event);
 		else groups.set(key, [event]);
 	}
-	const ordered = [...groups.values()].sort((a, b) => {
+	const sorted = [...groups.values()].sort((a, b) => {
 		if (Number.isInteger(a[0].metadata?.transcript_order) && Number.isInteger(b[0].metadata?.transcript_order)) {
 			return (a[0].metadata?.transcript_order ?? 0) - (b[0].metadata?.transcript_order ?? 0);
 		}
@@ -106,6 +106,23 @@ export function buildTranscriptSession(events: TranscriptEvent[], metadata: Sess
 			a.reduce((id, event) => Math.min(id, event.id), Infinity) - b.reduce((id, event) => Math.min(id, event.id), Infinity)
 		);
 	});
+	// Clocks can put a child a few milliseconds before its parent. Put every recorded
+	// parent first, so a parentless group never falls back onto its own descendant.
+	const groupOfKey = new Map<string, TranscriptEvent[]>();
+	for (const group of sorted) for (const event of group) groupOfKey.set(event.key, group);
+	const ordered: TranscriptEvent[][] = [];
+	const placed = new Set<TranscriptEvent[]>();
+	for (const start of sorted) {
+		const chain: TranscriptEvent[][] = [];
+		for (let group: TranscriptEvent[] | undefined = start; group && !placed.has(group); ) {
+			placed.add(group);
+			chain.push(group);
+			const first: TranscriptEvent = group.find((event) => event.parent_key || event.metadata?.transcript_parent) ?? group[0];
+			const native: string | undefined = first.metadata?.transcript_parent;
+			group = (native && groups.get(native)) || (first.parent_key ? groupOfKey.get(first.parent_key) : undefined);
+		}
+		ordered.push(...chain.reverse());
+	}
 	const entries: TranscriptEntry[] = [];
 	const eventEntries = new Map<string, string>();
 	const groupEntries = new Map<string, { first: TranscriptEntry; last: TranscriptEntry }>();
