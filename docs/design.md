@@ -355,6 +355,7 @@ The first API is versioned under `/api/v1`. Its full contract, with every parame
 | `GET /api/v1/search` | Search Events with explicit mode and filters |
 | `GET /api/v1/traces/{id}` | Read trace metadata and relationships |
 | `GET /api/v1/traces/{id}/events` | Page through a trace's Events and branches |
+| `GET /api/v1/traces/{id}/transcript` | Page through a trace's Events in the order the transcript page renders them |
 | `GET /api/v1/events/{id}/sources` | Inspect supporting Source Records and observations |
 | `GET /api/v1/cards` | List Traces, one row per Trace, with the same filters as search |
 | `PATCH /api/v1/traces/{id}` | Set or clear a trace's manual title |

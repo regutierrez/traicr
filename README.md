@@ -145,8 +145,10 @@ npm ci
 npm run build
 ```
 
-`npm run dev` serves the UI on port 5173 and proxies `/api`, login, and Go
-transcript JSON to `http://127.0.0.1:8080`. The Docker image builds the UI itself.
+`npm run dev` serves the UI on port 5173 and proxies `/api` and login to
+`http://127.0.0.1:8080`. The Docker image builds the UI itself.
+
+To find why a transcript renders badly or loads slowly, follow [AGENTS.md](./AGENTS.md).
 
 ### Git hooks
 

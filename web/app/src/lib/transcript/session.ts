@@ -1,13 +1,56 @@
-import { defaultLeafId } from './tree';
+import { defaultLeafId, getPath, leafCount } from './tree';
+import { visibleToolCalls } from './turns';
 import type {
+	AnomalyKind,
 	ContentBlock,
 	EventMetadata,
 	Message,
 	SessionMetadata,
+	TranscriptAnomaly,
 	TranscriptEntry,
 	TranscriptEvent,
 	TranscriptSession
 } from './types';
+
+const ANOMALY_SAMPLE = 20;
+
+// Collects anomalies by kind, keeping a count, a sample of event IDs, and how
+// often each detail (such as an event kind) occurred.
+function anomalyLog() {
+	const found = new Map<AnomalyKind, { eventIds: number[]; count: number; details: Map<string, number> }>();
+	return {
+		add(kind: AnomalyKind, eventId: number | undefined, detail = '') {
+			let item = found.get(kind);
+			if (!item) found.set(kind, (item = { eventIds: [], count: 0, details: new Map() }));
+			item.count += 1;
+			if (eventId !== undefined && item.eventIds.length < ANOMALY_SAMPLE) item.eventIds.push(eventId);
+			if (detail) item.details.set(detail, (item.details.get(detail) ?? 0) + 1);
+		},
+		list(describe: (kind: AnomalyKind, count: number, details: string) => string): TranscriptAnomaly[] {
+			return [...found].map(([kind, item]) => {
+				const details = [...item.details].map(([detail, count]) => `${detail} (${count})`).join(', ');
+				return { kind, message: describe(kind, item.count, details), eventIds: item.eventIds, count: item.count };
+			});
+		}
+	};
+}
+
+function describeAnomaly(kind: AnomalyKind, count: number, details: string, entries: number, branches: number) {
+	switch (kind) {
+		case 'unpaired_tool_result':
+			return `${count} tool results on the shown path have no call on that path and render as "Unpaired tool result"`;
+		case 'unrendered_event':
+			return `${count} events have no dedicated view and render as raw notes: ${details}`;
+		case 'tool_args_not_json':
+			return `${count} tool calls have arguments that are not a JSON object and show as { raw: text }: ${details}`;
+		case 'missing_parent':
+			return `${count} messages name a parent that is not loaded and follow the previous message instead`;
+		case 'parent_cycle':
+			return `${count} parent links formed a loop and were cut`;
+		case 'off_path':
+			return `${count} of ${entries} entries are not on the shown path (${branches} branches)`;
+	}
+}
 
 function nativeMessageKey(event: TranscriptEvent) {
 	if (event.metadata?.transcript_message) return event.metadata.transcript_message;
@@ -23,14 +66,15 @@ function blockIndex(event: TranscriptEvent) {
 	return match ? Number(match[1]) : event.id;
 }
 
-function parseArgs(text: string): Record<string, unknown> {
+// Returns null when the text is not a JSON object.
+function parseArgs(text: string): Record<string, unknown> | null {
 	let args: unknown;
 	try {
 		args = JSON.parse(text);
 	} catch {
-		args = { raw: text };
+		return null;
 	}
-	if (!args || typeof args !== 'object') return { raw: text };
+	if (!args || typeof args !== 'object') return null;
 	return args as Record<string, unknown>;
 }
 
@@ -66,6 +110,7 @@ export function buildTranscriptSession(events: TranscriptEvent[], metadata: Sess
 	const eventEntries = new Map<string, string>();
 	const groupEntries = new Map<string, { first: TranscriptEntry; last: TranscriptEntry }>();
 	const groupParents = new Map<string, { key?: string; nativeParent?: string; previous: string | null }>();
+	const anomalies = anomalyLog();
 	let previous: string | null = null;
 
 	for (const group of ordered) {
@@ -125,11 +170,13 @@ export function buildTranscriptSession(events: TranscriptEvent[], metadata: Sess
 				if (event.kind === 'reasoning') content.push({ type: 'thinking', thinking: text });
 				else if (event.kind === 'tool_call') {
 					const args = parseArgs(text);
+					// Calls without arguments record nothing or null; that is not a parsing problem.
+					if (!args && text.trim() && text.trim() !== 'null') anomalies.add('tool_args_not_json', event.id, event.tool || 'tool');
 					content.push({
 						type: 'toolCall',
 						id: event.call_id || event.key,
 						name: event.tool || 'tool',
-						arguments: args,
+						arguments: args ?? { raw: text },
 						details
 					});
 				} else if (event.kind === 'attachment') {
@@ -216,6 +263,10 @@ export function buildTranscriptSession(events: TranscriptEvent[], metadata: Sess
 						content: ''
 					});
 				} else {
+					// Pi's own custom_message records are meant to render as notes.
+					if (event.kind !== 'custom_message') {
+						anomalies.add('unrendered_event', event.id, event.role ? `${event.kind}/${event.role}` : event.kind);
+					}
 					entry = append({
 						id: String(event.id),
 						parentId: null,
@@ -255,7 +306,9 @@ export function buildTranscriptSession(events: TranscriptEvent[], metadata: Sess
 		const parent = groupParents.get(key);
 		if (!parent) continue;
 		const nativeParent = parent.nativeParent || (parent.key && nativeMessageKey({ key: parent.key } as TranscriptEvent));
-		group.first.parentId = (nativeParent && groupEntries.get(nativeParent)?.last.id) || (parent.key && eventEntries.get(parent.key)) || parent.previous;
+		const found = (nativeParent && groupEntries.get(nativeParent)?.last.id) || (parent.key && eventEntries.get(parent.key));
+		if (nativeParent && !found) anomalies.add('missing_parent', group.first.sources?.[0]?.eventId);
+		group.first.parentId = found || parent.previous;
 	}
 
 	const visited = new Set<string>();
@@ -265,6 +318,7 @@ export function buildTranscriptSession(events: TranscriptEvent[], metadata: Sess
 		let node: TranscriptEntry | undefined = entry;
 		while (node?.parentId && entryMap.has(node.parentId) && !visited.has(node.parentId)) {
 			if (seen.has(node.parentId)) {
+				anomalies.add('parent_cycle', node.sources?.[0]?.eventId);
 				node.parentId = null;
 				break;
 			}
@@ -273,6 +327,21 @@ export function buildTranscriptSession(events: TranscriptEvent[], metadata: Sess
 		}
 		for (const id of seen) visited.add(id);
 	}
+
+	const leafId = defaultLeafId(entries);
+	const path = getPath(entries, leafId);
+	const calls = visibleToolCalls(path);
+	for (const entry of path) {
+		const message = entry.message;
+		if (message?.role === 'toolResult' && !(message.toolCallId && calls.has(message.toolCallId))) {
+			anomalies.add('unpaired_tool_result', entry.sources?.[0]?.eventId);
+		}
+	}
+	const onPath = new Set(path.map((entry) => entry.id));
+	for (const entry of entries) {
+		if (!onPath.has(entry.id)) anomalies.add('off_path', entry.sources?.[0]?.eventId);
+	}
+	const branches = leafCount(entries);
 
 	return {
 		header: {
@@ -284,7 +353,8 @@ export function buildTranscriptSession(events: TranscriptEvent[], metadata: Sess
 			native
 		},
 		entries,
-		leafId: defaultLeafId(entries),
-		eventEntries
+		leafId,
+		eventEntries,
+		anomalies: anomalies.list((kind, count, details) => describeAnomaly(kind, count, details, entries.length, branches))
 	};
 }

@@ -1,6 +1,6 @@
 import { redirect } from '@sveltejs/kit';
 import { readJSON } from '$lib/api';
-import { loadTranscriptSession } from '$lib/transcript/load';
+import { loadTranscriptSession, reportLoad } from '$lib/transcript/load';
 import type { LoadedSession } from '$lib/transcript/types';
 import type { Trace } from '$lib/types';
 import type { PageLoad } from './$types';
@@ -31,6 +31,7 @@ export const load: PageLoad = async ({ fetch, params, url }) => {
 			},
 			fetch
 		);
+		void reportLoad(session);
 		return { trace: result.data, revision, session, loadError: '', error: '' };
 	} catch (error) {
 		return {

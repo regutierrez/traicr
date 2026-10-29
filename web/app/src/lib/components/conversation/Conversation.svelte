@@ -18,6 +18,7 @@
 	import type { Trace } from '$lib/types';
 	import AttachmentBlock from './AttachmentBlock.svelte';
 	import ChildCard from './ChildCard.svelte';
+	import DebugPanel from './DebugPanel.svelte';
 	import ExpandChip from './ExpandChip.svelte';
 	import Icon from './Icon.svelte';
 	import Markdown from './Markdown.svelte';
@@ -172,6 +173,9 @@
 	{:else}
 		{#if displayError}
 			<p class="status error" role="alert">{displayError}</p>
+		{/if}
+		{#if page.url.searchParams.get('debug') === '1'}
+			<DebugPanel {session} />
 		{/if}
 		{#snippet entryBlocks(entry: TranscriptEntry)}
 			{@const message = entry.message}

@@ -162,20 +162,51 @@ export type TranscriptHeader = {
 	native?: SessionNative;
 };
 
+// Places where the adapter could not show the records as the harness meant
+// them. Each kind names what the reader sees instead.
+export type AnomalyKind =
+	// A tool result on the shown path whose call is not on that path. It renders as "Unpaired tool result".
+	| 'unpaired_tool_result'
+	// An event kind or role the adapter does not render natively. It shows as a raw note.
+	| 'unrendered_event'
+	// Tool arguments that are not a JSON object. They show as { raw: text }.
+	| 'tool_args_not_json'
+	// A message names a parent that is not loaded. It is attached to the previous message instead.
+	| 'missing_parent'
+	// Parent links that loop. The loop is cut at this entry.
+	| 'parent_cycle'
+	// Entries that are not on the path the page shows first.
+	| 'off_path';
+
+export type TranscriptAnomaly = {
+	kind: AnomalyKind;
+	message: string;
+	// Up to ANOMALY_SAMPLE event IDs, so the records can be found on the Records page.
+	eventIds: number[];
+	count: number;
+};
+
 export type TranscriptSession = {
 	header: TranscriptHeader;
 	entries: TranscriptEntry[];
 	leafId?: string;
 	eventEntries: Map<string, string>;
+	anomalies: TranscriptAnomaly[];
+};
+
+export type LoadTiming = {
+	// Time spent waiting for and parsing transcript pages.
+	fetchMs: number;
+	// Time buildTranscriptSession took on the loaded events.
+	adapterMs: number;
+	pages: number;
+	events: number;
 };
 
 export type LoadedSession = TranscriptSession & {
-	hasMore: boolean;
-	status: string;
-	cursor: string;
 	events: TranscriptEvent[];
-	seenCursors: string[];
 	metadata: SessionMetadata;
+	timing: LoadTiming;
 };
 
 export type Turn = {

@@ -33,7 +33,7 @@ export default defineConfig({
 			'/logout': { target: server },
 			'/static': server,
 			'/login': pageUnless(isMutation),
-			'/traces': pageUnless((request) => isMutation(request) || /\/(events|transcript|resolve)$/.test(pathOf(request).pathname)),
+			'/traces': pageUnless((request) => isMutation(request) || /\/resolve$/.test(pathOf(request).pathname)),
 			'/revisions': pageUnless((request) => {
 				const url = pathOf(request);
 				return /\/(attachment|block)$/.test(url.pathname) || url.searchParams.get('download') === '1';

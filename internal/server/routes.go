@@ -57,6 +57,7 @@ func (app *application) apiRoutes() []apiRoute {
 		{"PATCH /api/v1/traces/{id}", app.updateTrace},
 		{"DELETE /api/v1/traces/{id}", app.deleteAPI},
 		{"GET /api/v1/traces/{id}/events", app.events},
+		{"GET /api/v1/traces/{id}/transcript", app.transcriptAPI},
 		{"GET /api/v1/events/{id}/sources", app.eventSources},
 		{"GET /api/v1/revisions/{id}/sources", app.revisionSources},
 		{"GET /api/v1/revisions/{id}/file", app.sourceFile},
@@ -95,9 +96,7 @@ func NewHTTPHandler(configuration config.ServerConfig, database *store.Store, lo
 	mux.HandleFunc("GET /login", app.loginPage)
 	mux.HandleFunc("POST /login", app.login)
 	mux.Handle("POST /logout", app.browser(app.logout))
-	// JSON the transcript page fetches. The page itself is the Svelte app.
-	mux.Handle("GET /traces/{id}/events", app.browser(app.events))
-	mux.Handle("GET /traces/{id}/transcript", app.browser(app.transcriptAPI))
+	mux.Handle("POST /traces/{id}/load-report", app.browser(app.loadReport))
 	mux.Handle("GET /traces/resolve", app.browser(app.resolveTrace))
 	mux.Handle("POST /traces/{id}/delete", app.browser(app.deletePage))
 	mux.Handle("GET /revisions/{id}/block", app.browser(app.sourceBlock))
@@ -113,6 +112,10 @@ func NewHTTPHandler(configuration config.ServerConfig, database *store.Store, lo
 	mux.HandleFunc("GET /api/", apiNotFound)
 	mux.Handle("GET /", app.browser(app.spa))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		started := time.Now()
+		recorder := &responseRecorder{ResponseWriter: w, status: http.StatusOK}
+		defer func() { app.logRequest(r, recorder, time.Since(started)) }()
+		w = recorder
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")
 		// Chrome needs same-origin referrers to send a non-null Origin on form POSTs.

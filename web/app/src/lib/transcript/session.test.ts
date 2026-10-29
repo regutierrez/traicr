@@ -93,7 +93,7 @@ test('Amp loads every page, keeps the revision and joins messages across pages',
 	globalThis.fetch = async (input) => {
 		calls += 1;
 		const url = String(input);
-		expect(url.startsWith('/traces/1/transcript?')).toBe(true);
+		expect(url.startsWith('/api/v1/traces/1/transcript?')).toBe(true);
 		expect(new URL(url, 'https://example.com').searchParams.get('revision')).toBe('7');
 		return {
 			ok: true,
@@ -115,7 +115,7 @@ test('Amp loads every page, keeps the revision and joins messages across pages',
 	};
 	const data = await loadTranscriptSession({ ...metadata, harness: 'amp', revision: '7' });
 	expect(calls).toBe(2);
-	expect(data.hasMore).toBe(false);
+	expect(data.timing).toMatchObject({ pages: 2, events: 2 });
 	expect(data.entries.length).toBe(1);
 	expect(data.entries[0].message?.content.length).toBe(2);
 });
@@ -234,6 +234,35 @@ test('cycles cannot trap the viewer parent traversal', () => {
 		metadata
 	);
 	expect(data.entries.some((entry) => entry.parentId === null)).toBe(true);
+	expect(data.anomalies.map((anomaly) => anomaly.kind)).toContain('parent_cycle');
+});
+
+test('reports what the page cannot show as recorded, and nothing else', () => {
+	const at = (minute: number) => `2026-09-06T10:${String(minute).padStart(2, '0')}:00Z`;
+	const data = buildTranscriptSession(
+		[
+			{ id: 1, key: 'message:u:0', kind: 'message', role: 'user', text: 'Fix it', timestamp: at(1) },
+			{ id: 2, key: 'tool_call:a:0', parent_key: 'message:u:0', kind: 'tool_call', role: 'assistant', tool: 'bash', call_id: 'call-1', text: 'ls -la', timestamp: at(2) },
+			{ id: 3, key: 'tool_result:r:0', parent_key: 'tool_call:a:0', kind: 'tool_result', call_id: 'call-1', text: 'ok', timestamp: at(3) },
+			{ id: 4, key: 'tool_result:s:0', parent_key: 'tool_result:r:0', kind: 'tool_result', call_id: 'call-gone', text: 'orphan', timestamp: at(4) },
+			{ id: 5, key: 'unknown:k:0', parent_key: 'tool_result:s:0', kind: 'unknown', role: 'assistant', text: '{}', timestamp: at(5) },
+			{ id: 6, key: 'message:v:0', parent_key: 'message:missing:0', kind: 'message', role: 'user', text: 'Again', timestamp: at(6) },
+			{ id: 7, key: 'tool_call:b:0', parent_key: 'message:v:0', kind: 'tool_call', role: 'assistant', tool: 'list', call_id: 'call-2', text: 'null', timestamp: at(7) },
+			{ id: 8, key: 'custom_message:c:0', parent_key: 'tool_call:b:0', kind: 'custom_message', text: 'note', timestamp: at(8) },
+			// An older sibling reply: a real fork, so it is off the newest path.
+			{ id: 9, key: 'message:w:0', parent_key: 'message:u:0', kind: 'message', role: 'assistant', text: 'Earlier try', timestamp: '2026-09-06T10:01:30Z' }
+		],
+		metadata
+	);
+	expect(Object.fromEntries(data.anomalies.map((anomaly) => [anomaly.kind, anomaly.eventIds]))).toEqual({
+		tool_args_not_json: [2],
+		unpaired_tool_result: [4],
+		unrendered_event: [5],
+		missing_parent: [6],
+		off_path: [9]
+	});
+	expect(data.anomalies.find((anomaly) => anomaly.kind === 'unrendered_event')?.message).toContain('unknown/assistant (1)');
+	expect(data.entries.find((entry) => entry.id === '2')?.message?.content[0]).toMatchObject({ arguments: { raw: 'ls -la' } });
 });
 
 test('Pi custom sidecars keep the extension name instead of the custom kind', () => {
@@ -270,7 +299,7 @@ test('loads every page rather than rendering only the first 200 records', async 
 	let calls = 0;
 	globalThis.fetch = async (input) => {
 		calls += 1;
-		expect(String(input).startsWith('/traces/1/events?')).toBe(true);
+		expect(String(input).startsWith('/api/v1/traces/1/events?')).toBe(true);
 		return {
 			ok: true,
 			headers: new Headers({ 'content-type': 'application/json' }),

@@ -4,65 +4,72 @@ import type { LoadedSession, SessionMetadata, TranscriptEvent } from './types';
 export const CHANGED_MESSAGE = 'Transcript changed while loading. Reload the page to read the updated history.';
 export const LOAD_FAILED_MESSAGE = 'Transcript load failed. Reload the page and sign in again.';
 
-function statusFor(events: TranscriptEvent[], metadata: SessionMetadata, hasMore: boolean) {
-	if (!events.length) {
-		return 'No normalized messages. Open Session details to inspect the retained source files.';
-	}
-	const view = metadata.revision ? 'Selected revision' : 'Merged archive';
-	const more = hasMore ? ' · More records available below' : ' · All records loaded';
-	return `${view} · ${events.length} records loaded${more}. Original records and parsing warnings are in Session details.`;
-}
-
-function assemble(events: TranscriptEvent[], metadata: SessionMetadata, cursor: string, seen: string[]): LoadedSession {
-	return {
-		...buildTranscriptSession(events, metadata),
-		hasMore: !!cursor,
-		status: statusFor(events, metadata, !!cursor),
-		cursor,
-		events,
-		seenCursors: seen,
-		metadata
-	};
-}
-
-export async function fetchTranscriptPage(
-	metadata: SessionMetadata,
-	cursor: string,
-	seen: string[],
-	fetcher: typeof fetch = fetch
-) {
+// Amp orders blocks by their native message order, which only the transcript
+// route applies. Other harnesses read Events in chronological order.
+export function transcriptPageURL(metadata: SessionMetadata, cursor: string) {
 	const route = metadata.harness === 'amp' ? 'transcript' : 'events';
-	const url = `/traces/${encodeURIComponent(metadata.traceId)}/${route}?limit=200&revision=${encodeURIComponent(metadata.revision || '')}&cursor=${encodeURIComponent(cursor)}`;
-	const response = await fetcher(url, { headers: { Accept: 'application/json' } });
+	const query = new URLSearchParams({ limit: '200', cursor });
+	if (metadata.harness === 'amp') query.set('revision', metadata.revision || '');
+	return `/api/v1/traces/${encodeURIComponent(metadata.traceId)}/${route}?${query}`;
+}
+
+async function fetchTranscriptPage(metadata: SessionMetadata, cursor: string, fetcher: typeof fetch) {
+	const response = await fetcher(transcriptPageURL(metadata, cursor), { headers: { Accept: 'application/json' } });
 	if (response.status === 409) throw new Error(CHANGED_MESSAGE);
 	if (!response.ok || !response.headers.get('content-type')?.includes('application/json')) {
 		throw new Error(LOAD_FAILED_MESSAGE);
 	}
 	const page = (await response.json()) as { events?: TranscriptEvent[]; next_cursor?: string };
-	const next = page.next_cursor || '';
-	if (next && seen.includes(next)) throw new Error('Transcript pagination returned a repeated cursor.');
-	return { events: page.events ?? [], cursor: next, seen: [...seen, next] };
+	return { events: page.events ?? [], cursor: page.next_cursor || '' };
 }
 
-export async function loadMoreSession(session: LoadedSession, fetcher: typeof fetch = fetch): Promise<LoadedSession> {
-	const page = await fetchTranscriptPage(session.metadata, session.cursor, session.seenCursors, fetcher);
-	return assemble([...session.events, ...page.events], session.metadata, page.cursor, page.seen);
-}
-
+// Loads every page, then builds the session once. Building after each page
+// made large sessions cost the square of their size.
 export async function loadTranscriptSession(
 	metadata: SessionMetadata,
 	fetcher: typeof fetch = fetch
 ): Promise<LoadedSession> {
-	let events: TranscriptEvent[] = [];
+	const events: TranscriptEvent[] = [];
+	const seen = new Set<string>();
 	let cursor = '';
-	let seen: string[] = [];
-	const first = await fetchTranscriptPage(metadata, cursor, seen, fetcher);
-	events = first.events;
-	cursor = first.cursor;
-	seen = first.seen;
-	let data = assemble(events, metadata, cursor, seen);
-	while (data.hasMore) {
-		data = await loadMoreSession(data, fetcher);
+	let pages = 0;
+	const fetchStarted = performance.now();
+	do {
+		const page = await fetchTranscriptPage(metadata, cursor, fetcher);
+		pages += 1;
+		events.push(...page.events);
+		cursor = page.cursor;
+		if (cursor && seen.has(cursor)) throw new Error('Transcript pagination returned a repeated cursor.');
+		seen.add(cursor);
+	} while (cursor);
+	const fetchMs = performance.now() - fetchStarted;
+	const adapterStarted = performance.now();
+	const session = buildTranscriptSession(events, metadata);
+	const adapterMs = performance.now() - adapterStarted;
+	return { ...session, events, metadata, timing: { fetchMs, adapterMs, pages, events: events.length } };
+}
+
+// Sends the load timing and adapter anomalies to the server log, where
+// GET /api/v1/logs returns them. Diagnostics must never break the page.
+export async function reportLoad(session: LoadedSession) {
+	const report = {
+		revision: session.metadata.revision || '',
+		fetch_ms: session.timing.fetchMs,
+		adapter_ms: session.timing.adapterMs,
+		pages: session.timing.pages,
+		events: session.timing.events,
+		anomalies: session.anomalies.map(({ kind, count, message, eventIds }) => ({ kind, count, message, event_ids: eventIds }))
+	};
+	try {
+		// window.fetch, not SvelteKit's load fetch, so the token matches the cookie this POST sends.
+		const csrf = await fetch('/api/v1/csrf', { credentials: 'same-origin', headers: { accept: 'application/json' } });
+		const token = ((await csrf.json()) as { csrf?: string }).csrf ?? '';
+		await fetch(`/traces/${encodeURIComponent(session.metadata.traceId)}/load-report`, {
+			method: 'post',
+			body: new URLSearchParams({ csrf: token, report: JSON.stringify(report) }),
+			credentials: 'same-origin'
+		});
+	} catch {
+		// The report is diagnostics only.
 	}
-	return data;
 }

@@ -3,7 +3,7 @@
   "info": {
     "title": "Traicr API",
     "version": "1",
-    "description": "The Trace Archive API. Traicr stores one person's AI coding Traces collected from several Source Machines. Use it to find, read, rename, and delete Traces, check imports, and read the server's recent logs.\n\n## Auth\nSend `Authorization: Bearer <TRAICR_ADMIN_TOKEN>` on every request. Without a valid token the server answers `401`, except for a `GET` or `HEAD` that carries a valid browser session cookie. This document itself (`GET /api/v1/openapi.json`) needs no token.\n\n## Pagination\nThese operations page: `listTraces`, `searchEvents`, `listTraceEvents`, `listImports`, `listLogs`. They take `limit` (1-200, default 50) and an opaque `cursor`. A response includes `next_cursor` only when another page exists; pass it back unchanged as `cursor`. A cursor keeps its snapshot: rows added after the first page do not appear in later pages. `listMachines`, `listEventSources`, and `listRevisionSources` return plain arrays.\n\n## Errors\nEvery error response has the shape `{\"api_version\":1,\"_tag\":\"...\",\"message\":\"...\",\"error\":{\"code\":\"...\",\"message\":\"...\"}}`. `error.code` (repeated as `_tag`) is stable and meant for programs; `error.message` (repeated as `message`) is for people. Each operation lists the codes it can return. `POST /api/v1/imports` is the exception after its upload is received: it answers `200` and reports failures inside its NDJSON stream.\n\n## Dates\n`after` and `before` accept `YYYY-MM-DD` (a whole UTC day, inclusive) or an RFC 3339 timestamp.\n\n## Words\nA **Trace** is one native harness session. An **Event** is a searchable message, tool call, tool result, or model change derived from a Trace. A **Source Record** is the lossless harness-specific data an Event came from. A **Revision** is one collected state of a Trace. An **Import** processes one uploaded Trace ZIP. A **Source Machine** is a computer the Traces were collected on. A **Harness** is the coding tool that produced the Trace, such as `amp`, `claude-code`, `codex`, `cursor`, or `pi`."
+    "description": "The Trace Archive API. Traicr stores one person's AI coding Traces collected from several Source Machines. Use it to find, read, rename, and delete Traces, check imports, and read the server's recent logs.\n\n## Auth\nSend `Authorization: Bearer <TRAICR_ADMIN_TOKEN>` on every request. Without a valid token the server answers `401`, except for a `GET` or `HEAD` that carries a valid browser session cookie. This document itself (`GET /api/v1/openapi.json`) needs no token.\n\n## Pagination\nThese operations page: `listTraces`, `searchEvents`, `listTraceEvents`, `listTraceTranscript`, `listImports`, `listLogs`. They take `limit` (1-200, default 50) and an opaque `cursor`. A response includes `next_cursor` only when another page exists; pass it back unchanged as `cursor`. A cursor keeps its snapshot: rows added after the first page do not appear in later pages. `listMachines`, `listEventSources`, and `listRevisionSources` return plain arrays.\n\n## Errors\nEvery error response has the shape `{\"api_version\":1,\"_tag\":\"...\",\"message\":\"...\",\"error\":{\"code\":\"...\",\"message\":\"...\"}}`. `error.code` (repeated as `_tag`) is stable and meant for programs; `error.message` (repeated as `message`) is for people. Each operation lists the codes it can return. `POST /api/v1/imports` is the exception after its upload is received: it answers `200` and reports failures inside its NDJSON stream.\n\n## Dates\n`after` and `before` accept `YYYY-MM-DD` (a whole UTC day, inclusive) or an RFC 3339 timestamp.\n\n## Words\nA **Trace** is one native harness session. An **Event** is a searchable message, tool call, tool result, or model change derived from a Trace. A **Source Record** is the lossless harness-specific data an Event came from. A **Revision** is one collected state of a Trace. An **Import** processes one uploaded Trace ZIP. A **Source Machine** is a computer the Traces were collected on. A **Harness** is the coding tool that produced the Trace, such as `amp`, `claude-code`, `codex`, `cursor`, or `pi`."
   },
   "servers": [
     {
@@ -526,6 +526,117 @@
             "$ref": "#/components/parameters/limit"
           }
         ]
+      }
+    },
+    "/api/v1/traces/{id}/transcript": {
+      "get": {
+        "tags": [
+          "traces"
+        ],
+        "operationId": "listTraceTranscript",
+        "summary": "Read a Trace's transcript",
+        "description": "Page through a Trace's Events in the order the web transcript renders them. For Amp Traces this is Amp's own message and block order, which can differ from listTraceEvents' time order; other harnesses fall back to time order. Each Event carries `revision_id` (the Revision whose observation is shown) and `aliases` (older keys and IDs that link to it). The web UI reads Amp transcripts from here and other harnesses from listTraceEvents; `npm run inspect-trace` in `web/app` turns either into the turns the UI shows.\n\nUnlike other cursors, a transcript cursor does not keep a snapshot. If any Revision of the Trace is imported or normalized again between pages, the next page answers `409 transcript_changed`; start again without a cursor.",
+        "security": [
+          {
+            "adminToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/id"
+          },
+          {
+            "name": "revision",
+            "in": "query",
+            "description": "Show one Revision's observations instead of the merged archive. Omit or pass `0` for the merged view.",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0
+            }
+          },
+          {
+            "$ref": "#/components/parameters/cursor"
+          },
+          {
+            "$ref": "#/components/parameters/limit"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of Events in transcript order.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request. Codes: `invalid_id`, `invalid_limit`, `invalid_revision`, `invalid_query`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/InvalidIdError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/InvalidLimitError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/InvalidRevisionError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/InvalidQueryError"
+                    }
+                  ]
+                },
+                "example": {
+                  "api_version": 1,
+                  "_tag": "invalid_query",
+                  "message": "invalid search query: invalid transcript cursor",
+                  "error": {
+                    "code": "invalid_query",
+                    "message": "invalid search query: invalid transcript cursor"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "408": {
+            "$ref": "#/components/responses/Timeout"
+          },
+          "409": {
+            "description": "The transcript changed since the first page. Codes: `transcript_changed`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TranscriptChangedError"
+                },
+                "example": {
+                  "api_version": 1,
+                  "_tag": "transcript_changed",
+                  "message": "transcript changed; reload the page to continue",
+                  "error": {
+                    "code": "transcript_changed",
+                    "message": "transcript changed; reload the page to continue"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        }
       }
     },
     "/api/v1/events/{id}/sources": {
@@ -2231,6 +2342,34 @@
           }
         }
       },
+      "InvalidRevisionError": {
+        "type": "object",
+        "description": "Error `invalid_revision`.",
+        "required": [
+          "api_version",
+          "_tag",
+          "message",
+          "error"
+        ],
+        "properties": {
+          "api_version": {
+            "type": "integer",
+            "const": 1
+          },
+          "_tag": {
+            "type": "string",
+            "const": "invalid_revision",
+            "description": "The error code, repeated from `error.code`."
+          },
+          "message": {
+            "type": "string",
+            "description": "The message, repeated from `error.message`."
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorDetail"
+          }
+        }
+      },
       "InvalidTitleError": {
         "type": "object",
         "description": "Error `invalid_title`.",
@@ -2276,6 +2415,34 @@
           "_tag": {
             "type": "string",
             "const": "not_found",
+            "description": "The error code, repeated from `error.code`."
+          },
+          "message": {
+            "type": "string",
+            "description": "The message, repeated from `error.message`."
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorDetail"
+          }
+        }
+      },
+      "TranscriptChangedError": {
+        "type": "object",
+        "description": "Error `transcript_changed`.",
+        "required": [
+          "api_version",
+          "_tag",
+          "message",
+          "error"
+        ],
+        "properties": {
+          "api_version": {
+            "type": "integer",
+            "const": 1
+          },
+          "_tag": {
+            "type": "string",
+            "const": "transcript_changed",
             "description": "The error code, repeated from `error.code`."
           },
           "message": {

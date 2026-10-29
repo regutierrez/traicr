@@ -41,7 +41,7 @@ func TestAmpAgentFixturePairsToolsAndPreservesThreadOrigin(t *testing.T) {
 		handler.ServeHTTP(w, r)
 		return w
 	}
-	response := get("/traces/1/transcript")
+	response := get("/api/v1/traces/1/transcript")
 	var page store.EventPage
 	if err := json.Unmarshal(response.Body.Bytes(), &page); err != nil || len(page.Events) != 16 {
 		t.Fatalf("transcript: %s %v", response.Body, err)
@@ -129,7 +129,7 @@ func TestAmpDownloadedImagesSurviveArchiveImport(t *testing.T) {
 		handler.ServeHTTP(w, r)
 		return w
 	}
-	page := get("/traces/1/transcript?revision=1")
+	page := get("/api/v1/traces/1/transcript?revision=1")
 	if !strings.Contains(page.Body.String(), `"archived_path":"`+imagePath+`"`) || !strings.Contains(page.Body.String(), `"path":"screenshot.png"`) {
 		t.Fatalf("archived image missing from transcript: %s", page.Body)
 	}
@@ -152,7 +152,7 @@ func TestAmpDownloadedImagesSurviveArchiveImport(t *testing.T) {
 		t.Fatal("original export changed")
 	}
 	var merged, selected store.EventPage
-	for route, page := range map[string]*store.EventPage{"/traces/1/transcript?limit=1": &merged, "/traces/1/transcript?revision=1&limit=1": &selected} {
+	for route, page := range map[string]*store.EventPage{"/api/v1/traces/1/transcript?limit=1": &merged, "/api/v1/traces/1/transcript?revision=1&limit=1": &selected} {
 		response := get(route)
 		if err := json.Unmarshal(response.Body.Bytes(), page); err != nil || page.NextCursor == "" {
 			t.Fatalf("first page: %s %v", response.Body, err)
@@ -173,10 +173,10 @@ func TestAmpDownloadedImagesSurviveArchiveImport(t *testing.T) {
 	if response := request(handler, "POST", "/api/v1/imports", bytes.NewReader(data), adminToken); response.Code != 200 {
 		t.Fatalf("import large image: %s", response.Body)
 	}
-	if response := get("/traces/1/transcript?cursor=" + merged.NextCursor); response.Code != http.StatusConflict || !strings.Contains(response.Body.String(), "transcript_changed") {
+	if response := get("/api/v1/traces/1/transcript?cursor=" + merged.NextCursor); response.Code != http.StatusConflict || !strings.Contains(response.Body.String(), "transcript_changed") {
 		t.Fatalf("stale transcript cursor: %d %s", response.Code, response.Body)
 	}
-	response := get("/traces/1/transcript?revision=1&cursor=" + selected.NextCursor)
+	response := get("/api/v1/traces/1/transcript?revision=1&cursor=" + selected.NextCursor)
 	var last store.EventPage
 	if err := json.Unmarshal(response.Body.Bytes(), &last); err != nil || response.Code != 200 || len(last.Events) != 1 || last.Events[0].RevisionID != 1 || last.NextCursor != "" {
 		t.Fatalf("unchanged selected revision invalidated: %s %v", response.Body, err)
@@ -229,11 +229,11 @@ func TestAmpImagesAndNumericIdentityThroughRepeatedImports(t *testing.T) {
 		return w
 	}
 	var page store.EventPage
-	response := get("/traces/1/transcript")
+	response := get("/api/v1/traces/1/transcript")
 	if err := json.Unmarshal(response.Body.Bytes(), &page); err != nil || len(page.Events) != 3 || page.Events[0].Text != "final" {
 		t.Fatalf("stale or duplicate numeric message: %s %v", response.Body, err)
 	}
-	response = get("/traces/1/transcript?revision=1")
+	response = get("/api/v1/traces/1/transcript?revision=1")
 	if err := json.Unmarshal(response.Body.Bytes(), &page); err != nil || page.Events[0].Text != "draft" {
 		t.Fatalf("revision lost: %s %v", response.Body, err)
 	}
@@ -268,13 +268,16 @@ func TestAmpTranscriptRevisionAndSourceInspection(t *testing.T) {
 		handler.ServeHTTP(w, r)
 		return w
 	}
-	for _, path := range []string{"/traces/1/transcript", "/revisions/1/block?pointer=/messages/5/content/0", "/revisions/1/attachment?pointer=/messages/0/content/1", "/traces/resolve?native_id=T-amp-rich-fixture"} {
+	if response := request(handler, "GET", "/api/v1/traces/1/transcript", nil, ""); response.Code != http.StatusUnauthorized {
+		t.Fatalf("unprotected transcript: %d", response.Code)
+	}
+	for _, path := range []string{"/revisions/1/block?pointer=/messages/5/content/0", "/revisions/1/attachment?pointer=/messages/0/content/1", "/traces/resolve?native_id=T-amp-rich-fixture"} {
 		if response := request(handler, "GET", path, nil, ""); response.Code != http.StatusSeeOther {
 			t.Fatalf("unprotected %s: %d", path, response.Code)
 		}
 	}
 	var page store.EventPage
-	response := get("/traces/1/transcript?revision=1")
+	response := get("/api/v1/traces/1/transcript?revision=1")
 	if err := json.Unmarshal(response.Body.Bytes(), &page); err != nil || len(page.Events) < 16 || page.Events[0].Kind != "session_info" {
 		t.Fatalf("transcript: %s %v", response.Body, err)
 	}
@@ -298,7 +301,7 @@ func TestAmpTranscriptRevisionAndSourceInspection(t *testing.T) {
 	if response := get("/traces/resolve?native_id=T-amp-rich-fixture"); response.Code != http.StatusSeeOther || response.Header().Get("Location") != "/traces/1" {
 		t.Fatalf("related trace: %d %s", response.Code, response.Header())
 	}
-	if response := get("/traces/1/transcript?revision=999"); response.Code != 404 {
+	if response := get("/api/v1/traces/1/transcript?revision=999"); response.Code != 404 {
 		t.Fatalf("unrelated revision: %d", response.Code)
 	}
 }
@@ -363,15 +366,15 @@ func TestTranscriptHomeAndBrowserEventPagination(t *testing.T) {
 	if !strings.Contains(csp, "script-src 'self'") || strings.Contains(csp, "script-src 'unsafe-inline'") {
 		t.Fatal("viewer weakened CSP")
 	}
-	if response := request(handler, "GET", "/traces/1/events", nil, ""); response.Code != http.StatusSeeOther {
+	if response := request(handler, "GET", "/api/v1/traces/1/events", nil, ""); response.Code != http.StatusUnauthorized {
 		t.Fatalf("unauthenticated event access: %d", response.Code)
 	}
-	first := browserGet("/traces/1/events?limit=200")
+	first := browserGet("/api/v1/traces/1/events?limit=200")
 	var page store.EventPage
 	if err := json.Unmarshal(first.Body.Bytes(), &page); err != nil || len(page.Events) != 200 || page.NextCursor == "" {
 		t.Fatalf("first event page: %d %v", len(page.Events), err)
 	}
-	second := browserGet("/traces/1/events?limit=200&cursor=" + page.NextCursor)
+	second := browserGet("/api/v1/traces/1/events?limit=200&cursor=" + page.NextCursor)
 	page = store.EventPage{}
 	if err := json.Unmarshal(second.Body.Bytes(), &page); err != nil || len(page.Events) != 5 || page.NextCursor != "" {
 		t.Fatalf("second event page: %d %v", len(page.Events), err)

@@ -14,7 +14,9 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -215,6 +217,49 @@ func TestImportReportsDeriveCompleteFromTheStoredReport(t *testing.T) {
 	}
 }
 
+type logRecord struct {
+	Level   string         `json:"level"`
+	Message string         `json:"message"`
+	Attrs   map[string]any `json:"attrs"`
+}
+
+type logPage struct {
+	Records []logRecord `json:"records"`
+}
+
+func TestBrowserLoadReportReachesLogs(t *testing.T) {
+	handler, database, _ := archiveHandler(t, config.ServerConfig{}, slog.New(slog.NewJSONHandler(io.Discard, nil)))
+	report, err := importOne(context.Background(), database, "laptop", "loaded", false, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	traceID := report.Traces[0].TraceID
+	cookie, csrf := login(t, handler, false)
+	body := `{"revision":"","fetch_ms":1500.7,"adapter_ms":20,"pages":3,"events":450,"anomalies":[{"kind":"unpaired_tool_result","count":2,"message":"2 tool results have no call","event_ids":[7,9]}]}`
+	if response := submit(handler, "/traces/"+itoa(traceID)+"/load-report", url.Values{"csrf": {csrf}, "report": {body}}, cookie, "http://example.com"); response.Code != http.StatusNoContent {
+		t.Fatalf("load report: %d %s", response.Code, response.Body)
+	}
+	if response := submit(handler, "/traces/"+itoa(traceID)+"/load-report", url.Values{"report": {body}}, cookie, "http://example.com"); response.Code != http.StatusForbidden {
+		t.Fatalf("load report without CSRF: %d", response.Code)
+	}
+	var page logPage
+	decode(t, request(handler, http.MethodGet, "/api/v1/logs?level=warn", nil, adminToken), &page)
+	found := map[string]map[string]any{}
+	for _, record := range page.Records {
+		if record.Attrs["trace_id"] == float64(traceID) {
+			found[record.Message] = record.Attrs
+		}
+	}
+	// 1.5 s of loading is slow, so the timing is a warning too.
+	load, anomaly := found["transcript load"], found["transcript anomaly"]
+	if load["fetch_ms"] != float64(1500) || load["pages"] != float64(3) || load["events"] != float64(450) {
+		t.Fatalf("load record = %+v", load)
+	}
+	if anomaly["kind"] != "unpaired_tool_result" || anomaly["count"] != float64(2) || anomaly["event_ids"] != "[7 9]" {
+		t.Fatalf("anomaly record = %+v", anomaly)
+	}
+}
+
 func TestLogsRecordRejectedUploadsAndFilterByLevel(t *testing.T) {
 	var stdout bytes.Buffer
 	handler, database, _ := archiveHandler(t, config.ServerConfig{}, slog.New(slog.NewJSONHandler(&stdout, nil)))
@@ -230,14 +275,20 @@ func TestLogsRecordRejectedUploadsAndFilterByLevel(t *testing.T) {
 	if upload.Code != http.StatusOK || !strings.Contains(upload.Body.String(), `"phase":"failed"`) {
 		t.Fatalf("upload: %d %s", upload.Code, upload.Body)
 	}
-	var page struct {
-		Records []struct {
-			Level   string         `json:"level"`
-			Message string         `json:"message"`
-			Attrs   map[string]any `json:"attrs"`
-		} `json:"records"`
-	}
+	var page logPage
 	decode(t, request(handler, http.MethodGet, "/api/v1/logs", nil, adminToken), &page)
+	// Every request is logged; set those records aside to check the others' order.
+	var requests []map[string]any
+	page.Records = slices.DeleteFunc(page.Records, func(record logRecord) bool {
+		if record.Message == "request" {
+			requests = append(requests, record.Attrs)
+		}
+		return record.Message == "request"
+	})
+	if len(requests) != 2 || requests[0]["route"] != "POST /api/v1/imports" || requests[1]["route"] != "PATCH /api/v1/traces/{id}" ||
+		requests[1]["status"] != float64(200) || requests[1]["trace_id"] != float64(report.Traces[0].TraceID) || requests[1]["bytes"].(float64) <= 0 {
+		t.Fatalf("request records = %+v", requests)
+	}
 	if len(page.Records) < 2 || page.Records[0].Message != "import rejected" || page.Records[0].Level != "warn" || page.Records[0].Attrs["error"] != "ZIP end directory missing" || page.Records[1].Message != "trace title changed" {
 		t.Fatalf("newest records = %+v", page.Records)
 	}
@@ -308,6 +359,7 @@ func TestResponsesMatchThePublishedSchemas(t *testing.T) {
 		{"/api/v1/search", "get", "/api/v1/search?q=hello"},
 		{"/api/v1/traces/{id}", "get", "/api/v1/traces/" + traceID},
 		{"/api/v1/traces/{id}/events", "get", "/api/v1/traces/" + traceID + "/events"},
+		{"/api/v1/traces/{id}/transcript", "get", "/api/v1/traces/" + traceID + "/transcript"},
 		{"/api/v1/events/{id}/sources", "get", "/api/v1/events/" + itoa(events.Events[0].ID) + "/sources"},
 		{"/api/v1/imports", "get", "/api/v1/imports"},
 		{"/api/v1/imports/{id}", "get", "/api/v1/imports/" + itoa(interrupted.ID)},
@@ -329,6 +381,7 @@ func TestResponsesMatchThePublishedSchemas(t *testing.T) {
 		{"/api/v1/traces/{id}", "get", "/api/v1/traces/0", "", adminToken},
 		{"/api/v1/traces/{id}", "patch", "/api/v1/traces/" + traceID, `{"other":1}`, adminToken},
 		{"/api/v1/cards", "get", "/api/v1/cards?after=not-a-date", "", adminToken},
+		{"/api/v1/traces/{id}/transcript", "get", "/api/v1/traces/" + traceID + "/transcript?revision=-1", "", adminToken},
 		{"/api/v1/logs", "get", "/api/v1/logs?cursor=stale", "", adminToken},
 		{"/api/v1/status", "get", "/api/v1/status", "", ""},
 	} {
