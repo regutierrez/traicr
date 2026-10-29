@@ -255,22 +255,20 @@ func (s *Store) Imports(ctx context.Context, encodedCursor string, limit int) (I
 		return ImportPage{}, err
 	}
 	defer rows.Close()
-	page := ImportPage{Imports: []domain.ImportReport{}}
+	page := ImportPage{Imports: []ImportSummary{}}
 	for rows.Next() {
-		var report domain.ImportReport
+		var report ImportSummary
 		var encoded []byte
 		if err = rows.Scan(&report.ID, &report.CreatedAt, &report.Machine.ID, &report.Machine.Hostname, &report.Machine.OS, &report.Machine.Arch, &encoded); err != nil {
 			return ImportPage{}, err
 		}
 		if len(encoded) > 0 {
+			// The stored report's "traces" has no field here, so the decoder skips it.
 			if err = json.Unmarshal(encoded, &report); err != nil {
 				return ImportPage{}, err
 			}
 		}
 		report.Complete = len(encoded) > 0
-		if report.Traces == nil {
-			report.Traces = []domain.TraceOutcome{} // an unfinished import has no outcomes yet
-		}
 		page.Imports = append(page.Imports, report)
 	}
 	if len(page.Imports) > limit {

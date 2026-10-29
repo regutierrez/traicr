@@ -70,7 +70,7 @@ The `traicr` CLI subcommands are a later consumer of the same contract and are n
 | events | `listEventSources` | `GET /api/v1/events/{id}/sources` | |
 | revisions | `listRevisionSources` | `GET /api/v1/revisions/{id}/sources` | |
 | revisions | `getRevisionFile` | `GET /api/v1/revisions/{id}/file` | `path` is required. `preview=1` returns JSON (first 1 MiB). Otherwise returns the original bytes. |
-| imports | `listImports` | `GET /api/v1/imports` | |
+| imports | `listImports` | `GET /api/v1/imports` | Counts only; per-Trace outcomes are in `getImport`. |
 | imports | `getImport` | `GET /api/v1/imports/{id}` | |
 | imports | `uploadTraceZip` | `POST /api/v1/imports` | `application/zip` in, NDJSON progress out. |
 | machines | `listMachines` | `GET /api/v1/machines` | `last_seen` is the start time of the machine's latest import. |

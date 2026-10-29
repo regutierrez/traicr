@@ -819,7 +819,7 @@
         ],
         "operationId": "listImports",
         "summary": "List imports",
-        "description": "List Import Reports, newest first.",
+        "description": "List Imports, newest first, with their counts. Per-Trace outcomes are left out because they run to megabytes per Import; read them with `getImport`.",
         "security": [
           {
             "adminToken": []
@@ -1873,13 +1873,64 @@
           "traces"
         ]
       },
+      "ImportSummary": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "source_machine": {
+            "$ref": "#/components/schemas/Machine"
+          },
+          "imported": {
+            "type": "integer"
+          },
+          "updated": {
+            "type": "integer"
+          },
+          "unchanged": {
+            "type": "integer"
+          },
+          "partially_parsed": {
+            "type": "integer"
+          },
+          "unsupported": {
+            "type": "integer"
+          },
+          "failed": {
+            "type": "integer",
+            "description": "Traces in this import that failed."
+          },
+          "complete": {
+            "type": "boolean",
+            "description": "False while the import runs or after it was interrupted; its counts are then not final."
+          }
+        },
+        "required": [
+          "id",
+          "created_at",
+          "source_machine",
+          "imported",
+          "updated",
+          "unchanged",
+          "partially_parsed",
+          "unsupported",
+          "failed",
+          "complete"
+        ],
+        "description": "An Import's counts without its per-Trace outcomes. Read one Import with `getImport` for those."
+      },
       "ImportPage": {
         "type": "object",
         "properties": {
           "imports": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/ImportReport"
+              "$ref": "#/components/schemas/ImportSummary"
             }
           },
           "next_cursor": {

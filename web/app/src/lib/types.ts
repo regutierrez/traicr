@@ -39,7 +39,8 @@ export type ImportReport = {
 };
 
 export type ImportPage = {
-	imports: ImportReport[];
+	// The list leaves out per-Trace outcomes; /api/v1/imports/{id} has them.
+	imports: Omit<ImportReport, 'traces'>[];
 	next_cursor?: string;
 };
 

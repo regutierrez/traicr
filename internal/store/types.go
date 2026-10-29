@@ -122,8 +122,24 @@ type SourceObject struct {
 }
 
 type ImportPage struct {
-	Imports    []domain.ImportReport `json:"imports"`
-	NextCursor string                `json:"next_cursor,omitempty"`
+	Imports    []ImportSummary `json:"imports"`
+	NextCursor string          `json:"next_cursor,omitempty"`
+}
+
+// ImportSummary is an Import's counts without its per-Trace outcomes. Those run to
+// megabytes per Import, so only GET /api/v1/imports/{id} returns them.
+type ImportSummary struct {
+	ID          int64          `json:"id"`
+	CreatedAt   string         `json:"created_at"`
+	Machine     domain.Machine `json:"source_machine"`
+	Imported    int            `json:"imported"`
+	Updated     int            `json:"updated"`
+	Unchanged   int            `json:"unchanged"`
+	Partial     int            `json:"partially_parsed"`
+	Unsupported int            `json:"unsupported"`
+	Failed      int            `json:"failed"`
+	// Complete is false while an import runs or after it was interrupted.
+	Complete bool `json:"complete"`
 }
 
 type Machine struct {
