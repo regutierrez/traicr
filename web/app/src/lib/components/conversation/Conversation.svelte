@@ -78,6 +78,21 @@
 	let results = $derived(toolResults(path));
 	let filtered = $derived(path.filter((entry) => entryMatchesFilter(entry, filter)));
 	let rows = $derived(streamRows(filtered));
+	// Big traces have thousands of rows. Painting them all in one frame blocks the
+	// page for seconds, so the first rows paint at once and the rest follow in
+	// chunks on later frames.
+	const FIRST_ROWS = 150;
+	const MORE_ROWS = 300;
+	let grown = $state.raw<{ rows: typeof rows; count: number } | null>(null);
+	let shownCount = $derived(grown?.rows === rows ? grown.count : FIRST_ROWS);
+	let shownRows = $derived(rows.length > shownCount ? rows.slice(0, shownCount) : rows);
+	$effect(() => {
+		const current = rows;
+		const count = shownCount;
+		if (count >= current.length) return;
+		const frame = requestAnimationFrame(() => (grown = { rows: current, count: count + MORE_ROWS }));
+		return () => cancelAnimationFrame(frame);
+	});
 	let children = $derived(trace.children ?? []);
 	let leftover = $derived(leftoverCards(path, results, children));
 	let counts = $derived(session ? streamCounts(path, session.entries) : streamCounts([]));
@@ -292,7 +307,7 @@
 			/>
 			{#key sessionKey}
 				<div class="stream">
-					{#each rows as row (row.id)}
+					{#each shownRows as row (row.id)}
 						<section class={['row', `is-${row.chrome}`, row.entries.some((entry) => entry.id === targetId) && 'is-target']}>
 							{#if row.chrome !== 'quiet'}
 								<div class="avatar" aria-hidden="true">
@@ -365,6 +380,9 @@
 		padding: 0 0 0 40px;
 		font-size: 14.5px;
 		line-height: 1.6;
+		/* Off-screen rows skip layout and paint until they scroll near view. */
+		content-visibility: auto;
+		contain-intrinsic-size: auto 3rem;
 	}
 
 	.row.is-user {
@@ -377,6 +395,11 @@
 
 	.row.is-quiet {
 		margin-block: 0;
+	}
+
+	/* Containment clips paint at the row edge; the one target row shows its full outline. */
+	.row.is-target {
+		content-visibility: visible;
 	}
 
 	.row.is-target .turn-body {
