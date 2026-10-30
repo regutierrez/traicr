@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/fs"
+	"slices"
 
 	"github.com/regutierrez/traicr/internal/amp"
 	"github.com/regutierrez/traicr/internal/domain"
@@ -51,17 +52,30 @@ func normalizeAmp(ctx context.Context, sourceFS fs.FS, files []domain.File) (dom
 			}
 		}
 	}
+	// Amp's numeric messageId is the message's position, so it moves when messages are
+	// added or removed earlier in the thread. protocolMessageID stays with the message.
+	ids := make(map[string]string, len(messages))
+	for _, message := range messages {
+		if position := numberString(firstValue(message, "id", "messageId", "message_id")); position != "" {
+			ids[position] = ampMessageID(message)
+		}
+	}
+	seenKeys := make(map[string]bool)
 	for messageIndex, message := range messages {
 		if err := ctx.Err(); err != nil {
 			return domain.Normalization{}, err
 		}
-		id := numberString(firstValue(message, "id", "messageId", "message_id"))
+		position := numberString(firstValue(message, "id", "messageId", "message_id"))
+		id := ampMessageID(message)
 		role := firstString(message, "role", "sender")
 		model := firstString(message, "model", "modelId", "model_id")
 		if model == "" {
 			model = stringValue(object(message["usage"])["model"])
 		}
 		parent := numberString(firstValue(message, "parentId", "parent_id"))
+		if stable, ok := ids[parent]; ok {
+			parent = stable
+		}
 		messageTimestamp := timestamp(firstValue(message, "timestamp", "createdAt"))
 		if messageTimestamp == "" {
 			messageTimestamp = timestamp(object(message["meta"])["sentAt"])
@@ -82,6 +96,9 @@ func normalizeAmp(ctx context.Context, sourceFS fs.FS, files []domain.File) (dom
 		if parent != "" {
 			parentMessageKey = nativeKey("amp-message", parent, nil)
 		}
+		// Later exports can drop a message's thinking blocks, so blocks are numbered
+		// per kind rather than by position.
+		ordinals := make(map[string]int)
 		for index, raw := range blocks {
 			if err := ctx.Err(); err != nil {
 				return domain.Normalization{}, err
@@ -154,17 +171,25 @@ func normalizeAmp(ctx context.Context, sourceFS fs.FS, files []domain.File) (dom
 				}
 			}
 			blockID := stringValue(block["id"])
-			if blockID == "" {
-				blockID = indexedID(id, index)
+			if blockID == "" && event.Kind == "tool_result" {
+				blockID = event.CallID
 			}
+			if blockID == "" || seenKeys[nativeKey(event.Kind, blockID, nil)] {
+				blockID = indexedID(id, ordinals[event.Kind])
+			}
+			ordinals[event.Kind]++
 			event.Key = nativeKey(event.Kind, blockID, map[string]any{"message": message, "block": block})
-			legacyID := stringValue(block["id"])
-			if legacyID == "" {
-				legacyID = indexedID(firstString(message, "id", "messageId", "message_id"), index)
-			}
-			legacyKey := nativeKey(event.Kind, legacyID, map[string]any{"message": message, "block": block})
-			if legacyKey != event.Key {
-				event.LegacyKeys = []string{legacyKey}
+			seenKeys[event.Key] = true
+			// Keys from earlier normalizer versions stay as aliases, so old links still open.
+			stable := map[string]any{"message": message, "block": block}
+			for _, legacyID := range []string{
+				firstNonEmpty(stringValue(block["id"]), indexedID(position, index)),
+				firstNonEmpty(stringValue(block["id"]), indexedID(firstString(message, "id", "messageId", "message_id"), index)),
+			} {
+				legacyKey := nativeKey(event.Kind, legacyID, stable)
+				if legacyKey != event.Key && !slices.Contains(event.LegacyKeys, legacyKey) {
+					event.LegacyKeys = append(event.LegacyKeys, legacyKey)
+				}
 			}
 			event.Metadata, _ = json.Marshal(metadata)
 			events = append(events, event)
@@ -174,6 +199,22 @@ func normalizeAmp(ctx context.Context, sourceFS fs.FS, files []domain.File) (dom
 		warnings = append(warnings, warning("unsupported_version", "Amp export has no supported messages"))
 	}
 	return complete(events, warnings), nil
+}
+
+func ampMessageID(message map[string]any) string {
+	if id := stringValue(message["protocolMessageID"]); id != "" {
+		return id
+	}
+	return numberString(firstValue(message, "id", "messageId", "message_id"))
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if value != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 func ampResultText(block map[string]any) string {

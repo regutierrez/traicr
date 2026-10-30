@@ -124,6 +124,44 @@ func TestAmpNumericMessageIdentitySurvivesReadAndContentChanges(t *testing.T) {
 	}
 }
 
+func TestAmpKeepsIdentityWhenAnExportShiftsMessagesOrDropsThinking(t *testing.T) {
+	// Amp numbers messages by position. A newer export of the same thread can insert a
+	// message earlier on, which renumbers every later one, and can drop thinking blocks.
+	older := `{"messages":[
+		{"messageId":1,"protocolMessageID":"M-ask","role":"user","content":[{"type":"text","text":"check the vault"}]},
+		{"messageId":2,"protocolMessageID":"M-look","role":"assistant","content":[{"type":"thinking","thinking":"plan"},{"type":"text","text":"Looking."},{"type":"tool_use","id":"TU-ls","name":"ls","input":{}}]},
+		{"messageId":3,"protocolMessageID":"M-ls","role":"user","content":[{"type":"tool_result","toolUseID":"TU-ls","run":{"status":"done","result":"a.md"}}]}
+	]}`
+	newer := `{"messages":[
+		{"messageId":1,"protocolMessageID":"M-ask","role":"user","content":[{"type":"text","text":"check the vault"}]},
+		{"messageId":2,"protocolMessageID":"M-steer","role":"user","content":[{"type":"text","text":"only the akkio folder"}]},
+		{"messageId":3,"protocolMessageID":"M-look","role":"assistant","content":[{"type":"text","text":"Looking."},{"type":"tool_use","id":"TU-ls","name":"ls","input":{}}]},
+		{"messageId":4,"protocolMessageID":"M-ls","role":"user","content":[{"type":"tool_result","toolUseID":"TU-ls","run":{"status":"done","result":"a.md"}}]}
+	]}`
+	keys := func(data string) map[string]string {
+		result, err := Run(context.Background(), domain.Descriptor{Harness: "amp"}, exportFS(data))
+		if err != nil {
+			t.Fatal(err)
+		}
+		found := map[string]string{}
+		for _, event := range result.Events {
+			if event.Kind != "reasoning" {
+				found[event.Kind+" "+event.Text] = event.Key
+			}
+		}
+		return found
+	}
+	before, after := keys(older), keys(newer)
+	for _, block := range []string{"message check the vault", "message Looking.", "tool_call {}", "tool_result a.md"} {
+		if before[block] == "" || before[block] != after[block] {
+			t.Errorf("%s: key %q in the older export, %q in the newer", block, before[block], after[block])
+		}
+	}
+	if after["message only the akkio folder"] == before["message Looking."] {
+		t.Errorf("the inserted message took another message's key %q", before["message Looking."])
+	}
+}
+
 func TestAmpPreservesResultShapesAndExecutionDetails(t *testing.T) {
 	for _, test := range []struct{ run, text string }{
 		{`{"status":"done","result":"Oracle answer"}`, "Oracle answer"},
@@ -160,7 +198,7 @@ func TestAmpRetainsTranscriptDetailsAndUnknownContent(t *testing.T) {
 	if events["compaction:5:0"].Text != "The build fails because the upper bound is exclusive. Preserve the boundary case." {
 		t.Fatal("summary disappeared")
 	}
-	image := events["attachment:0:1"].Attachments
+	image := events["attachment:0:0"].Attachments
 	if len(image) != 1 || image[0].URL != "https://ampcode.com/attachments/fixture.png" || image[0].Path != "screenshot.png" {
 		t.Fatalf("image source lost: %+v", image)
 	}
