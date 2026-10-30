@@ -81,12 +81,13 @@ func TestImportReportsEveryOutcomeAndCompletedProgress(t *testing.T) {
 		files[descriptor.Path+"/source/records.jsonl"] = sample.files["traces/000001/source/records.jsonl"]
 	}
 	var updates []domain.Progress
-	report, err := s.Import(ctx, manifest, files, func(_ context.Context, descriptor domain.Descriptor, _ fs.FS) (domain.Normalization, error) {
+	normalize := func(_ context.Context, descriptor domain.Descriptor, _ fs.FS) (domain.Normalization, error) {
 		if descriptor.NativeTraceID == "failed" {
 			return domain.Normalization{}, errors.New("cannot parse this trace")
 		}
 		return domain.Normalization{Status: descriptor.NativeTraceID, Version: 1}, nil
-	}, func(progress domain.Progress) { updates = append(updates, progress) })
+	}
+	report, err := s.Import(ctx, manifest, files, normalize, func(progress domain.Progress) { updates = append(updates, progress) })
 	if err != nil || report.Imported != 1 || report.Partial != 1 || report.Unsupported != 1 || report.Failed != 1 || len(report.Traces) != 4 {
 		t.Fatalf("mixed report=%+v err=%v", report, err)
 	}
@@ -109,6 +110,57 @@ func TestImportReportsEveryOutcomeAndCompletedProgress(t *testing.T) {
 	stored, err := s.ImportReport(ctx, report.ID)
 	if err != nil || stored.Partial != 1 || stored.Failed != 1 || len(stored.Traces) != 4 {
 		t.Fatalf("stored report=%+v err=%v", stored, err)
+	}
+	for attempt, counts := range [][3]int{{1, 0, 0}, {0, 1, 0}, {0, 0, 1}} {
+		if attempt > 0 {
+			manifest.Traces[0].RevisionDigest = "updated"
+			report, err = s.Import(ctx, manifest, files, normalize, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+		page, err := s.Imports(ctx, "", 1)
+		if err != nil || len(page.Imports) != 1 {
+			t.Fatalf("import summaries=%+v err=%v", page, err)
+		}
+		want := store.ImportSummary{
+			ID: report.ID, CreatedAt: report.CreatedAt, Machine: report.Machine,
+			Imported: counts[0], Updated: counts[1], Unchanged: counts[2], Partial: 1, Unsupported: 1, Failed: 1, Complete: true,
+		}
+		if page.Imports[0] != want {
+			t.Fatalf("summary=%+v want=%+v", page.Imports[0], want)
+		}
+	}
+}
+
+func TestImportSummariesDoNotReadFullReports(t *testing.T) {
+	directory := t.TempDir()
+	database, err := store.Open(directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer database.Close()
+	ctx := context.Background()
+	input := traceInput("machine", "revision", "2026-08-22T10:00:00Z", "Summary", nil)
+	report, err := database.Import(ctx, input.manifest, input.files, normalizer(nil, "normalized", 1), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := sql.Open("sqlite", filepath.Join(directory, "traicr.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer raw.Close()
+	// A list must not decode the retained detail report, even if it is unreadable.
+	if _, err := raw.Exec("UPDATE imports SET report_json=? WHERE id=?", []byte("not JSON"), report.ID); err != nil {
+		t.Fatal(err)
+	}
+	page, err := database.Imports(ctx, "", 50)
+	if err != nil || len(page.Imports) != 1 || page.Imports[0].Imported != 1 || !page.Imports[0].Complete {
+		t.Fatalf("summary depends on full report: %+v %v", page, err)
+	}
+	if _, err := database.ImportReport(ctx, report.ID); err == nil {
+		t.Fatal("detail endpoint did not read the unreadable report")
 	}
 }
 
@@ -159,7 +211,11 @@ func TestSearchDateOnlyBeforeExcludesNextMidnight(t *testing.T) {
 }
 
 func TestOpenMigratesExistingArchive(t *testing.T) {
-	for name, schema := range map[string]string{"version 1": migrations.Initial, "version 2": migrations.Initial + migrations.EventAliases} {
+	for name, schema := range map[string]string{
+		"version 1": migrations.Initial,
+		"version 2": migrations.Initial + migrations.EventAliases,
+		"version 3": migrations.Initial + migrations.EventAliases + migrations.TraceTitles,
+	} {
 		t.Run(name, func(t *testing.T) {
 			directory := t.TempDir()
 			db, err := sql.Open("sqlite", filepath.Join(directory, "traicr.db"))
@@ -167,6 +223,8 @@ func TestOpenMigratesExistingArchive(t *testing.T) {
 				t.Fatal(err)
 			}
 			if _, err := db.Exec(schema + `INSERT INTO source_machines VALUES ('old','existing archive','linux','amd64','2026-01-01','2026-01-01');
+				INSERT INTO imports(created_at,machine_id,report_json) VALUES('2026-01-01','old',CAST('{"imported":2,"updated":3,"unchanged":5,"partially_parsed":7,"unsupported":11,"failed":13,"traces":[{"error":"retained"}]}' AS BLOB));
+				INSERT INTO imports(created_at,machine_id) VALUES('2026-01-02','old');
 				INSERT INTO traces(harness,native_trace_id,title,working_directory,parent_native_trace_id,created_at,updated_at) VALUES('pi','old-trace','Collected','','','2026-01-01','2026-01-01');`); err != nil {
 				t.Fatal(err)
 			}
@@ -182,6 +240,18 @@ func TestOpenMigratesExistingArchive(t *testing.T) {
 				if err != nil || len(machines) != 1 || machines[0].Hostname != "existing archive" {
 					database.Close()
 					t.Fatalf("existing archive lost: %+v %v", machines, err)
+				}
+				page, err := database.Imports(context.Background(), "", 50)
+				if err != nil || len(page.Imports) != 2 || page.Imports[0].Complete {
+					t.Fatalf("migrated imports: %+v %v", page, err)
+				}
+				want := store.ImportSummary{ID: 1, CreatedAt: "2026-01-01", Machine: domain.Machine{ID: "old", Hostname: "existing archive", OS: "linux", Arch: "amd64"}, Imported: 2, Updated: 3, Unchanged: 5, Partial: 7, Unsupported: 11, Failed: 13, Complete: true}
+				if page.Imports[1] != want {
+					t.Fatalf("migrated summary: %+v want %+v", page.Imports[1], want)
+				}
+				report, err := database.ImportReport(context.Background(), 1)
+				if err != nil || !report.Complete || len(report.Traces) != 1 || report.Traces[0].Error != "retained" {
+					t.Fatalf("migrated detail: %+v %v", report, err)
 				}
 				trace, err := database.Trace(context.Background(), 1)
 				database.Close()
@@ -207,7 +277,7 @@ func TestOpenRejectsInvalidDatabase(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				statement := "PRAGMA user_version=4"
+				statement := "PRAGMA user_version=5"
 				if state == "partial" {
 					statement = "CREATE TABLE events(id INTEGER)"
 				}

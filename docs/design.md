@@ -277,6 +277,7 @@ Core tables:
 | --- | --- |
 | `source_machines` | Stable machine IDs, observed hostnames, OS, architecture, and timestamps |
 | `imports` | Archive metadata and the retained Import Report in `report_json` |
+| `import_summaries` | Small Import summaries for list reads, saved atomically with full reports |
 | `repositories` | Normalized Git identity and observed local paths |
 | `traces` | Logical trace identity, harness, native ID, `parent_native_trace_id`, and summary metadata |
 | `trace_revisions` | Revision digest, source machine, native times, collection time, and parse status |

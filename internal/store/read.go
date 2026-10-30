@@ -250,7 +250,10 @@ func (s *Store) Imports(ctx context.Context, encodedCursor string, limit int) (I
 		return ImportPage{}, err
 	}
 	limit = pageLimit(limit)
-	rows, err := s.db.QueryContext(ctx, `SELECT i.id,i.created_at,m.id,m.hostname,m.os,m.arch,i.report_json FROM imports i JOIN source_machines m ON m.id=i.machine_id WHERE i.id<=? AND i.id<? ORDER BY i.id DESC LIMIT ?`, position.Max, position.Last, limit+1)
+	rows, err := s.db.QueryContext(ctx, `SELECT i.id,i.created_at,m.id,m.hostname,m.os,m.arch,s.summary_json
+		FROM imports i JOIN source_machines m ON m.id=i.machine_id
+		LEFT JOIN import_summaries s ON s.import_id=i.id
+		WHERE i.id<=? AND i.id<? ORDER BY i.id DESC LIMIT ?`, position.Max, position.Last, limit+1)
 	if err != nil {
 		return ImportPage{}, err
 	}
@@ -263,7 +266,6 @@ func (s *Store) Imports(ctx context.Context, encodedCursor string, limit int) (I
 			return ImportPage{}, err
 		}
 		if len(encoded) > 0 {
-			// The stored report's "traces" has no field here, so the decoder skips it.
 			if err = json.Unmarshal(encoded, &report); err != nil {
 				return ImportPage{}, err
 			}

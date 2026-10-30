@@ -2,6 +2,12 @@
 
 Traicr is a single-user service that trusts the network path to the server. Run one non-root container with one persistent data volume. Traicr serves plain HTTP; it does not manage TLS or backups.
 
+## Archive upgrades
+
+Back up the archive before upgrading the server. Schema version 4 adds a separate import summaries table and backfills it from existing reports in one transaction before the server starts accepting requests. This one-time step reads the full reports; subsequent Imports-page loads read only the summaries. New imports save their report and summary together. Full reports remain available on the import detail page.
+
+Older server binaries reject schema version 4. To roll back, restore the pre-upgrade archive backup as well as the previous binary. Do not lower `user_version` on an upgraded archive: older binaries would write imports without summaries.
+
 ## Direct access over Tailscale
 
 `compose.yaml` publishes `8080:8080`, so Docker binds host port 8080 on every interface. Inside the container the process listens on `TRAICR_LISTEN_ADDRESS`, which defaults to `:8080`. Traicr does not read a bind-address environment variable.

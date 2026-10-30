@@ -77,7 +77,7 @@ The `traicr` CLI subcommands are a later consumer of the same contract and are n
 
 - `listTraces` keeps the `/cards` path. A new `/traces` alias would add a second name for the same handler, and agents see the operation name, not the path.
 - **Additive change:** import reports gain `"complete": bool`. Today an import that started but never finished (interrupted, or still running) has no `report_json`, so its report shows all zero counts and looks like an empty success.
-  - The list and detail readers set `complete` from whether `report_json` is present, after decoding.
+  - The list reader sets `complete` from whether a separately stored summary is present; the detail reader uses the full `report_json`. The report and summary are saved in one transaction.
   - Readers never trust a stored value. Older reports were written without the field and must still read as `complete: true`.
   - The final `complete` record of the upload stream also carries `complete: true`.
 

@@ -26,3 +26,15 @@ ALTER TABLE traces ADD COLUMN generated_title TEXT NOT NULL DEFAULT '';
 ALTER TABLE traces ADD COLUMN generated_title_revision_id INTEGER NOT NULL DEFAULT 0;
 PRAGMA user_version = 3;
 `
+
+// ImportSummaries keeps list reads off the large per-trace reports.
+const ImportSummaries = `
+CREATE TABLE import_summaries (
+    import_id INTEGER PRIMARY KEY REFERENCES imports(id) ON DELETE CASCADE,
+    summary_json BLOB NOT NULL
+);
+INSERT INTO import_summaries(import_id,summary_json)
+    SELECT id,CAST(json_remove(CAST(report_json AS TEXT),'$.traces') AS BLOB)
+    FROM imports WHERE length(report_json)>0;
+PRAGMA user_version = 4;
+`

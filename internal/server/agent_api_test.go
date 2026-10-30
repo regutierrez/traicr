@@ -198,6 +198,9 @@ func TestImportReportsDeriveCompleteFromTheStoredReport(t *testing.T) {
 	if _, err := raw.Exec(`UPDATE imports SET report_json=CAST(json_remove(CAST(report_json AS TEXT),'$.complete') AS BLOB) WHERE id=?`, legacy.ID); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := raw.Exec(`UPDATE import_summaries SET summary_json=CAST(json_remove(CAST(summary_json AS TEXT),'$.complete') AS BLOB) WHERE import_id=?`, legacy.ID); err != nil {
+		t.Fatal(err)
+	}
 
 	var page struct {
 		Imports []domain.ImportReport `json:"imports"`

@@ -43,7 +43,7 @@ func Open(dataDir string) (*Store, error) {
 		db.Close()
 		return nil, err
 	}
-	if version < 3 {
+	if version < 4 {
 		tx, txErr := db.Begin()
 		if txErr == nil && version == 0 {
 			_, txErr = tx.Exec(migrations.Initial)
@@ -51,8 +51,11 @@ func Open(dataDir string) (*Store, error) {
 		if txErr == nil && version < 2 {
 			_, txErr = tx.Exec(migrations.EventAliases)
 		}
-		if txErr == nil {
+		if txErr == nil && version < 3 {
 			_, txErr = tx.Exec(migrations.TraceTitles)
+		}
+		if txErr == nil {
+			_, txErr = tx.Exec(migrations.ImportSummaries)
 		}
 		if txErr == nil {
 			txErr = tx.Commit()
@@ -63,7 +66,7 @@ func Open(dataDir string) (*Store, error) {
 			db.Close()
 			return nil, fmt.Errorf("migrate sqlite: %w", txErr)
 		}
-	} else if version != 3 {
+	} else if version != 4 {
 		db.Close()
 		return nil, fmt.Errorf("unsupported database version %d", version)
 	}
@@ -106,10 +109,29 @@ func (s *Store) Import(ctx context.Context, manifest domain.Manifest, sources fs
 	}
 	report.Complete = true
 	b, err := json.Marshal(report)
-	if err == nil {
-		_, err = s.db.ExecContext(ctx, "UPDATE imports SET report_json=? WHERE id=?", b, report.ID)
-	}
 	if err != nil {
+		return report, err
+	}
+	summary, err := json.Marshal(ImportSummary{
+		ID: report.ID, CreatedAt: report.CreatedAt, Machine: report.Machine,
+		Imported: report.Imported, Updated: report.Updated, Unchanged: report.Unchanged,
+		Partial: report.Partial, Unsupported: report.Unsupported, Failed: report.Failed, Complete: true,
+	})
+	if err != nil {
+		return report, err
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return report, err
+	}
+	defer tx.Rollback()
+	if _, err = tx.ExecContext(ctx, "UPDATE imports SET report_json=? WHERE id=?", b, report.ID); err != nil {
+		return report, err
+	}
+	if _, err = tx.ExecContext(ctx, "INSERT INTO import_summaries(import_id,summary_json) VALUES(?,?)", report.ID, summary); err != nil {
+		return report, err
+	}
+	if err = tx.Commit(); err != nil {
 		return report, err
 	}
 	progress(domain.Progress{Phase: "complete", Completed: len(manifest.Traces), Total: len(manifest.Traces), Report: &report})
