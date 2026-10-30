@@ -564,8 +564,11 @@ func (s *Store) insertEvents(ctx context.Context, tx *sql.Tx, traceID, revisionI
 		if err != nil {
 			return nil, err
 		}
+		// Compare only with revisions parsed by the same normalizer version. While a
+		// server re-parses a trace after an upgrade, its other revisions still hold
+		// observations in the old shape; they report their own conflicts when re-parsed.
 		var differs bool
-		if err = tx.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM event_observations WHERE event_id=? AND digest<>?)", eventID, digest).Scan(&differs); err != nil {
+		if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM event_observations o JOIN observation_revisions x ON x.observation_id=o.id JOIN trace_revisions r ON r.id=x.revision_id WHERE o.event_id=? AND o.digest<>? AND r.normalizer_version=(SELECT normalizer_version FROM trace_revisions WHERE id=?))`, eventID, digest, revisionID).Scan(&differs); err != nil {
 			return nil, err
 		}
 		if differs {

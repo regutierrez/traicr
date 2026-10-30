@@ -171,6 +171,44 @@ func TestRenormalizePreservesLinksWhenNativeEventKeysChange(t *testing.T) {
 	}
 }
 
+func TestRenormalizeReportsConflictsOnlyBetweenRevisionsOfTheNewVersion(t *testing.T) {
+	database, _ := openMaintenanceStore(t)
+	ctx := context.Background()
+	var traceID int64
+	for i, revision := range []string{"first", "second"} {
+		input := traceInput("machine", revision, fmt.Sprintf("2026-08-22T10:00:0%dZ", i), "Trace", []domain.Event{{Key: "stable", Kind: "message", ParentKey: "message:7"}})
+		report, err := database.Import(ctx, input.manifest, input.files, normalizer(input.events, "normalized", 1), nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		traceID = report.Traces[0].TraceID
+	}
+	// Version 2 changes the parent key of "stable" in both revisions the same way,
+	// and gives "edited" a different text in each revision: only that is a conflict.
+	err := database.Renormalize(ctx, func(string) int { return 2 }, func(_ context.Context, descriptor domain.Descriptor, _ fs.FS) (domain.Normalization, error) {
+		return domain.Normalization{Version: 2, Status: "normalized", Events: []domain.Event{
+			{Key: "stable", Kind: "message", ParentKey: "message:M-1"},
+			{Key: "edited", Kind: "message", Text: descriptor.RevisionDigest},
+		}}, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	trace, err := database.Trace(ctx, traceID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var conflicts []string
+	for _, revision := range trace.Revisions {
+		for _, warning := range revision.Diagnostics {
+			conflicts = append(conflicts, warning.Message)
+		}
+	}
+	if len(conflicts) != 1 || conflicts[0] != "conflicting observations retained for event edited" {
+		t.Fatalf("diagnostics = %q; want one conflict for edited", conflicts)
+	}
+}
+
 func TestRenormalizeProcessesEveryQueuedRevisionAcrossBatches(t *testing.T) {
 	database, _ := openMaintenanceStore(t)
 	const revisionCount = 101

@@ -251,6 +251,9 @@ func (s *Store) replaceRevisionEvents(ctx context.Context, traceID, revisionID i
 	if _, err = tx.ExecContext(ctx, "DELETE FROM event_observations WHERE event_id IN (SELECT id FROM events WHERE trace_id=?) AND NOT EXISTS(SELECT 1 FROM observation_revisions WHERE observation_id=event_observations.id)", traceID); err != nil {
 		return nil, err
 	}
+	if _, err = tx.ExecContext(ctx, "UPDATE trace_revisions SET status=?,normalizer_version=? WHERE id=?", normalization.Status, normalization.Version, revisionID); err != nil {
+		return nil, err
+	}
 	conflicts, err := s.insertEvents(ctx, tx, traceID, revisionID, labels, normalization.Events)
 	if err != nil {
 		return nil, err
@@ -262,9 +265,6 @@ func (s *Store) replaceRevisionEvents(ctx context.Context, traceID, revisionID i
 		return nil, err
 	}
 	diagnostics, _ := json.Marshal(append(normalization.Warnings, conflicts...))
-	if _, err = tx.ExecContext(ctx, "UPDATE trace_revisions SET status=?,normalizer_version=? WHERE id=?", normalization.Status, normalization.Version, revisionID); err != nil {
-		return nil, err
-	}
 	if _, err = tx.ExecContext(ctx, "INSERT INTO normalizer_runs(revision_id,version,status,diagnostics_json,created_at) VALUES(?,?,?,?,?)", revisionID, normalization.Version, normalization.Status, diagnostics, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
 		return nil, err
 	}
