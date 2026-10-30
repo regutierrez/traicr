@@ -41,6 +41,10 @@ func TestSearchBoundedCandidatePages(t *testing.T) {
 		{SearchQuery{Query: "needlecommon event 000001", Mode: "exact"}, 1, 1},
 		{SearchQuery{Query: `(?s).*needlecommon event 000001`, Mode: "regex"}, 1, 1},
 		{SearchQuery{Query: `(?s).*absent-selective-marker`, Mode: "regex"}, 0, 0},
+		// The index narrows on text every match must contain, not on optional parts.
+		{SearchQuery{Query: `(?i)RARE-SELECTIVE-MARKER-4990`, Mode: "regex"}, 1, 4990},
+		{SearchQuery{Query: `[0-9]+ rare-selective-marker-4990`, Mode: "regex"}, 1, 4990},
+		{SearchQuery{Query: `(?:absent-selective-marker-that-is-longer)?needlecommon event 004990`, Mode: "regex"}, 1, 4990},
 		{SearchQuery{Query: "absent-selective-marker", Mode: "exact"}, 0, 0},
 		{SearchQuery{Query: "needlecommon", Model: "model-b"}, 50, 5000},
 		{SearchQuery{Query: "needlecommon", Model: "rare-model"}, 1, 1},

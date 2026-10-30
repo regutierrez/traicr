@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"regexp/syntax"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -57,8 +58,9 @@ func (s *Store) prepareSearch(ctx context.Context, query SearchQuery) (preparedS
 		if err != nil {
 			return preparedSearch{}, fmt.Errorf("%w: invalid regular expression: %v", ErrInvalidQuery, err)
 		}
-		literal, _ := prepared.expression.LiteralPrefix()
-		candidate = trigramCandidate(literal)
+		if parsed, parseErr := syntax.Parse(query.Query, syntax.Perl); parseErr == nil {
+			candidate = trigramCandidate(requiredLiteral(parsed))
+		}
 	} else if mode == "exact" {
 		candidate = trigramCandidate(query.Query)
 	}
@@ -324,6 +326,40 @@ func observationSearchFilters(query SearchQuery) ([]string, []any) {
 		args = append(args, query.Machine)
 	}
 	return where, args
+}
+
+// requiredLiteral returns the longest text every match of a regular expression
+// contains, so the trigram index can narrow a regex with no literal prefix, such as
+// (?i)needle or [0-9]+-needle. The trigram index folds case like (?i) does for ASCII
+// letters (ſ and the Kelvin sign included), so a case-insensitive literal qualifies
+// only when it is ASCII.
+func requiredLiteral(expression *syntax.Regexp) string {
+	switch expression.Op {
+	case syntax.OpLiteral:
+		if expression.Flags&syntax.FoldCase != 0 {
+			for _, r := range expression.Rune {
+				if r >= utf8.RuneSelf {
+					return ""
+				}
+			}
+		}
+		return string(expression.Rune)
+	case syntax.OpCapture, syntax.OpPlus:
+		return requiredLiteral(expression.Sub[0])
+	case syntax.OpRepeat:
+		if expression.Min > 0 {
+			return requiredLiteral(expression.Sub[0])
+		}
+	case syntax.OpConcat:
+		longest := ""
+		for _, sub := range expression.Sub {
+			if literal := requiredLiteral(sub); utf8.RuneCountInString(literal) > utf8.RuneCountInString(longest) {
+				longest = literal
+			}
+		}
+		return longest
+	}
+	return ""
 }
 
 func trigramCandidate(value string) string {
