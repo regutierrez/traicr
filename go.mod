@@ -2,7 +2,10 @@ module github.com/regutierrez/traicr
 
 go 1.27
 
-require modernc.org/sqlite v1.39.0
+require (
+	github.com/google/codesearch v1.2.0
+	modernc.org/sqlite v1.39.0
+)
 
 require (
 	github.com/dustin/go-humanize v1.0.1 // indirect

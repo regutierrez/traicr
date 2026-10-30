@@ -11,6 +11,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/google/codesearch/index"
 	searchtext "github.com/regutierrez/traicr/internal/search"
 )
 
@@ -52,24 +53,26 @@ func (s *Store) prepareSearch(ctx context.Context, query SearchQuery) (preparedS
 		return preparedSearch{}, fmt.Errorf("%w: before must be YYYY-MM-DD or an RFC 3339 timestamp", ErrInvalidQuery)
 	}
 	prepared := preparedSearch{query: query, mode: mode}
-	var candidate string
+	var trigramQuery string
 	if mode == "regex" && query.Query != "" {
 		prepared.expression, err = regexp.Compile(query.Query)
 		if err != nil {
 			return preparedSearch{}, fmt.Errorf("%w: invalid regular expression: %v", ErrInvalidQuery, err)
 		}
 		if parsed, parseErr := syntax.Parse(query.Query, syntax.Perl); parseErr == nil {
-			candidate = trigramCandidate(requiredLiteral(parsed))
+			trigramQuery = regexTrigramQuery(parsed)
 		}
 	} else if mode == "exact" {
-		candidate = trigramCandidate(query.Query)
+		if candidate := trigramCandidate(query.Query); candidate != "" {
+			trigramQuery = ftsPhrase(candidate)
+		}
 	}
 	if mode == "fulltext" && query.Query != "" {
 		prepared.index = "search_words"
 		prepared.indexQuery = query.Query
-	} else if candidate != "" {
+	} else if trigramQuery != "" {
 		prepared.index = "search_trigrams"
-		prepared.indexQuery = `"` + strings.ReplaceAll(candidate, `"`, `""`) + `"`
+		prepared.indexQuery = trigramQuery
 	}
 	prepared.position, err = decodeCursor(ctx, s.db, query.Cursor, "events", "1=1")
 	if err != nil {
@@ -326,6 +329,150 @@ func observationSearchFilters(query SearchQuery) ([]string, []any) {
 		args = append(args, query.Machine)
 	}
 	return where, args
+}
+
+// maxTrigramPhrases caps the index query built from a regex; a larger one costs more
+// to evaluate than it saves.
+const maxTrigramPhrases = 256
+
+// regexTrigramQuery returns an FTS5 query for the trigram index that every chunk
+// holding a match satisfies, or "" when the index cannot narrow the expression.
+// The longest literal every match contains always fits in one chunk. codesearch
+// adds the trigrams a match must contain, such as ("acd" OR "bcd") for [ab]cd, but
+// the index matches one chunk at a time and trigrams from distant parts of a match
+// can sit in different chunks, so they are used only when every match fits inside
+// the chunk overlap.
+func regexTrigramQuery(expression *syntax.Regexp) string {
+	var parts []string
+	literal := trigramCandidate(requiredLiteral(expression))
+	if longest := maxMatchBytes(expression); longest >= 0 && longest <= searchtext.ChunkOverlap-utf8.UTFMax {
+		// The index ignores case; without (?i) codesearch would track every case
+		// variant and soon give up on the trigrams after the first few letters.
+		lowerFoldedLiterals(expression)
+		if query, phrases := ftsQuery(index.RegexpQuery(expression), asciiLower(literal)); query != "" && phrases <= maxTrigramPhrases {
+			parts = append(parts, "("+query+")")
+		}
+	}
+	if literal != "" {
+		parts = append(parts, ftsPhrase(literal))
+	}
+	return strings.Join(parts, " AND ")
+}
+
+// lowerFoldedLiterals rewrites case-insensitive ASCII literals as lower-case
+// case-sensitive ones. Only the index query reads the rewritten expression.
+func lowerFoldedLiterals(expression *syntax.Regexp) {
+	if expression.Op == syntax.OpLiteral && expression.Flags&syntax.FoldCase != 0 {
+		for _, r := range expression.Rune {
+			if r >= utf8.RuneSelf {
+				return
+			}
+		}
+		for i, r := range expression.Rune {
+			if 'A' <= r && r <= 'Z' {
+				expression.Rune[i] = r + 'a' - 'A'
+			}
+		}
+		expression.Flags &^= syntax.FoldCase
+	}
+	for _, sub := range expression.Sub {
+		lowerFoldedLiterals(sub)
+	}
+}
+
+// ftsQuery writes a codesearch query in FTS5 syntax and counts its phrases. It
+// returns "" when the query cannot narrow anything beyond the literal the caller
+// also requires. codesearch works on bytes and the index on characters, so a
+// trigram that is not three whole characters is left out, which only widens the
+// query. The index ignores case, so case variants merge.
+func ftsQuery(query *index.Query, literal string) (string, int) {
+	if query.Op != index.QAnd && query.Op != index.QOr {
+		return "", 0
+	}
+	var parts []string
+	seen := map[string]bool{}
+	phrases := 0
+	add := func(part string, count int) {
+		if !seen[part] {
+			seen[part] = true
+			parts = append(parts, part)
+			phrases += count
+		}
+	}
+	for _, trigram := range query.Trigram {
+		// A trigram that is not three whole characters cannot be looked up; one
+		// inside the literal is already required.
+		if !utf8.ValidString(trigram) || utf8.RuneCountInString(trigram) != 3 || strings.Contains(literal, asciiLower(trigram)) {
+			if query.Op == index.QOr {
+				return "", 0
+			}
+			continue
+		}
+		add(ftsPhrase(asciiLower(trigram)), 1)
+	}
+	for _, sub := range query.Sub {
+		part, count := ftsQuery(sub, literal)
+		if part == "" {
+			if query.Op == index.QOr {
+				return "", 0
+			}
+			continue
+		}
+		add("("+part+")", count)
+	}
+	operator := " AND "
+	if query.Op == index.QOr {
+		operator = " OR "
+	}
+	return strings.Join(parts, operator), phrases
+}
+
+func ftsPhrase(text string) string {
+	return `"` + strings.ReplaceAll(text, `"`, `""`) + `"`
+}
+
+func asciiLower(text string) string {
+	return strings.Map(func(r rune) rune {
+		if 'A' <= r && r <= 'Z' {
+			return r + 'a' - 'A'
+		}
+		return r
+	}, text)
+}
+
+// maxMatchBytes returns the most bytes one match of the expression can span, or -1
+// when there is no limit.
+func maxMatchBytes(expression *syntax.Regexp) int {
+	switch expression.Op {
+	case syntax.OpEmptyMatch, syntax.OpNoMatch, syntax.OpBeginLine, syntax.OpEndLine, syntax.OpBeginText, syntax.OpEndText, syntax.OpWordBoundary, syntax.OpNoWordBoundary:
+		return 0
+	case syntax.OpLiteral:
+		// A case-insensitive letter can match a longer encoding, such as the Kelvin sign.
+		return len(expression.Rune) * utf8.UTFMax
+	case syntax.OpCharClass, syntax.OpAnyChar, syntax.OpAnyCharNotNL:
+		return utf8.UTFMax
+	case syntax.OpCapture, syntax.OpQuest:
+		return maxMatchBytes(expression.Sub[0])
+	case syntax.OpRepeat:
+		if longest := maxMatchBytes(expression.Sub[0]); expression.Max >= 0 && longest >= 0 {
+			return longest * expression.Max
+		}
+	case syntax.OpConcat, syntax.OpAlternate:
+		total := 0
+		for _, sub := range expression.Sub {
+			longest := maxMatchBytes(sub)
+			if longest < 0 {
+				return -1
+			}
+			if expression.Op == syntax.OpConcat {
+				total += longest
+			} else {
+				total = max(total, longest)
+			}
+		}
+		return total
+	}
+	return -1
 }
 
 // requiredLiteral returns the longest text every match of a regular expression

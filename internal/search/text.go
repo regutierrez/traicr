@@ -6,10 +6,12 @@ import (
 	"unicode/utf8"
 )
 
-const (
-	chunkBytes   = 16 * 1024
-	chunkOverlap = 1024
-)
+const chunkBytes = 16 * 1024
+
+// ChunkOverlap is how many bytes consecutive chunks share, less up to three bytes
+// that keep chunks on rune boundaries, so any span of at most
+// ChunkOverlap-utf8.UTFMax bytes lies whole inside one chunk.
+const ChunkOverlap = 1024
 
 func Chunks(text string) []string {
 	if text == "" {
@@ -25,7 +27,7 @@ func Chunks(text string) []string {
 		if end == len(text) {
 			break
 		}
-		start = end - min(chunkOverlap, end-start)
+		start = end - min(ChunkOverlap, end-start)
 		for !utf8.RuneStart(text[start]) {
 			start++
 		}

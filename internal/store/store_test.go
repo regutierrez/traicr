@@ -716,3 +716,30 @@ func (f cancellingFileInfo) Mode() fs.FileMode  { return 0 }
 func (f cancellingFileInfo) ModTime() time.Time { return time.Time{} }
 func (f cancellingFileInfo) IsDir() bool        { return false }
 func (f cancellingFileInfo) Sys() any           { return nil }
+
+func TestRegexSearchNarrowsWithTheIndexWithoutMissingMatches(t *testing.T) {
+	ctx := context.Background()
+	s := openStore(t)
+	// Search chunks hold 16 KiB and overlap by 1 KiB: the start of the long match is
+	// only in the first chunk and its end only in the second.
+	long := strings.Repeat("x", 14500) + "alphastart" + strings.Repeat("y", 2500) + "omegaend" + strings.Repeat("z", 2000)
+	events := []domain.Event{
+		{Key: "message:long", Kind: "message", Role: "assistant", Text: long},
+		{Key: "message:greeting", Kind: "message", Role: "user", Text: "Viele Grüße aus Köln"},
+	}
+	input := traceInput("machine", "long", "2026-09-06T12:00:00Z", "Long", events)
+	if _, err := s.Import(ctx, input.manifest, input.files, normalizer(events, "normalized", 1), nil); err != nil {
+		t.Fatal(err)
+	}
+	for _, expression := range []string{
+		`alphastarty{0,1000}y{0,1000}y{0,1000}omegaend`, // bounded, but longer than the chunk overlap
+		`alphastart[^!]*omegaend`,
+		`Grüße`, // codesearch trigrams are bytes; ü and ß split them
+		`(?i)VIELE grüße`,
+	} {
+		page, err := s.Search(ctx, store.SearchQuery{Query: expression, Mode: "regex"})
+		if err != nil || len(page.Results) != 1 {
+			t.Errorf("regex %s found %d results, %v; want one event", expression, len(page.Results), err)
+		}
+	}
+}
