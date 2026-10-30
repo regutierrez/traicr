@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"sync"
+	"time"
 
 	"github.com/regutierrez/traicr/internal/domain"
 )
@@ -19,6 +20,10 @@ type Store struct {
 	// runningImport is the imports row being processed, or 0. Guarded by importMu.
 	runningImport int64
 	orders        transcriptOrders
+	// searchBudget is how long one search page may read before it returns what it
+	// found so far, marked partial, with a cursor that continues from there. A regex
+	// the index cannot narrow reads every Event's text, which takes minutes.
+	searchBudget time.Duration
 }
 
 type SearchQuery struct {
@@ -54,6 +59,9 @@ type SearchResult struct {
 type SearchPage struct {
 	Results    []SearchResult `json:"results"`
 	NextCursor string         `json:"next_cursor,omitempty"`
+	// Partial means the search budget ran out before the page filled; NextCursor
+	// continues the search where it stopped.
+	Partial bool `json:"partial,omitempty"`
 }
 
 type Trace struct {

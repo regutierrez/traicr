@@ -109,6 +109,7 @@ func (s *Store) collectSearch(ctx context.Context, prepared preparedSearch) (Sea
 	seen := map[int64]bool{}
 	before := prepared.position.Last
 	batchSize := max(256, limit*2)
+	deadline := time.Now().Add(s.searchBudget)
 	for len(page.Results) <= limit {
 		statement, args := searchStatement(prepared, before, batchSize)
 		rows, err := s.db.QueryContext(ctx, statement, args...)
@@ -124,6 +125,12 @@ func (s *Store) collectSearch(ctx context.Context, prepared preparedSearch) (Sea
 			break
 		}
 		before = lastEventID
+		if time.Now().After(deadline) {
+			// Every Event from before up has been read; the next page starts below it.
+			page.NextCursor = encodeCursor(cursor{Last: before, Max: prepared.position.Max})
+			page.Partial = true
+			return page, nil
+		}
 	}
 	if len(page.Results) > limit {
 		page.Results = page.Results[:limit]

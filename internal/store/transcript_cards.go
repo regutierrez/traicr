@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	searchtext "github.com/regutierrez/traicr/internal/search"
 )
@@ -32,6 +33,9 @@ type TranscriptCard struct {
 type TranscriptPage struct {
 	Cards      []TranscriptCard
 	NextCursor string
+	// Partial means the search budget ran out before the page filled; NextCursor
+	// continues the search after the last session it read.
+	Partial bool
 }
 
 type transcriptCursor struct {
@@ -128,7 +132,11 @@ func (s *Store) TranscriptCards(ctx context.Context, query SearchQuery) (Transcr
 	}
 	page := TranscriptPage{Cards: []TranscriptCard{}}
 	limit := pageLimit(query.Limit)
+	deadline := time.Now().Add(s.searchBudget)
 	var lastID int64
+	// reading is the card whose rows are being read; read is the last card whose
+	// rows were all read, where a partial page resumes.
+	var reading, read transcriptCursor
 	for rows.Next() {
 		var card TranscriptCard
 		var matchedText string
@@ -136,6 +144,17 @@ func (s *Store) TranscriptCards(ctx context.Context, query SearchQuery) (Transcr
 		if err := rows.Scan(&card.ID, &card.UpdatedAt, &matchedID, &observationID, &revisionID); err != nil {
 			rows.Close()
 			return TranscriptPage{}, err
+		}
+		if card.ID != reading.ID {
+			if reading.ID != 0 {
+				read = reading
+				// Stopping only between cards guarantees every page moves forward.
+				if time.Now().After(deadline) {
+					page.Partial = true
+					break
+				}
+			}
+			reading = transcriptCursor{ID: card.ID, Updated: card.UpdatedAt}
 		}
 		if card.ID == lastID {
 			continue
@@ -171,10 +190,15 @@ func (s *Store) TranscriptCards(ctx context.Context, query SearchQuery) (Transcr
 	if err != nil {
 		return TranscriptPage{}, err
 	}
-	if len(page.Cards) > limit {
+	more := len(page.Cards) > limit
+	if more {
 		page.Cards = page.Cards[:limit]
 		last := page.Cards[len(page.Cards)-1]
-		b, _ := json.Marshal(transcriptCursor{ID: last.ID, Updated: last.UpdatedAt, MaxID: position.MaxID})
+		read = transcriptCursor{ID: last.ID, Updated: last.UpdatedAt}
+	}
+	if more || page.Partial {
+		read.MaxID = position.MaxID
+		b, _ := json.Marshal(read)
 		page.NextCursor = base64.RawURLEncoding.EncodeToString(b)
 	}
 	for i := range page.Cards {

@@ -15,6 +15,8 @@ export type TranscriptCard = {
 export type TranscriptCardPage = {
 	cards: TranscriptCard[];
 	next_cursor?: string;
+	/** The search stopped at its time limit; next_cursor continues it. */
+	partial?: boolean;
 };
 
 export type Warning = { code: string; message: string };

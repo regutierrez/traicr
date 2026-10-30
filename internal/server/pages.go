@@ -66,6 +66,7 @@ type traceRef struct {
 type transcriptCardPage struct {
 	Cards      []transcriptCard `json:"cards"`
 	NextCursor string           `json:"next_cursor,omitempty"`
+	Partial    bool             `json:"partial,omitempty"`
 }
 
 func newTranscriptCard(item store.TranscriptCard) transcriptCard {
@@ -100,7 +101,7 @@ func (app *application) cards(w http.ResponseWriter, r *http.Request) {
 	for _, item := range page.Cards {
 		cards = append(cards, newTranscriptCard(item))
 	}
-	writeJSON(w, transcriptCardPage{Cards: cards, NextCursor: page.NextCursor})
+	writeJSON(w, transcriptCardPage{Cards: cards, NextCursor: page.NextCursor, Partial: page.Partial})
 }
 
 func (app *application) trace(w http.ResponseWriter, r *http.Request) {

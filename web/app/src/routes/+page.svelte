@@ -45,7 +45,7 @@
 <header class="page-head">
 	<h1>Sessions</h1>
 	<p class="count">
-		{query ? `${count(data.cards.length, 'match', 'matches')} for “${query}”` : `${count(data.cards.length, 'session')} on this page`}
+		{query ? `${count(data.cards.length, 'match', 'matches')}${data.partial ? ' so far' : ''} for “${query}”` : `${count(data.cards.length, 'session')} on this page`}
 	</p>
 </header>
 
@@ -127,15 +127,18 @@
 	{:else}
 		{#if !data.error}
 			<div class="empty">
-				<p class="empty-title">{query ? 'No matching sessions' : 'Your archive starts here'}</p>
+				<p class="empty-title">{data.partial ? 'No matches yet' : query ? 'No matching sessions' : 'Your archive starts here'}</p>
 				<p>
-					{query ? 'Try another search mode, remove a filter, or use a shorter phrase.' : 'Collect traces on a source machine, then upload the ZIPs. Your original records stay intact.'}
+					{data.partial ? 'The search stopped after 5 seconds. Older sessions are not searched yet.' : query ? 'Try another search mode, remove a filter, or use a shorter phrase.' : 'Collect traces on a source machine, then upload the ZIPs. Your original records stay intact.'}
 				</p>
 			</div>
 		{/if}
 	{/each}
 	{#if data.next}
-		<Button class="mt-6" variant="outline" href={nextHref(data.next)}>Older sessions</Button>
+		{#if data.partial && data.cards.length}
+			<p class="partial">The search stopped after 5 seconds. Older sessions are not searched yet.</p>
+		{/if}
+		<Button class="mt-6" variant="outline" href={nextHref(data.next)}>{data.partial ? 'Continue searching' : 'Older sessions'}</Button>
 	{/if}
 </section>
 
@@ -466,6 +469,12 @@
 
 	.empty {
 		padding: 3rem 0;
+		color: var(--muted-foreground);
+		font-size: 13px;
+	}
+
+	.partial {
+		margin: 1.5rem 0 0;
 		color: var(--muted-foreground);
 		font-size: 13px;
 	}

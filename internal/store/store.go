@@ -67,7 +67,7 @@ func Open(dataDir string) (*Store, error) {
 		db.Close()
 		return nil, fmt.Errorf("unsupported database version %d", version)
 	}
-	return &Store{db: db, dataDir: dataDir, objects: filepath.Join(dataDir, "objects", "sha256"), writer: make(chan struct{}, 1)}, nil
+	return &Store{db: db, dataDir: dataDir, objects: filepath.Join(dataDir, "objects", "sha256"), writer: make(chan struct{}, 1), searchBudget: 5 * time.Second}, nil
 }
 
 func (s *Store) Close() error {

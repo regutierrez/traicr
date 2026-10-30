@@ -1451,6 +1451,10 @@
           },
           "next_cursor": {
             "type": "string"
+          },
+          "partial": {
+            "type": "boolean",
+            "description": "True when the search stopped after its time budget (about 5 seconds) before the page filled, which happens with a regex the index cannot narrow. The page holds what was found so far; pass next_cursor to keep searching."
           }
         },
         "required": [
@@ -1516,6 +1520,10 @@
           },
           "next_cursor": {
             "type": "string"
+          },
+          "partial": {
+            "type": "boolean",
+            "description": "True when the search stopped after its time budget (about 5 seconds) before the page filled, which happens with a regex the index cannot narrow. The page holds what was found so far; pass next_cursor to keep searching."
           }
         },
         "required": [

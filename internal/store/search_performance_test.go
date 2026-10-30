@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/regutierrez/traicr/internal/domain"
 )
@@ -83,6 +84,70 @@ func TestSearchBoundedCandidatePages(t *testing.T) {
 	page, err = s.Search(ctx, query)
 	if err != nil || len(page.Results) != 200 || page.Results[0].EventID != 4600 {
 		t.Fatalf("fallback second page=%+v err=%v", page, err)
+	}
+}
+
+func TestSearchStopsAtItsBudgetAndContinuesWhereItStopped(t *testing.T) {
+	s := seedSearchCorpus(t, 2000)
+	ctx := context.Background()
+	// Five sessions, so card search has sessions to stop between.
+	for id := 2; id <= 5; id++ {
+		updated := fmt.Sprintf("2026-08-2%dT10:00:00.000000000Z", id)
+		if _, err := s.db.Exec(`INSERT INTO traces(id,harness,native_trace_id,title,working_directory,parent_native_trace_id,created_at,updated_at) VALUES(?,'synthetic',?,'','','',?,?)`, id, fmt.Sprint(id), updated, updated); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := s.db.Exec(`UPDATE events SET trace_id=1+id%5`); err != nil {
+		t.Fatal(err)
+	}
+	// Two characters are too short for the trigram index, so every Event is read.
+	// Event 1744 opens the second batch of 256, so a cursor that skips it fails.
+	wantEvents, wantTraces := map[int64]bool{}, map[int64]bool{}
+	for i := int64(1); i <= 2000; i++ {
+		if strings.Contains(fmt.Sprintf("needlecommon event %06d", i), "44") {
+			wantEvents[i], wantTraces[1+i%5] = true, true
+		}
+	}
+	s.searchBudget = -time.Second
+
+	gotEvents, partial := map[int64]bool{}, false
+	query := SearchQuery{Query: "44", Mode: "exact"}
+	for pages := 0; pages == 0 || query.Cursor != ""; pages++ {
+		page, err := s.Search(ctx, query)
+		if err != nil || pages > 100 {
+			t.Fatalf("page %d: %+v %v", pages, page, err)
+		}
+		for _, result := range page.Results {
+			if gotEvents[result.EventID] {
+				t.Fatalf("event %d returned twice", result.EventID)
+			}
+			gotEvents[result.EventID] = true
+		}
+		partial = partial || page.Partial
+		query.Cursor = page.NextCursor
+	}
+	if !partial || fmt.Sprint(gotEvents) != fmt.Sprint(wantEvents) {
+		t.Fatalf("events partial=%v got %v; want %v", partial, gotEvents, wantEvents)
+	}
+
+	gotTraces, partial := map[int64]bool{}, false
+	query = SearchQuery{Query: "44", Mode: "exact", Limit: 1}
+	for pages := 0; pages == 0 || query.Cursor != ""; pages++ {
+		page, err := s.TranscriptCards(ctx, query)
+		if err != nil || pages > 100 {
+			t.Fatalf("card page %d: %+v %v", pages, page, err)
+		}
+		for _, card := range page.Cards {
+			if gotTraces[card.ID] {
+				t.Fatalf("card %d returned twice", card.ID)
+			}
+			gotTraces[card.ID] = true
+		}
+		partial = partial || page.Partial
+		query.Cursor = page.NextCursor
+	}
+	if !partial || fmt.Sprint(gotTraces) != fmt.Sprint(wantTraces) {
+		t.Fatalf("cards partial=%v got %v; want %v", partial, gotTraces, wantTraces)
 	}
 }
 
