@@ -24,11 +24,31 @@
 	let queryInput = $state<HTMLInputElement>();
 
 	function onKeydown(event: KeyboardEvent) {
+		moveFocus(event);
 		if (event.key !== '/' || event.metaKey || event.ctrlKey || event.altKey) return;
 		const target = event.target;
 		if (target instanceof HTMLElement && (['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) || target.isContentEditable)) return;
 		event.preventDefault();
 		queryInput?.focus();
+	}
+
+	let results = $state<HTMLElement>();
+
+	// ↓ from the search box (or from nothing, right after a search) enters the results; ↑ and ↓
+	// move between them, ↑ from the first goes back to the box. Enter opens the focused result.
+	function moveFocus(event: KeyboardEvent) {
+		if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+		if (event.altKey || event.metaKey || event.ctrlKey || event.shiftKey) return;
+		// Visible ones only: on wide screens the browse list is hidden beside the session list.
+		const links = [...(results?.querySelectorAll<HTMLAnchorElement>('a.session') ?? [])].filter((link) => link.offsetParent);
+		if (!links.length) return;
+		const index = links.indexOf(document.activeElement as HTMLAnchorElement);
+		const fromBox = document.activeElement === queryInput || document.activeElement === document.body;
+		if (!fromBox && index === -1) return;
+		event.preventDefault();
+		const next = fromBox ? (event.key === 'ArrowDown' ? 0 : -1) : index + (event.key === 'ArrowDown' ? 1 : -1);
+		if (next < 0) queryInput?.focus();
+		else links[Math.min(next, links.length - 1)].focus();
 	}
 
 	// Cards arrive newest first; consecutive cards on the same day share a heading.
@@ -137,8 +157,8 @@
 	</details>
 </form>
 
-<section class={[browsing && sidebar.open && 'is-browse']}>
-	<p class="browse-hint">Pick a session from the list, or search every prompt, reply, and tool output above. Press <kbd>/</kbd> to search.</p>
+<section class={[browsing && sidebar.open && 'is-browse']} bind:this={results}>
+	<p class="browse-hint">Pick a session from the list, or search every prompt, reply, and tool output above. Press <kbd>/</kbd> to search, then <kbd>↓</kbd> to move through the results.</p>
 	{#if data.error}
 		<p class="error" role="alert">{data.error}</p>
 	{/if}
@@ -400,11 +420,18 @@
 		text-decoration: none;
 	}
 
-	.session:hover {
+	.session:hover,
+	.session:focus-visible {
 		background: linear-gradient(to right, transparent, var(--accent) 6rem);
 	}
 
-	.session:hover .title {
+	.session:focus-visible {
+		outline: none;
+		box-shadow: inset 2px 0 0 var(--primary);
+	}
+
+	.session:hover .title,
+	.session:focus-visible .title {
 		color: #fff;
 	}
 
