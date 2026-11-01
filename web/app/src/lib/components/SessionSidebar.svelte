@@ -70,7 +70,8 @@
 		if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey || event.isComposing) return;
 		// Narrow screens hide the sidebar with CSS; its keys go with it.
 		if (isEditable(event.target) || !list?.offsetParent) return;
-		if (event.key === '/') {
+		// The search page's own box takes / there.
+		if (event.key === '/' && !document.getElementById('query')) {
 			event.preventDefault();
 			filterInput?.focus();
 			return;

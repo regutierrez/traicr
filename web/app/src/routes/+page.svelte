@@ -3,9 +3,11 @@
 	import { resolve } from '$app/paths';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
+	import SidebarToggle from '$lib/components/SidebarToggle.svelte';
 	import { clockTime, count, dayLabel, shortRepository } from '$lib/format';
 	import { highlightParts } from '$lib/highlight';
 	import { withQuery } from '$lib/links';
+	import { sidebar } from '$lib/sidebar.svelte';
 	import { harnesses, type TranscriptCard } from '$lib/types';
 	import type { PageProps } from './$types';
 
@@ -13,8 +15,20 @@
 	let query = $derived(page.url.searchParams.get('q') ?? '');
 	let mode = $derived(page.url.searchParams.get('mode') ?? 'fulltext');
 
-	const filterNames = ['harness', 'model', 'machine', 'repository', 'after', 'before', 'role', 'kind', 'tool'];
+	const filterNames = ['harness', 'model', 'machine', 'repository', 'after', 'before'];
 	let activeFilters = $derived(filterNames.filter((name) => field(name)).length);
+	// With nothing to search for, the session list beside the page already lists every session.
+	// Older links may still carry event-level filters (role, kind, tool); those are a search too.
+	let browsing = $derived(!query && !activeFilters && !['role', 'kind', 'tool'].some((name) => field(name)));
+	let queryInput = $state<HTMLInputElement>();
+
+	function onKeydown(event: KeyboardEvent) {
+		if (event.key !== '/' || event.metaKey || event.ctrlKey || event.altKey) return;
+		const target = event.target;
+		if (target instanceof HTMLElement && (['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) || target.isContentEditable)) return;
+		event.preventDefault();
+		queryInput?.focus();
+	}
 
 	// Cards arrive newest first; consecutive cards on the same day share a heading.
 	let days = $derived.by(() => {
@@ -42,8 +56,10 @@
 	<title>Sessions · Traicr</title>
 </svelte:head>
 
-<header class="page-head">
-	<h1>Sessions</h1>
+<svelte:window onkeydown={onKeydown} />
+
+<header class={['page-head', browsing && sidebar.open && 'is-browse']}>
+	<div class="title-row"><SidebarToggle /><h1>{browsing ? 'Sessions' : 'Search'}</h1></div>
 	<p class="count">
 		{query ? `${count(data.cards.length, 'match', 'matches')}${data.partial ? ' so far' : ''} for “${query}”` : `${count(data.cards.length, 'session')} on this page`}
 	</p>
@@ -61,6 +77,7 @@
 			name="q"
 			type="search"
 			value={query}
+			bind:this={queryInput}
 			placeholder="Search prompts, answers, and tool output…"
 			autocomplete="off"
 			spellcheck="false"
@@ -89,7 +106,12 @@
 				<Input name="model" value={field('model')} placeholder="claude-opus-5…" autocomplete="off" spellcheck="false" />
 			</label>
 			<label>Machine
-				<Input name="machine" value={field('machine')} placeholder="Machine ID…" autocomplete="off" spellcheck="false" />
+				<select name="machine">
+					<option value="">All machines</option>
+					{#each data.machines as machine (machine.id)}
+						<option value={machine.id} selected={field('machine') === machine.id}>{machine.hostname}</option>
+					{/each}
+				</select>
 			</label>
 			<label>Repository
 				<Input name="repository" value={field('repository')} placeholder="github.com/you/repo…" autocomplete="off" spellcheck="false" />
@@ -100,20 +122,12 @@
 			<label>Before
 				<Input type="date" name="before" value={field('before')} />
 			</label>
-			<label>Role
-				<Input name="role" value={field('role')} placeholder="user, assistant, tool…" autocomplete="off" />
-			</label>
-			<label>Event kind
-				<Input name="kind" value={field('kind')} placeholder="message, tool_call…" autocomplete="off" />
-			</label>
-			<label>Tool
-				<Input name="tool" value={field('tool')} placeholder="Bash, edit_file…" autocomplete="off" spellcheck="false" />
-			</label>
 		</div>
 	</details>
 </form>
 
-<section>
+<section class={[browsing && sidebar.open && 'is-browse']}>
+	<p class="browse-hint">Pick a session from the list, or search every prompt, reply, and tool output above. Press <kbd>/</kbd> to search.</p>
 	{#if data.error}
 		<p class="error" role="alert">{data.error}</p>
 	{/if}
@@ -162,10 +176,6 @@
 						{/each}
 					</span>
 				{/if}
-			</span>
-			<span class="size">
-				{count(card.event_count, 'record')}
-				{#if card.revision_count > 1}<span>{count(card.revision_count, 'revision')}</span>{/if}
 			</span>
 		</a>
 	</li>
@@ -371,7 +381,7 @@
 
 	.session {
 		display: grid;
-		grid-template-columns: 5.5rem minmax(0, 1fr) auto;
+		grid-template-columns: 5.5rem minmax(0, 1fr);
 		gap: 0 1.25rem;
 		padding: 0.85rem 0.75rem 0.9rem 0;
 		border-bottom: 1px solid var(--border);
@@ -455,16 +465,40 @@
 		-webkit-line-clamp: 2;
 	}
 
-	.size {
+	.title-row {
 		display: flex;
-		flex-direction: column;
-		align-items: flex-end;
-		gap: 0.2rem;
-		padding-top: 0.15rem;
+		align-items: center;
+		gap: 0.4rem;
+	}
+
+	.browse-hint {
+		display: none;
+		margin: 2rem 0;
 		color: var(--muted-foreground);
-		font-size: 12px;
-		font-variant-numeric: tabular-nums;
-		white-space: nowrap;
+		font-size: 13px;
+	}
+
+	.browse-hint kbd {
+		padding: 0.05rem 0.35rem;
+		border-radius: 4px;
+		background: color-mix(in oklab, var(--foreground) 8%, transparent);
+		font-family: var(--font-sans);
+		font-size: 11px;
+	}
+
+	/* On wide screens the session list beside the page does the browsing; this page only searches. */
+	@media (min-width: 1100px) {
+		.is-browse .count {
+			display: none;
+		}
+
+		section.is-browse > :not(.browse-hint) {
+			display: none;
+		}
+
+		section.is-browse > .browse-hint {
+			display: block;
+		}
 	}
 
 	.empty {
@@ -506,8 +540,5 @@
 			gap: 0.75rem;
 		}
 
-		.size {
-			display: none;
-		}
 	}
 </style>

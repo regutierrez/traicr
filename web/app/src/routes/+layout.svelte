@@ -11,9 +11,11 @@
 	let path = $derived(page.url.pathname);
 	let login = $derived(path === '/login');
 	let workspace = $derived(path.startsWith('/traces/'));
+	// The session list sits beside traces and beside search, which shows only matches there.
+	let withSidebar = $derived(workspace || path === '/');
 	let loggingOut = $state(false);
 	function onKeydown(event: KeyboardEvent) {
-		if (!workspace || event.key !== '[' || event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
+		if (!withSidebar || event.key !== '[' || event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
 		const target = event.target;
 		if (target instanceof HTMLElement && (['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) || target.isContentEditable)) return;
 		event.preventDefault();
@@ -117,7 +119,7 @@
 				</button>
 			</form>
 		</aside>
-		{#if workspace && sidebar.open}
+		{#if withSidebar && sidebar.open}
 			<SessionSidebar current={page.params.id ?? ''} />
 		{/if}
 		<div class="workspace">
