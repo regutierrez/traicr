@@ -5,7 +5,7 @@
 	import MiddleTruncate from '$lib/components/MiddleTruncate.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
-	import { dateAndTime, shortRepository } from '$lib/format';
+	import { clockTime, dateAndTime, shortRepository } from '$lib/format';
 	import { submitGoForm } from '$lib/forms';
 	import { revisionSourcesHref, sourceFileHref, transcriptHref, withQuery } from '$lib/links';
 	import { toolKindIcon, type ChipIcon } from '$lib/transcript/tools';
@@ -52,6 +52,18 @@
 	let outline = $derived(promptOutline(streamRows(path)));
 	// The newest reply that says something; a turn can end on tool calls alone.
 	let lastReply = $derived(outline.findLast((item) => item.reply));
+	const PROMPTS_SHOWN = 8;
+	let allPrompts = $state(false);
+	let shownPrompts = $derived(allPrompts ? outline : outline.slice(0, PROMPTS_SHOWN));
+	const promptDay = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' });
+	// A prompt shows its day ("Oct 30") only when the day changes, so a multi-day session reads as a timeline.
+	function promptWhen(index: number) {
+		const at = shownPrompts[index].at;
+		if (!at) return '';
+		const previous = shownPrompts[index - 1]?.at;
+		const sameDay = previous && new Date(previous).toDateString() === new Date(at).toDateString();
+		return sameDay ? clockTime(at) : `${promptDay.format(new Date(at))}, ${clockTime(at)}`;
+	}
 
 	const number = new Intl.NumberFormat();
 	const parseStatus: Record<string, string> = {
@@ -193,6 +205,28 @@
 					<p class="note">The transcript did not load, so activity is unknown.</p>
 				{/if}
 			</section>
+
+			{#if outline.length > 1}
+				<section>
+					<h2>Prompts <span class="dim">· {outline.length}</span></h2>
+					<ol class="prompts">
+						{#each shownPrompts as item, index (item.id)}
+							<li>
+								<a href={traceHref({ targetId: item.id })}>
+									<span class="prompt-number">{index + 1}</span>
+									<span class="prompt-text">{item.prompt || 'Prompt without text'}</span>
+									{#if item.at}<time class="prompt-time" datetime={item.at}>{promptWhen(index)}</time>{/if}
+								</a>
+							</li>
+						{/each}
+					</ol>
+					{#if outline.length > PROMPTS_SHOWN}
+						<button type="button" class="more" onclick={() => (allPrompts = !allPrompts)}>
+							{allPrompts ? 'Show fewer' : `Show all ${outline.length} prompts`}
+						</button>
+					{/if}
+				</section>
+			{/if}
 
 			{#if tools.length}
 				<section>
@@ -501,6 +535,52 @@
 
 	.tool-errors {
 		font-size: 12px;
+	}
+
+	.prompts a {
+		display: grid;
+		grid-template-columns: 1.75rem minmax(0, 1fr) auto;
+		align-items: baseline;
+		gap: 0.5rem;
+		margin-inline: -0.6rem;
+		padding: 0.3rem 0.6rem;
+		border-radius: var(--radius);
+		color: var(--foreground);
+		text-decoration: none;
+	}
+
+	.prompts a:hover,
+	.prompts a:focus-visible {
+		background: var(--accent);
+	}
+
+	.prompt-number,
+	.prompt-time {
+		color: var(--muted-foreground);
+		font-size: 12px;
+		font-variant-numeric: tabular-nums;
+	}
+
+	.prompt-text {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.more {
+		margin-top: 0.4rem;
+		border: 0;
+		background: transparent;
+		color: var(--muted-foreground);
+		padding: 0;
+		font: inherit;
+		font-size: 12px;
+		cursor: pointer;
+	}
+
+	.more:hover,
+	.more:focus-visible {
+		color: var(--foreground);
 	}
 
 	.links li + li {
