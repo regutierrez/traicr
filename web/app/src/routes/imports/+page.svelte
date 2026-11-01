@@ -8,17 +8,28 @@
 
 	let { data }: PageProps = $props();
 
+	type Tone = '' | 'warn' | 'bad';
+
 	// One readable outcome per upload instead of six mostly-zero columns.
 	function outcome(item: ImportReport) {
-		const parts: { text: string; tone: '' | 'warn' | 'bad' }[] = [];
-		const add = (value: number, label: string, tone: '' | 'warn' | 'bad' = '') => value && parts.push({ text: `${value} ${label}`, tone });
+		if (!item.complete) {
+			return item.id === data.health?.running_import_id ? [{ text: 'Running now', tone: '' as Tone }] : [{ text: 'Stopped before finishing', tone: 'warn' as Tone }];
+		}
+		const parts: { text: string; tone: Tone }[] = [];
+		const add = (value: number, label: string, tone: Tone = '') => value && parts.push({ text: `${value} ${label}`, tone });
 		add(item.imported, 'new');
 		add(item.updated, 'updated');
 		add(item.unchanged, 'unchanged');
 		add(item.partially_parsed, 'partly parsed', 'warn');
 		add(item.unsupported, 'unsupported', 'warn');
 		add(item.failed, 'failed', 'bad');
-		return parts.length ? parts : [{ text: 'No traces', tone: '' as const }];
+		return parts.length ? parts : [{ text: 'No traces', tone: '' as Tone }];
+	}
+
+	// The worst outcome colors the row's dot, so a failed upload is visible while scanning.
+	function rowTone(item: ImportReport): Tone {
+		const tones = outcome(item).map((part) => part.tone);
+		return tones.includes('bad') ? 'bad' : tones.includes('warn') ? 'warn' : '';
 	}
 
 	// "18h ago", "just now", or "on Oct 12" once shortAge switches to a date.
@@ -128,7 +139,7 @@
 			</thead>
 			<tbody>
 				{#each data.imports as item (item.id)}
-					<tr>
+					<tr data-tone={rowTone(item) || undefined}>
 						<td><a href={resolve('/imports/[id]', { id: String(item.id) })}>#{item.id}</a></td>
 						<td translate="no">{item.source_machine.hostname}</td>
 						<td><time datetime={item.created_at}>{dateAndTime(item.created_at)}</time></td>
@@ -268,10 +279,40 @@
 		background: var(--accent);
 	}
 
+	tbody tr {
+		position: relative;
+	}
+
 	td a {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.5rem;
 		color: var(--primary);
 		font-family: var(--font-mono);
 		text-decoration: none;
+	}
+
+	/* The dot keeps its space on every row so the IDs line up. */
+	td a::before {
+		content: '';
+		width: 6px;
+		height: 6px;
+		border-radius: 999px;
+	}
+
+	tr[data-tone='bad'] td a::before {
+		background: var(--destructive);
+	}
+
+	tr[data-tone='warn'] td a::before {
+		background: var(--primary);
+	}
+
+	/* The import link covers its whole row, so any cell opens the report. */
+	td a::after {
+		content: '';
+		position: absolute;
+		inset: 0;
 	}
 
 	.outcome {

@@ -33,6 +33,8 @@ export type ImportReport = {
 	partially_parsed: number;
 	unsupported: number;
 	failed: number;
+	/** False while the import runs or after it was interrupted. */
+	complete: boolean;
 	traces?: {
 		trace_id?: number;
 		harness: string;
