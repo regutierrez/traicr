@@ -1,20 +1,24 @@
 <script lang="ts">
 	import MiddleTruncate from '$lib/components/MiddleTruncate.svelte';
-	import { count } from '$lib/format';
+	import { count, dateAndTime } from '$lib/format';
 	import { sourceFileHref, transcriptHref } from '$lib/links';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
+	let collected = $derived(data.trace?.revisions?.find((revision) => String(revision.id) === data.id)?.collected_at);
 </script>
 
-<svelte:head><title>Native source files · Traicr</title></svelte:head>
+<svelte:head><title>Original files · Traicr</title></svelte:head>
 <header class="page-head">
 	<nav class="crumbs" aria-label="Breadcrumbs">
 		{#if data.trace}<a href={transcriptHref(data.trace.id)}>{data.trace.title || data.trace.native_trace_id}</a>{/if}
 		<span>Revision {data.id}</span>
 	</nav>
-	<h1>Native source files</h1>
-	<p class="page-lede">These files are the retained source of truth, including fields the normalizer does not yet understand.</p>
+	<h1>Original files</h1>
+	<p class="page-lede">
+		{#if collected}Collected <time datetime={collected}>{dateAndTime(collected)}</time>.{/if}
+		Exactly as collected, including data Traicr does not show yet.
+	</p>
 </header>
 {#if data.error}
 	<p class="text-destructive" role="alert">{data.error}</p>
