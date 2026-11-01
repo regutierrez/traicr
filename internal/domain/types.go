@@ -98,9 +98,11 @@ type Normalization struct {
 }
 
 type TraceOutcome struct {
-	TraceID        int64     `json:"trace_id,omitempty"`
-	Harness        string    `json:"harness"`
-	NativeTraceID  string    `json:"native_trace_id"`
+	TraceID       int64  `json:"trace_id,omitempty"`
+	Harness       string `json:"harness"`
+	NativeTraceID string `json:"native_trace_id"`
+	// Title is the trace's current display title, filled when a stored report is read.
+	Title          string    `json:"title,omitempty"`
 	RevisionDigest string    `json:"revision_digest"`
 	Status         string    `json:"status"`
 	Warnings       []Warning `json:"warnings,omitempty"`

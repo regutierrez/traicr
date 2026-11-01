@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/regutierrez/traicr/internal/domain"
 )
@@ -295,7 +296,42 @@ func (s *Store) ImportReport(ctx context.Context, id int64) (domain.ImportReport
 	if report.Traces == nil {
 		report.Traces = []domain.TraceOutcome{} // an unfinished import has no outcomes yet
 	}
+	if err := s.fillOutcomeTitles(ctx, report.Traces); err != nil {
+		return domain.ImportReport{}, err
+	}
 	return report, nil
+}
+
+// fillOutcomeTitles sets each outcome's current display title, so a report shows
+// renames made after the import. Deleted traces keep an empty title.
+func (s *Store) fillOutcomeTitles(ctx context.Context, outcomes []domain.TraceOutcome) error {
+	ids := make([]any, 0, len(outcomes))
+	for _, outcome := range outcomes {
+		if outcome.TraceID != 0 {
+			ids = append(ids, outcome.TraceID)
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	rows, err := s.db.QueryContext(ctx, "SELECT t.id,"+displayTitle+" FROM traces t WHERE t.id IN (?"+strings.Repeat(",?", len(ids)-1)+")", ids...)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	titles := map[int64]string{}
+	for rows.Next() {
+		var id int64
+		var title string
+		if err := rows.Scan(&id, &title); err != nil {
+			return err
+		}
+		titles[id] = title
+	}
+	for index := range outcomes {
+		outcomes[index].Title = titles[outcomes[index].TraceID]
+	}
+	return rows.Err()
 }
 
 func (s *Store) Machines(ctx context.Context) ([]Machine, error) {

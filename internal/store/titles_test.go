@@ -24,6 +24,7 @@ func TestTitleOverrideSurvivesImportsAndIsSearchable(t *testing.T) {
 		t.Fatalf("import: %+v, %v", report, err)
 	}
 	id := report.Traces[0].TraceID
+	firstImport := report.ID
 
 	searchCount := func(query, mode string) int {
 		t.Helper()
@@ -42,6 +43,11 @@ func TestTitleOverrideSurvivesImportsAndIsSearchable(t *testing.T) {
 		cards, err := s.TranscriptCards(ctx, store.SearchQuery{})
 		if err != nil || len(cards.Cards) != 1 || cards.Cards[0].Title != want {
 			t.Fatalf("cards: %+v, %v", cards, err)
+		}
+		// A stored import report names the trace by its current title, not the one it had when imported.
+		stored, err := s.ImportReport(ctx, firstImport)
+		if err != nil || len(stored.Traces) != 1 || stored.Traces[0].Title != want {
+			t.Fatalf("import report: %+v, %v", stored, err)
 		}
 	}
 

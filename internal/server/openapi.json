@@ -1816,6 +1816,10 @@
           "native_trace_id": {
             "type": "string"
           },
+          "title": {
+            "type": "string",
+            "description": "The trace's current display title, set when a stored report is read. Absent while importing and for deleted traces."
+          },
           "revision_digest": {
             "type": "string"
           },

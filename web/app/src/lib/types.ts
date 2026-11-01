@@ -35,6 +35,7 @@ export type ImportReport = {
 		trace_id?: number;
 		harness: string;
 		native_trace_id: string;
+		title?: string;
 		revision_digest: string;
 		status: string;
 		warnings?: Warning[];

@@ -50,11 +50,11 @@
 				<div class="line">
 					<span class={['status', trace.error ? 'bad' : trace.warnings?.length ? 'warn' : '']}>{trace.status}</span>
 					<span class="harness" translate="no">{trace.harness}</span>
-					<span class="id" translate="no">
+					<span class="id">
 						{#if trace.trace_id}
-							<a href={transcriptHref(trace.trace_id)}>{trace.native_trace_id}</a>
+							<a href={transcriptHref(trace.trace_id)} title={trace.native_trace_id}>{trace.title || trace.native_trace_id}</a>
 						{:else}
-							{trace.native_trace_id}
+							<span translate="no">{trace.native_trace_id}</span>
 						{/if}
 					</span>
 					<span class="digest" translate="no"><MiddleTruncate text={trace.revision_digest} tail={12} /></span>
@@ -132,8 +132,7 @@
 
 	.id {
 		overflow: hidden;
-		font-family: var(--font-mono);
-		font-size: 12px;
+		font-size: 13px;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
