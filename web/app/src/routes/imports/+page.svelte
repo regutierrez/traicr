@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { Button } from '$lib/components/ui/button';
-	import { count, dateAndTime, shortAge } from '$lib/format';
+	import { count, dateAndTime, fileSize, shortAge } from '$lib/format';
 	import { withQuery } from '$lib/links';
 	import type { ImportReport } from '$lib/types';
 	import type { PageProps } from './$types';
@@ -51,16 +51,6 @@
 		return { href, text: 'OK', tone: 'ok' };
 	}
 
-	const sizeUnits = ['byte', 'kilobyte', 'megabyte', 'gigabyte', 'terabyte'];
-	function size(bytes: number) {
-		let unit = 0;
-		while (bytes >= 1000 && unit < sizeUnits.length - 1) {
-			bytes /= 1000;
-			unit++;
-		}
-		return new Intl.NumberFormat(undefined, { style: 'unit', unit: sizeUnits[unit], unitDisplay: 'short', maximumFractionDigits: bytes < 10 ? 1 : 0 }).format(bytes);
-	}
-
 	// Problems first, so a glance at the top says whether anything needs a look.
 	let problems = $derived.by(() => {
 		const health = data.health;
@@ -85,7 +75,7 @@
 				count(health.traces, 'trace'),
 				count(health.events, 'event'),
 				count(health.imports.total, 'import'),
-				`${size(health.storage.database_bytes + health.storage.objects_bytes)} stored`
+				`${fileSize(health.storage.database_bytes + health.storage.objects_bytes)} stored`
 			].join(' · ')}
 		</p>
 		{#if problems.length}

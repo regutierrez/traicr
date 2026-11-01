@@ -43,6 +43,18 @@ export function count(value: number, singular: string, plural = `${singular}s`) 
 	return `${number.format(value)} ${value === 1 ? singular : plural}`;
 }
 
+const sizeUnits = ['byte', 'kilobyte', 'megabyte', 'gigabyte', 'terabyte'];
+
+/** "880 byte", "186 kB", "3.3 MB": decimal units, one decimal place below 10. */
+export function fileSize(bytes: number) {
+	let unit = 0;
+	while (bytes >= 1000 && unit < sizeUnits.length - 1) {
+		bytes /= 1000;
+		unit++;
+	}
+	return new Intl.NumberFormat(undefined, { style: 'unit', unit: sizeUnits[unit], unitDisplay: 'short', maximumFractionDigits: bytes < 10 ? 1 : 0 }).format(bytes);
+}
+
 /** "https://github.com/owner/repo" becomes "owner/repo"; local identities pass through. */
 export function shortRepository(value = '') {
 	const match = value.match(/^(?:https?:\/\/|git@)[^/:]+[/:](.+?)(?:\.git)?\/?$/);

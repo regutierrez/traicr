@@ -1,10 +1,19 @@
 <script lang="ts">
-	import MiddleTruncate from '$lib/components/MiddleTruncate.svelte';
-	import { count, dateAndTime } from '$lib/format';
+	import { count, dateAndTime, fileSize } from '$lib/format';
 	import { sourceFileHref, transcriptHref } from '$lib/links';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
+	// Every path starts with "source/"; the rest is the folder worth showing.
+	function parts(path: string) {
+		const shown = path.replace(/^source\//, '');
+		const cut = shown.lastIndexOf('/') + 1;
+		const name = shown.slice(cut);
+		// Attachments are named by their SHA-256; the first characters tell them apart.
+		return { folder: shown.slice(0, cut), name: /^[0-9a-f]{64}$/.test(name) ? `${name.slice(0, 12)}…` : name };
+	}
+	// Top-level files, such as the session export, before attachments.
+	let files = $derived(data.files.toSorted((a, b) => Number(parts(a.path).folder !== '') - Number(parts(b.path).folder !== '')));
 	let collected = $derived(data.trace?.revisions?.find((revision) => String(revision.id) === data.id)?.collected_at);
 </script>
 
@@ -29,16 +38,17 @@
 				<tr>
 					<th scope="col">File</th>
 					<th scope="col" class="num">Size</th>
-					<th scope="col">SHA-256</th>
 					<th scope="col"><span class="sr-only">Download</span></th>
 				</tr>
 			</thead>
 			<tbody>
-				{#each data.files as file (file.path)}
-					<tr>
-						<td class="path"><a href={sourceFileHref(file.revision_id, file.path)} data-sveltekit-reload><MiddleTruncate text={file.path} /></a></td>
-						<td class="num">{count(file.size, 'byte')}</td>
-						<td class="digest" translate="no"><MiddleTruncate text={file.digest} tail={12} /></td>
+				{#each files as file (file.path)}
+					{@const shown = parts(file.path)}
+					<tr title={`${file.path}\nSHA-256 ${file.digest}`}>
+						<td class="path">
+							<a href={sourceFileHref(file.revision_id, file.path)} data-sveltekit-reload translate="no"><span class="folder">{shown.folder}</span>{shown.name}</a>
+						</td>
+						<td class="num" title={count(file.size, 'byte')}>{fileSize(file.size)}</td>
 						<td class="num"><a class="download" href={sourceFileHref(file.revision_id, file.path)} data-sveltekit-reload>Download</a></td>
 					</tr>
 				{/each}
@@ -74,14 +84,10 @@
 	}
 
 	th:nth-child(2) {
-		width: 9rem;
+		width: 7rem;
 	}
 
 	th:nth-child(3) {
-		width: 12rem;
-	}
-
-	th:nth-child(4) {
 		width: 6rem;
 	}
 
@@ -89,8 +95,12 @@
 		background: var(--accent);
 	}
 
+	.path {
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
 	.path a {
-		display: flex;
 		color: var(--foreground);
 		font-family: var(--font-mono);
 		font-size: 12px;
@@ -102,13 +112,12 @@
 	}
 
 	.num {
+		font-variant-numeric: tabular-nums;
 		text-align: right;
 	}
 
-	.digest {
+	.folder {
 		color: var(--muted-foreground);
-		font-family: var(--font-mono);
-		font-size: 11px;
 	}
 
 	.download {
