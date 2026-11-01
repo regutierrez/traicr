@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { Button } from '$lib/components/ui/button';
-	import { count, dateAndTime } from '$lib/format';
+	import { count, dateAndTime, shortAge } from '$lib/format';
 	import { withQuery } from '$lib/links';
 	import type { ImportReport } from '$lib/types';
 	import type { PageProps } from './$types';
@@ -19,6 +19,25 @@
 		add(item.unsupported, 'unsupported', 'warn');
 		add(item.failed, 'failed', 'bad');
 		return parts.length ? parts : [{ text: 'No traces', tone: '' as const }];
+	}
+
+	// "18h ago", "just now", or "on Oct 12" once shortAge switches to a date.
+	function ago(value: string) {
+		const age = shortAge(value);
+		return age === 'now' ? 'just now' : /^\d+[mhdw]$/.test(age) ? `${age} ago` : `on ${age}`;
+	}
+
+	// Each machine's newest import, from /api/v1/status.
+	let latest = $derived(new Map((data.health?.machines ?? []).map((machine) => [machine.id, machine])));
+
+	function lastResult(id: string) {
+		const machine = latest.get(id);
+		if (!machine) return null;
+		const href = resolve('/imports/[id]', { id: String(machine.last_import_id) });
+		if (machine.last_import_id === data.health?.running_import_id) return { href, text: 'running', tone: 'running' };
+		if (!machine.last_import_complete) return { href, text: 'stopped before finishing', tone: 'warn' };
+		if (machine.last_import_failed_traces) return { href, text: `${machine.last_import_failed_traces} failed`, tone: 'bad' };
+		return { href, text: 'OK', tone: 'ok' };
 	}
 
 	const sizeUnits = ['byte', 'kilobyte', 'megabyte', 'gigabyte', 'terabyte'];
@@ -78,11 +97,16 @@
 	<h2>Machines</h2>
 	<ul class="machines">
 		{#each data.machines as machine (machine.id)}
+			{@const uploaded = latest.get(machine.id)?.last_import_at ?? machine.last_seen}
+			{@const result = lastResult(machine.id)}
 			<li>
 				<span class="host" translate="no">{machine.hostname}</span>
 				<span class="dim" translate="no">{machine.os} / {machine.arch}</span>
-				<span class="dim">last upload <time datetime={machine.last_seen}>{dateAndTime(machine.last_seen)}</time></span>
-				<a href={withQuery(resolve('/'), { machine: machine.id })}>Search its sessions</a>
+				<span class="dim">
+					last upload <time datetime={uploaded} title={dateAndTime(uploaded)}>{ago(uploaded)}</time>
+					{#if result}· <a class={['result', result.tone]} href={result.href}>{result.text}</a>{/if}
+				</span>
+				<a class="search" href={withQuery(resolve('/'), { machine: machine.id })}>Search its sessions</a>
 			</li>
 		{:else}
 			<li class="dim">No machines yet. A source machine appears here after its first upload.</li>
@@ -189,15 +213,31 @@
 		font-weight: 500;
 	}
 
-	.machines a {
+	.machines .search {
 		margin-left: auto;
 		color: var(--muted-foreground);
 		font-size: 12px;
 		text-decoration: none;
 	}
 
-	.machines a:hover {
+	.machines .search:hover {
 		color: var(--foreground);
+	}
+
+	.result {
+		text-decoration: none;
+	}
+
+	.result.ok {
+		color: var(--muted-foreground);
+	}
+
+	.result.running {
+		color: var(--foreground);
+	}
+
+	.result:hover {
+		text-decoration: underline;
 	}
 
 	.table-wrap {
