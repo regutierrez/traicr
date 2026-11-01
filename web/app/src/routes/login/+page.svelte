@@ -43,7 +43,9 @@
 		<!-- The page that sent them here; the server checks it stays inside Traicr. -->
 		<input type="hidden" name="next" value={page.url.searchParams.get('next') ?? ''} />
 		<label class="label" for="token">Admin token</label>
+		<!-- The token box is the only thing to do here. SvelteKit resets focus after navigation unless an element has autofocus. -->
 		<Input
+			autofocus
 			id="token"
 			name="token"
 			type="password"
