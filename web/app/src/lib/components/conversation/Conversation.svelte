@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { tick } from 'svelte';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { parseSkillBlock } from '$lib/transcript/skill';
@@ -13,6 +14,7 @@
 		customNote,
 		streamFilters,
 		streamRows,
+		promptOutline,
 		toolResults,
 		withoutSuggestedReplies,
 		type StreamFilter
@@ -26,6 +28,7 @@
 	import ExpandChip from './ExpandChip.svelte';
 	import Icon from './Icon.svelte';
 	import Markdown from './Markdown.svelte';
+	import PromptRail from './PromptRail.svelte';
 	import ToolRow from './ToolRow.svelte';
 	import WorkspaceHeader from './WorkspaceHeader.svelte';
 
@@ -107,6 +110,63 @@
 		const frame = requestAnimationFrame(() => (grown = { rows: current, count: count + MORE_ROWS }));
 		return () => cancelAnimationFrame(frame);
 	});
+	let prompts = $derived(promptOutline(rows));
+	let stream = $state<HTMLElement | null>(null);
+	let currentPrompt = $state(-1);
+	let scrollFrame = 0;
+
+	function promptTops() {
+		return stream ? [...stream.querySelectorAll('[data-prompt]')].map((element) => element.getBoundingClientRect().top) : [];
+	}
+
+	// The prompt being read is the last one that starts above a reading line a third of the way
+	// down. At the end of the trace the line drops to the bottom, since the last prompts cannot
+	// scroll any higher.
+	function updateCurrentPrompt() {
+		if (!stream) return;
+		const atEnd = stream.scrollTop + stream.clientHeight >= stream.scrollHeight - 2;
+		const line = stream.getBoundingClientRect().top + stream.clientHeight * (atEnd ? 1 : 1 / 3);
+		currentPrompt = promptTops().findLastIndex((top) => top <= line);
+	}
+
+	function onStreamScroll() {
+		cancelAnimationFrame(scrollFrame);
+		scrollFrame = requestAnimationFrame(updateCurrentPrompt);
+	}
+
+	$effect(() => {
+		void shownRows;
+		void tick().then(updateCurrentPrompt);
+	});
+
+	async function jumpToPrompt(index: number) {
+		const id = prompts[index]?.id;
+		if (!stream || !id) return;
+		const rowIndex = rows.findIndex((row) => row.id === id);
+		if (rowIndex >= shownCount) {
+			grown = { rows, count: rowIndex + MORE_ROWS };
+			await tick();
+		}
+		const element = stream.querySelector(`[data-prompt="${CSS.escape(id)}"]`);
+		// Rows that have not painted yet are sized by estimate, and the rows near the landing spot
+		// change size once they paint. Scroll again until the position holds.
+		let last = -1;
+		for (let attempt = 0; element && attempt < 8 && stream.scrollTop !== last; attempt += 1) {
+			last = stream.scrollTop;
+			element.scrollIntoView({ block: 'start' });
+			await new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)));
+		}
+	}
+
+	// The next prompt starts below the top edge; the previous one starts above it.
+	function stepPrompt(direction: 1 | -1) {
+		if (!stream) return;
+		const top = stream.getBoundingClientRect().top;
+		const tops = promptTops();
+		const index = direction === 1 ? tops.findIndex((y) => y > top + 24) : tops.findLastIndex((y) => y < top + 8);
+		void jumpToPrompt(index === -1 && direction === 1 ? tops.length : index);
+	}
+
 	let children = $derived(trace.children ?? []);
 	let leftover = $derived(leftoverCards(path, results, children));
 	let leaves = $derived(
@@ -123,9 +183,13 @@
 	function onKeydown(event: KeyboardEvent) {
 		if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey || event.isComposing) return;
 		if (isEditable(event.target)) return;
-		if (event.key.toLowerCase() === 'e') {
+		const key = event.key.toLowerCase();
+		if (key === 'e') {
 			event.preventDefault();
 			toggleSteps();
+		} else if (key === 'n' || key === 'p') {
+			event.preventDefault();
+			stepPrompt(key === 'n' ? 1 : -1);
 		}
 	}
 
@@ -338,8 +402,11 @@
 			{/if}
 		{/snippet}
 		<div class="body">
+			{#if prompts.length > 1}
+				<PromptRail items={prompts} current={currentPrompt} onSelect={jumpToPrompt} onStep={stepPrompt} />
+			{/if}
 			{#key sessionKey}
-				<div class="stream">
+				<div class="stream" bind:this={stream} onscroll={onStreamScroll}>
 					{#if filter !== 'all' || leaves.length > 1 || revision}
 						<div class="view-bar">
 							{#if revision}
@@ -395,7 +462,7 @@
 								</ExpandChip>
 							</section>
 						{:else}
-						<section class={['row', `is-${row.chrome}`, row.entries.some((entry) => entry.id === targetId) && 'is-target']}>
+						<section class={['row', `is-${row.chrome}`, row.entries.some((entry) => entry.id === targetId) && 'is-target']} data-prompt={row.chrome === 'user' ? row.id : undefined}>
 							{#if row.chrome === 'user'}<h2 class="sr-only">You</h2>{:else if row.chrome === 'agent'}<h2 class="sr-only">Agent</h2>{/if}
 							<div class={['turn-body', row.chrome === 'user' && 'bubble']}>
 								<div class={['clamp', row.chrome === 'user' && userPromptLength(row.entries) > 700 && !expandedUsers[row.id] && 'is-clamped']}>
@@ -447,10 +514,13 @@
 	}
 
 	.body {
+		position: relative;
 		display: flex;
 		min-height: 0;
 		flex: 1;
 		flex-direction: column;
+		/* The prompt rail shows only when this area leaves a gutter beside the column. */
+		container-type: inline-size;
 	}
 
 	.stream {
@@ -477,6 +547,10 @@
 		flex-direction: column;
 		align-items: flex-end;
 		margin-block: 2rem 1rem;
+	}
+
+	.row.is-user {
+		scroll-margin-top: 1rem;
 	}
 
 	.row.is-user:first-child {

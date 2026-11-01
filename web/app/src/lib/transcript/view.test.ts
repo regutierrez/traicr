@@ -6,7 +6,7 @@ import { parseSkillBlock } from './skill';
 import { buildTranscriptSession } from './session';
 import { isStructuredOutput, requestedEdit, resultFiles, resultText, toolChipLabel, toolChipParts, toolStatus, toolSummary } from './tools';
 import { defaultLeafId, findNewestLeaf, getPath, graphHasFork, graphLeaves } from './tree';
-import { displayModel, foldWork, groupTurns, isToolOnlyMessage, pathSessionFacts, streamCounts, streamRows, activeTime, timeSpan, toolNameCounts, toolResults, usageTotals, withoutSuggestedReplies, workSummary } from './turns';
+import { displayModel, foldWork, groupTurns, isToolOnlyMessage, pathSessionFacts, streamCounts, streamRows, activeTime, timeSpan, toolNameCounts, toolResults, usageTotals, withoutSuggestedReplies, workSummary, promptOutline } from './turns';
 import type { ToolCallBlock, TranscriptEntry } from './types';
 
 test('shared tools keep original names and display shell and file operations consistently', () => {
@@ -518,4 +518,23 @@ test("replies drop Amp's suggested-replies block but keep the tag when it is men
 	const reply = 'Done. The `<suggested-replies>` tag is stripped by Amp.\n\n<suggested-replies>\n**Ship it**\nRevert it\n</suggested-replies>';
 	expect(withoutSuggestedReplies(reply)).toBe('Done. The `<suggested-replies>` tag is stripped by Amp.');
 	expect(withoutSuggestedReplies('<suggested-replies>\nOK\n</suggested-replies>')).toBe('');
+});
+
+test('the prompt outline pairs each prompt with the last reply of its turn, as plain text', () => {
+	const say = (id: string, role: string, text: string) =>
+		({ id, parentId: null, type: 'message', message: { role, content: [{ type: 'text', text }] } }) as TranscriptEntry;
+	const rows = foldWork(
+		streamRows([
+			say('u1', 'user', '## Fix the **login** bug'),
+			say('a1', 'assistant', 'Looking.'),
+			say('a2', 'assistant', 'Fixed in `auth.ts`.\n\n<suggested-replies>\nShip it\n</suggested-replies>'),
+			say('u2', 'user', '<skill name="review" location="/skills/review">\nReview steps\n</skill>\n\nreview it'),
+			say('u3', 'user', 'thanks')
+		])
+	);
+	expect(promptOutline(rows)).toEqual([
+		{ id: 'u1', prompt: 'Fix the login bug', reply: 'Fixed in auth.ts.' },
+		{ id: 'u2', prompt: 'review it', reply: '' },
+		{ id: 'u3', prompt: 'thanks', reply: '' }
+	]);
 });

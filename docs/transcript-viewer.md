@@ -44,6 +44,9 @@ Forks do not grow a tree pane. Branches stay in the index: the count comes
 from the parent graph, and choosing Branches lists leaf paths so a different
 path can be selected without changing the page shape. Existing event/key links
 resolve to their containing turn. `E` expands or collapses every work row; single thoughts and tools open one at a time.
+The prompt rail in the right gutter has one tick per prompt; hovering previews the
+prompt and its turn's last reply, clicking jumps to it, and `n` / `p` jump to
+the next and previous prompt.
 
 Display features depend on the available data, not the harness name. Tool
 bodies start collapsed. Opened, a tool shows the command, the file path, the

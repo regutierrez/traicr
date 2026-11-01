@@ -51,6 +51,7 @@ Three panes, hideable:
 - A single Turn column. The user prompt is a compact, right-aligned bubble that marks where each Turn starts; agent replies are bubble-free prose at slightly reduced contrast. No avatars and no card stack.
 - Thinking and tools start collapsed. A run of three or more steps between replies folds into one work row: `Worked for 2m 14s · Ran 12 commands, read 3 files, and thought 4 times`. Inside it, a tool is one quiet row (`tool · path or status`) that expands in place for args and result. Steps that open a Child Trace never fold away.
 - The Trace header has one always-visible `Expand all` toggle (`E`) that opens every work row, with its key shown. Single thoughts and tools open one at a time.
+- A prompt rail, after T3 Code's timeline minimap, sits in the gutter right of the column, beside the scrollbar it mirrors, when there is room and the pointer is a mouse: one tick per prompt, the prompt being read in white. Hovering shows the prompt and its turn's last reply; clicking jumps there. `n` / `p` jump to the next and previous prompt.
 - Token totals, counts, and tool use live on Overview, not in the Trace header. Overview counts link to Trace filtered to that kind of row. Raw events and source records are not a tab; they stay on the API and `inspect-trace`.
 - A conversation tree exists only when the Event parent graph forks. Linear graphs must not grow a fake tree.
 - A Child Trace is a compact card/row that opens that Trace in the same workspace. Do not dock a second transcript pane (that was issue #8 concept A / the Linear plan). A missing child says it was never collected.
@@ -131,6 +132,7 @@ Three panes, hideable:
 50. As the archive owner, I want dark mode only, so that the chrome matches Cursor until I supply screenshots for tokens.
 51. As the archive owner, I want the browser UI to be the embedded SvelteKit app, so that Go templates are gone.
 52. As the archive owner, I want the Pi transcript DOM gone, so that Conversation is Svelte and shares one Event model with the other tabs.
+53. As the archive owner, I want to see every prompt of a long Trace at a glance and jump to one, so that I can find a moment without scrolling through hours of work.
 
 ## Implementation Decisions
 
@@ -149,7 +151,7 @@ Three panes, hideable:
 - Insights is specified but not built in the first implementation slice.
 - Dark-only shadcn-svelte (bits-ui) + Tailwind 4 tokens. Cursor-faithful token pass waits on screenshots. Until then, tune the default dark palette toward Cursor (near-black canvas, hairline borders, one muted accent) and delete the paper/green Traicr theme from any route the Svelte app owns.
 - Issue #9 (Linear-inspired, light-and-dark, right-hand inspector, command palette first) is superseded. Keep its useful constraints: density, keyboard, fewer cards, `prefers-reduced-motion`. Drop light mode, Linear-as-reference, and the child-transcript side pane.
-- Keyboard: `j`/`k`/`Enter` on the list, `[`/`]` for the list pane, `E` in Trace. Command palette is a later ticket.
+- Keyboard: `j`/`k`/`Enter` on the list, `[`/`]` for the list pane, `E` and `n`/`p` in Trace. Command palette is a later ticket.
 
 ### Test seams
 

@@ -1,3 +1,4 @@
+import { parseSkillBlock } from './skill';
 import { leafCount } from './tree';
 import { isHousekeepingTool, toolKind, toolKindLabel, type ToolKind } from './tools';
 import type { TranscriptEntry, Turn } from './types';
@@ -64,6 +65,38 @@ export function streamCounts(entries: TranscriptEntry[], graph: TranscriptEntry[
  */
 export function withoutSuggestedReplies(text: string) {
 	return text.replace(/(?:^|\n)[ \t]*<suggested-replies>[ \t]*\n[\s\S]*?\n[ \t]*<\/suggested-replies>[ \t]*(?=\n|$)/g, '').trimEnd();
+}
+
+export type PromptItem = { id: string; prompt: string; reply: string };
+
+function plainText(entries: TranscriptEntry[]) {
+	const text = entries
+		.flatMap((entry) => entry.message?.content ?? [])
+		.map((block) => {
+			if (block.type !== 'text') return '';
+			const skill = parseSkillBlock(block.text);
+			return skill ? (skill.userMessage ?? `Skill · ${skill.name}`) : withoutSuggestedReplies(block.text);
+		})
+		.join(' ')
+		.slice(0, 1500);
+	return text
+		.replace(/```[^\n]*/g, ' ')
+		.replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
+		.replace(/^\s{0,3}(?:#{1,6}|>|[-*+]|\d+\.)\s+/gm, '')
+		.replace(/[*`]+/g, '')
+		.replace(/\s+/g, ' ')
+		.trim();
+}
+
+/** One item per prompt for the Trace prompt rail: the prompt and its turn's last reply, as plain one-line text. */
+export function promptOutline(rows: { id: string; chrome: string; entries: TranscriptEntry[] }[]): PromptItem[] {
+	const items: PromptItem[] = [];
+	for (const row of rows) {
+		if (row.chrome === 'user') items.push({ id: row.id, prompt: plainText(row.entries), reply: '' });
+		const last = items.at(-1);
+		if (row.chrome === 'agent' && last) last.reply = plainText(row.entries) || last.reply;
+	}
+	return items;
 }
 
 export function isToolOnlyMessage(entry: TranscriptEntry) {
