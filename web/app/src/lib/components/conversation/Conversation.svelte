@@ -15,11 +15,13 @@
 		streamFilters,
 		streamRows,
 		promptOutline,
+		findHits,
 		toolResults,
 		withoutSuggestedReplies,
 		type StreamFilter
 	} from '$lib/transcript/turns';
 	import type { LoadedSession, TranscriptEntry } from '$lib/transcript/types';
+	import { searchExpression } from '$lib/highlight';
 	import { dateAndTime } from '$lib/format';
 	import type { Trace } from '$lib/types';
 	import AttachmentBlock from './AttachmentBlock.svelte';
@@ -167,6 +169,30 @@
 			element.scrollIntoView({ block });
 			await new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)));
 		}
+		focusHit(element);
+	}
+
+	// With a search active, the first hit inside the revealed message is marked as the current
+	// one and scrolled into view when the message is taller than the screen.
+	function focusHit(element: Element | null) {
+		const expression = findExpression;
+		if (!stream || typeof CSS === 'undefined' || !('highlights' in CSS)) return;
+		CSS.highlights.delete('trace-find-current');
+		if (!element || !expression) return;
+		const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+		for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+			expression.lastIndex = 0;
+			const match = expression.exec(node.nodeValue ?? '');
+			if (!match?.[0]) continue;
+			const range = new Range();
+			range.setStart(node, match.index);
+			range.setEnd(node, match.index + match[0].length);
+			CSS.highlights.set('trace-find-current', new Highlight(range));
+			const box = range.getBoundingClientRect();
+			const view = stream.getBoundingClientRect();
+			if (box.bottom > view.bottom - 40) stream.scrollTop += box.top - view.top - view.height / 3;
+			return;
+		}
 	}
 
 	function jumpToPrompt(index: number) {
@@ -204,6 +230,93 @@
 		history.replaceState(history.state, '', messageHref(entryId));
 	}
 
+	// A search result opens here with ?q= and ?mode=: its hits are marked in the text, and the
+	// find bar steps through every message (or tool call) that matched, opening folds and tools.
+	// Steps and Clear belong to one trace and query; opening another trace starts fresh.
+	let findQuery = $derived(page.url.searchParams.get('q') ?? '');
+	let findMode = $derived(page.url.searchParams.get('mode') ?? 'fulltext');
+	let findKey = $derived(`${sessionKey}:${findMode}:${findQuery}`);
+	let findCleared = $state('');
+	let findExpression = $derived(findQuery && findCleared !== findKey ? searchExpression(findQuery, findMode) : null);
+	let hits = $derived(session && findExpression ? findHits(path, findExpression) : []);
+	let findStep = $state.raw<{ key: string; index: number } | null>(null);
+	let findIndex = $derived(findStep?.key === findKey ? findStep.index : -1);
+	// Until the reader steps, the current hit is the message the link opened.
+	let hitIndex = $derived(findIndex >= 0 ? findIndex : hits.findIndex((hit) => hit.target === linkedId));
+	// The current hit's tool opens, so a match in its arguments or output shows.
+	let findCall = $derived(hits[hitIndex]?.call ?? '');
+	async function stepFind(direction: 1 | -1) {
+		const count = hits.length;
+		if (!count) return;
+		const index = hitIndex < 0 ? (direction === 1 ? 0 : count - 1) : (hitIndex + direction + count) % count;
+		const hit = hits[index];
+		findStep = { key: findKey, index };
+		selection = { key: sessionKey, leaf: leafId, target: hit.target };
+		const owner = targetId;
+		revealedTarget = `${sessionKey}:${owner}`;
+		const params = new URLSearchParams(page.url.searchParams);
+		params.delete('event');
+		params.set('targetId', hit.target);
+		history.replaceState(history.state, '', `${resolve('/traces/[id]/trace', { id: String(trace.id) })}?${params}`);
+		await tick();
+		const rowIndex = rows.findIndex((row) => row.entries.some((entry) => entry.id === owner));
+		void reveal(
+			rowIndex,
+			(root) =>
+				(hit.call && root.querySelector(`#tool-call-${CSS.escape(hit.call)}`)) ||
+				root.querySelector('.is-target-block') ||
+				root.querySelector('.row.is-target'),
+			'start'
+		);
+	}
+
+	function clearFind() {
+		findCleared = findKey;
+		const params = new URLSearchParams(page.url.searchParams);
+		params.delete('q');
+		params.delete('mode');
+		const href = resolve('/traces/[id]/trace', { id: String(trace.id) });
+		history.replaceState(history.state, '', params.size ? `${href}?${params}` : href);
+	}
+
+	// Marks every hit in the rendered text with the CSS Custom Highlight API, which paints
+	// ranges without changing the DOM. It repaints when rows grow or folds and tools open.
+	$effect(() => {
+		const expression = findExpression;
+		const root = stream;
+		if (!expression || !root || typeof CSS === 'undefined' || !('highlights' in CSS)) return;
+		let frame = 0;
+		const paint = () => {
+			const ranges: Range[] = [];
+			const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+			for (let node = walker.nextNode(); node && ranges.length < 5000; node = walker.nextNode()) {
+				// matchAll starts from the expression's lastIndex, which findHits may have moved.
+				expression.lastIndex = 0;
+				for (const match of (node.nodeValue ?? '').matchAll(expression)) {
+					if (!match[0]) continue;
+					const range = new Range();
+					range.setStart(node, match.index);
+					range.setEnd(node, match.index + match[0].length);
+					ranges.push(range);
+				}
+			}
+			CSS.highlights.set('trace-find', new Highlight(...ranges));
+		};
+		const schedule = () => {
+			cancelAnimationFrame(frame);
+			frame = requestAnimationFrame(paint);
+		};
+		schedule();
+		const observer = new MutationObserver(schedule);
+		observer.observe(root, { childList: true, subtree: true, characterData: true });
+		return () => {
+			observer.disconnect();
+			cancelAnimationFrame(frame);
+			CSS.highlights.delete('trace-find');
+			CSS.highlights.delete('trace-find-current');
+		};
+	});
+
 	// The next prompt starts below the top edge; the previous one starts above it.
 	function stepPrompt(direction: 1 | -1) {
 		if (!stream) return;
@@ -236,6 +349,11 @@
 		} else if (key === 'n' || key === 'p') {
 			event.preventDefault();
 			stepPrompt(key === 'n' ? 1 : -1);
+		} else if (findExpression && (event.key === '.' || event.key === ',')) {
+			event.preventDefault();
+			void stepFind(event.key === '.' ? 1 : -1);
+		} else if (findExpression && event.key === 'Escape') {
+			clearFind();
 		}
 	}
 
@@ -260,12 +378,13 @@
 		);
 	}
 
+	// While stepping through search hits, the current message's collapsed parts open so the hit shows.
 	function thinkingIsOpen(id: string) {
-		return thinkingOpen[id] ?? false;
+		return thinkingOpen[id] ?? (Boolean(findExpression) && id.slice(0, id.lastIndexOf(':')) === targetId);
 	}
 
 	function toolIsOpen(id: string) {
-		return toolOpen[id] ?? id === targetCall;
+		return toolOpen[id] ?? (id === targetCall || id === findCall);
 	}
 
 	function selectNode(entryId: string) {
@@ -431,7 +550,12 @@
 				</article>
 			{:else if entry.type === 'compaction' || entry.type === 'branch_summary'}
 				<div id="entry-{entry.id}">
-					<ExpandChip icon={entry.type === 'compaction' ? 'compaction' : 'branch'} verb={entry.type === 'compaction' ? 'Compaction' : 'Branch summary'}>
+					<ExpandChip
+						icon={entry.type === 'compaction' ? 'compaction' : 'branch'}
+						verb={entry.type === 'compaction' ? 'Compaction' : 'Branch summary'}
+						open={thinkingIsOpen(`${entry.id}:summary`)}
+						onToggle={(next) => (thinkingOpen[`${entry.id}:summary`] = next)}
+					>
 						<Markdown text={entry.summary || ''} />
 					</ExpandChip>
 				</div>
@@ -448,6 +572,19 @@
 			{/if}
 		{/snippet}
 		<div class="body">
+			{#if findExpression}
+				<div class="find-bar" role="search" aria-label="Matches in this trace">
+					<span class="find-query">“{findQuery}”</span>
+					<span class="find-count" aria-live="polite">
+						{#if !hits.length}No matching messages on this path{:else if hitIndex >= 0}{hitIndex + 1} of {hits.length}{:else}{hits.length} {hits.length === 1 ? 'message' : 'messages'}{/if}
+					</span>
+					{#if hits.length}
+						<button type="button" title="Previous match (,)" aria-label="Previous match" onclick={() => stepFind(-1)}><span class="up"><Icon name="chevron" size={13} /></span></button>
+						<button type="button" title="Next match (.)" aria-label="Next match" onclick={() => stepFind(1)}><span class="down"><Icon name="chevron" size={13} /></span></button>
+					{/if}
+					<button type="button" class="find-close" title="Stop marking matches (Esc)" onclick={clearFind}>Clear</button>
+				</div>
+			{/if}
 			{#if prompts.length > 1}
 				<PromptRail items={prompts} current={currentPrompt} onSelect={jumpToPrompt} onStep={stepPrompt} />
 			{/if}
@@ -503,7 +640,13 @@
 						{:else if row.chrome === 'automation'}
 							<!-- Amp wrote this on the user's behalf; it is a note in the flow, not a prompt. -->
 							<section class={['row', 'is-automation', row.entries.some((entry) => entry.id === targetId) && 'is-target']} id="entry-{row.id}">
-								<ExpandChip icon="agent" verb="Automation" rest={automationText(row.entries).split('\n')[0]}>
+								<ExpandChip
+									icon="agent"
+									verb="Automation"
+									rest={automationText(row.entries).split('\n')[0]}
+									open={thinkingIsOpen(`${row.id}:automation`)}
+									onToggle={(next) => (thinkingOpen[`${row.id}:automation`] = next)}
+								>
 									<div class="automation-body"><Markdown text={automationText(row.entries)} /></div>
 								</ExpandChip>
 							</section>
@@ -806,6 +949,67 @@
 		font-family: var(--font-mono);
 		font-size: 12px;
 		white-space: pre-wrap;
+	}
+
+	/* Above the stream, so it stays in view while the reader steps through matches. */
+	.find-bar {
+		display: flex;
+		width: min(46rem, calc(100% - 2.5rem));
+		align-items: center;
+		gap: 0.35rem;
+		margin: 0.6rem auto 0;
+		padding: 0.3rem 0.4rem 0.3rem 0.75rem;
+		border: 1px solid var(--border);
+		border-radius: var(--radius);
+		background: var(--card);
+		color: var(--muted-foreground);
+		font-size: 12px;
+		font-variant-numeric: tabular-nums;
+	}
+
+	.find-query {
+		overflow: hidden;
+		color: var(--foreground);
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.find-count {
+		flex-shrink: 0;
+		margin-right: auto;
+		padding-left: 0.35rem;
+	}
+
+	.find-bar button {
+		display: inline-flex;
+		height: 1.6rem;
+		min-width: 1.6rem;
+		flex-shrink: 0;
+		align-items: center;
+		justify-content: center;
+		border: 0;
+		border-radius: 6px;
+		background: transparent;
+		color: var(--muted-foreground);
+		padding: 0 0.4rem;
+		font: inherit;
+		cursor: pointer;
+	}
+
+	.find-bar button:hover,
+	.find-bar button:focus-visible {
+		background: var(--accent);
+		color: var(--foreground);
+	}
+
+	.find-bar .up {
+		display: inline-flex;
+		transform: rotate(-90deg);
+	}
+
+	.find-bar .down {
+		display: inline-flex;
+		transform: rotate(90deg);
 	}
 
 	.view-bar {

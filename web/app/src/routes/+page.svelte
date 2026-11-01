@@ -70,7 +70,8 @@
 	function cardHref(card: TranscriptCard) {
 		const id = String(card.matched_child?.id ?? card.id);
 		if (!card.matched_event_id) return resolve('/traces/[id]', { id });
-		return withQuery(resolve('/traces/[id]/trace', { id }), new URLSearchParams({ event: String(card.matched_event_id) }));
+		// The query rides along so Trace can mark its hits and step through them.
+		return withQuery(resolve('/traces/[id]/trace', { id }), new URLSearchParams({ event: String(card.matched_event_id), q: query, mode }));
 	}
 
 	function nextHref(cursor: string) {

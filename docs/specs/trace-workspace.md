@@ -52,6 +52,7 @@ Three panes, hideable:
 - Thinking and tools start collapsed. A run of three or more steps between replies folds into one work row: `Worked for 2m 14s · Ran 12 commands, read 3 files, and thought 4 times`. Inside it, a tool is one quiet row (`tool · path or status`) that expands in place for args and result. Steps that open a Child Trace never fold away.
 - The Trace header has one always-visible `Expand all` toggle (`E`) that opens every work row, with its key shown. Single thoughts and tools open one at a time.
 - A prompt rail, after T3 Code's timeline minimap, sits in the gutter right of the column, beside the scrollbar it mirrors, when there is room and the pointer is a mouse: one tick per prompt, the prompt being read in white. Hovering shows the prompt and its turn's last reply; clicking jumps there. `n` / `p` jump to the next and previous prompt.
+- Opened from search, Trace marks the query's hits and a find bar steps through the matching messages (`.` / `,`, `Esc` to clear).
 - A message's time shows on hover and links to that message; a message link opens with the message at the top and outlined.
 - Token totals, counts, and tool use live on Overview, not in the Trace header. Overview counts link to Trace filtered to that kind of row. Raw events and source records are not a tab; they stay on the API and `inspect-trace`.
 - A conversation tree exists only when the Event parent graph forks. Linear graphs must not grow a fake tree.
@@ -152,7 +153,7 @@ Three panes, hideable:
 - Insights is specified but not built in the first implementation slice.
 - Dark-only shadcn-svelte (bits-ui) + Tailwind 4 tokens. Cursor-faithful token pass waits on screenshots. Until then, tune the default dark palette toward Cursor (near-black canvas, hairline borders, one muted accent) and delete the paper/green Traicr theme from any route the Svelte app owns.
 - Issue #9 (Linear-inspired, light-and-dark, right-hand inspector, command palette first) is superseded. Keep its useful constraints: density, keyboard, fewer cards, `prefers-reduced-motion`. Drop light mode, Linear-as-reference, and the child-transcript side pane.
-- Keyboard: `j`/`k`/`Enter` on the list, `[`/`]` for the list pane, `E` and `n`/`p` in Trace. Command palette is a later ticket.
+- Keyboard: `j`/`k`/`Enter` on the list, `[`/`]` for the list pane, `E`, `n`/`p`, and `.`/`,` (search hits) in Trace. Command palette is a later ticket.
 
 ### Test seams
 

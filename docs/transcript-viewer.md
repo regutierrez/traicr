@@ -5,8 +5,11 @@ whole transcript in the Svelte Conversation view. Text search still searches
 event observations, but returns one card per matching session, with a matching
 excerpt cut at word edges, marked `…` where cut, and shown as plain text. A matching card carries `matched_event_id`, the earliest matching Event,
 and opens Trace there (in the subagent when the match was in one), outlined and
-with its work row and, for tool output, its tool opened. Cards sort by session
-update time, then ID. Session-level cursors
+with its work row and, for tool output, its tool opened. The result link also
+carries `q` and `mode`: Trace marks every hit with the CSS Custom Highlight API
+and shows a find bar ("3 of 91") that steps through each matching message or
+tool call with `.` and `,`, opening folds, tools, and notes as it goes; `Esc`
+clears it. Cards sort by session update time, then ID. Session-level cursors
 prevent repeated matches from appearing on separate pages. Sessions without
 normalized events remain visible when browsing.
 

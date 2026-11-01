@@ -6,7 +6,7 @@ import { parseSkillBlock } from './skill';
 import { buildTranscriptSession } from './session';
 import { isStructuredOutput, requestedEdit, resultFiles, resultText, toolChipLabel, toolChipParts, toolStatus, toolSummary } from './tools';
 import { defaultLeafId, findNewestLeaf, getPath, graphHasFork, graphLeaves } from './tree';
-import { displayModel, foldWork, groupTurns, isToolOnlyMessage, pathSessionFacts, streamCounts, streamRows, activeTime, timeSpan, toolNameCounts, toolResults, usageTotals, withoutSuggestedReplies, workSummary, promptOutline, plainMarkdown } from './turns';
+import { displayModel, foldWork, groupTurns, isToolOnlyMessage, pathSessionFacts, streamCounts, streamRows, activeTime, timeSpan, toolNameCounts, toolResults, usageTotals, withoutSuggestedReplies, workSummary, promptOutline, plainMarkdown, findHits } from './turns';
 import type { ToolCallBlock, TranscriptEntry } from './types';
 
 test('shared tools keep original names and display shell and file operations consistently', () => {
@@ -549,4 +549,28 @@ test('previews read markdown and JSON-escaped text as one plain line', () => {
 	expect(plainMarkdown('## Plan\n\n- read `a.ts`\n4. **write** tests\n| a | b |\n|---|---|')).toBe('Plan read a.ts write tests a b');
 	// Literal "\n" escapes from JSON arguments read as spaces, and a fence ends at its language.
 	expect(plainMarkdown('…ate is **not usable**.\\n```diff\\nTradeDesk [docs](https://x.y)')).toBe('…ate is not usable. TradeDesk docs');
+});
+
+test('find stops at each matching message and each matching tool call once, in order', () => {
+	const entry = (id: string, role: string, content: unknown[], extra: object = {}) =>
+		({ id, parentId: null, type: 'message', message: { role, content, ...extra } }) as TranscriptEntry;
+	const path = [
+		entry('u', 'user', [{ type: 'text', text: 'why does the Needle fail?' }]),
+		entry('a', 'assistant', [
+			{ type: 'text', text: 'Looking.\n\n<suggested-replies>\nfind the needle\n</suggested-replies>' },
+			{ type: 'toolCall', id: 'c1', name: 'bash', arguments: { command: 'rg needle' } },
+			{ type: 'toolCall', id: 'c2', name: 'bash', arguments: { command: 'ls' } }
+		]),
+		entry('r1', 'toolResult', [{ type: 'text', text: 'src/needle.ts' }], { toolCallId: 'c1' }),
+		entry('r2', 'toolResult', [{ type: 'text', text: 'needle.ts' }], { toolCallId: 'c2' }),
+		{ id: 'k', parentId: null, type: 'compaction', summary: 'Kept the needle fix.' } as TranscriptEntry
+	];
+	// Words mode is case-insensitive; suggested replies are not part of the reply; c1's
+	// result does not add a second stop for c1, but c2's result is c2's only stop.
+	expect(findHits(path, /needle/gi)).toEqual([
+		{ target: 'u', call: '' },
+		{ target: 'a', call: 'c1' },
+		{ target: 'r2', call: 'c2' },
+		{ target: 'k', call: '' }
+	]);
 });

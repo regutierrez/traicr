@@ -17,34 +17,41 @@ function unsafeRegex(pattern: string): boolean {
 	return /[+*][+*]/.test(pattern);
 }
 
+/**
+ * The global expression that marks a search's hits, as the server matches them: Words
+ * mode marks each word, case-insensitively; Exact and Regex are case-sensitive. Null when
+ * the query cannot be marked safely.
+ */
+export function searchExpression(query: string, mode: string): RegExp | null {
+	if (!query || query.length > MAX_QUERY) return null;
+	let pattern = '';
+	if (mode === 'regex') {
+		if (unsafeRegex(query)) return null;
+		pattern = query;
+	} else if (mode === 'exact') {
+		pattern = escapeRegExp(query);
+	} else {
+		const terms = query.match(/[\p{L}\p{N}_]+/gu) ?? [];
+		if (terms.length === 0) return null;
+		pattern = terms.map(escapeRegExp).join('|');
+	}
+	try {
+		return new RegExp(pattern, mode === 'regex' || mode === 'exact' ? 'g' : 'gi');
+	} catch {
+		return null;
+	}
+}
+
 export function highlightParts(text: string, query: string, mode: string) {
 	if (!text) return [{ text: '', mark: false }];
-	if (!query) return [{ text, mark: false }];
-	if (query.length > MAX_QUERY) return [{ text, mark: false }];
+	const expression = searchExpression(query, mode);
+	if (!expression) return [{ text, mark: false }];
 
 	let haystack = text;
 	let overflow = '';
 	if (mode === 'regex' && text.length > MAX_HAYSTACK) {
 		haystack = text.slice(0, MAX_HAYSTACK);
 		overflow = text.slice(MAX_HAYSTACK);
-	}
-
-	let pattern = '';
-	if (mode === 'regex') {
-		if (unsafeRegex(query)) return [{ text, mark: false }];
-		pattern = query;
-	} else if (mode === 'exact') {
-		pattern = escapeRegExp(query);
-	} else {
-		const terms = query.match(/[\p{L}\p{N}_]+/gu) ?? [];
-		if (terms.length === 0) return [{ text, mark: false }];
-		pattern = terms.map(escapeRegExp).join('|');
-	}
-	let expression: RegExp;
-	try {
-		expression = new RegExp(pattern, mode === 'regex' || mode === 'exact' ? 'g' : 'gi');
-	} catch {
-		return [{ text, mark: false }];
 	}
 	const parts: { text: string; mark: boolean }[] = [];
 	let last = 0;

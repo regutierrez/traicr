@@ -193,3 +193,15 @@
 		scroll-behavior: auto !important;
 	}
 }
+
+/* Search hits in Trace, painted by the CSS Custom Highlight API (see Conversation.svelte). */
+::highlight(trace-find) {
+	background-color: color-mix(in oklch, var(--primary) 32%, transparent);
+	color: var(--foreground);
+}
+
+/* The hit the find bar is on. */
+::highlight(trace-find-current) {
+	background-color: var(--primary);
+	color: var(--primary-foreground);
+}

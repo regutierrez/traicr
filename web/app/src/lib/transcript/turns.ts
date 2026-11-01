@@ -124,6 +124,42 @@ export function promptOutline(rows: { id: string; chrome: string; entries: Trans
 	return items;
 }
 
+/** One stop when stepping through a search's hits in Trace: a message, or one tool call in it. */
+export type FindHit = { target: string; call: string };
+
+/**
+ * Every message on the path whose text matches, in order. A tool call whose arguments
+ * match, or whose result does, is its own stop, so stepping can open that tool. A
+ * result's stop targets the result entry, which Trace shows inside its call's row.
+ */
+export function findHits(path: TranscriptEntry[], expression: RegExp): FindHit[] {
+	const hits: FindHit[] = [];
+	const seen = new Set<string>();
+	const matches = (text: string | undefined) => {
+		expression.lastIndex = 0;
+		return Boolean(text) && expression.test(text!);
+	};
+	const add = (target: string, call = '') => {
+		if (seen.has(call || target)) return;
+		seen.add(call || target);
+		hits.push({ target, call });
+	};
+	for (const entry of path) {
+		const message = entry.message;
+		if (!message) {
+			if (matches(entry.summary)) add(entry.id);
+			continue;
+		}
+		for (const block of message.content ?? []) {
+			if (block.type === 'text' && matches(message.role === 'assistant' ? withoutSuggestedReplies(block.text) : block.text)) {
+				add(entry.id, message.role === 'toolResult' ? (message.toolCallId ?? '') : '');
+			} else if (block.type === 'thinking' && matches(block.thinking)) add(entry.id);
+			else if (block.type === 'toolCall' && matches(JSON.stringify(block.arguments ?? {}))) add(entry.id, block.id);
+		}
+	}
+	return hits;
+}
+
 export function isToolOnlyMessage(entry: TranscriptEntry) {
 	const message = entry.message;
 	if (!message || message.role !== 'assistant') return false;
