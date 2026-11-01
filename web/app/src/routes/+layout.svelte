@@ -71,8 +71,8 @@
 		</svg>
 	{:else}
 		<svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-			<path d="M6 4.5H4.2A1.2 1.2 0 0 0 3 5.7v6.1A1.2 1.2 0 0 0 4.2 13h7.6A1.2 1.2 0 0 0 13 11.8V5.7A1.2 1.2 0 0 0 11.8 4.5H10" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
-			<path d="M8 2.5v6.2M6.2 7.2 8 9l1.8-1.8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" />
+			<path d="M6.5 2.75H4.25a1.25 1.25 0 0 0-1.25 1.25v8a1.25 1.25 0 0 0 1.25 1.25H6.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
+			<path d="M7 8h6.5M10.75 5.25 13.5 8l-2.75 2.75" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" />
 		</svg>
 	{/if}
 {/snippet}
