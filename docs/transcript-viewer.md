@@ -23,7 +23,7 @@ A trace opens on two tabs. **Overview** (the default, `/traces/{id}`) is the
 session at a glance: the first ask and the last reply, each opening Trace at
 that message, then when it ran and for how long, how the agent ran (model,
 thinking level, Amp agent mode and skills), where (branch and commit,
-directory, machine and client), counts of prompts, replies, thoughts,
+directory, machine and client), counts of prompts, replies, thoughts (hidden when no thought kept its text),
 tool calls, and compactions, a numbered list of every prompt (the first eight,
 then all on request) that opens Trace at each one, every failed tool call with
 its command and exit code, linked to it in Trace, tool use by name (housekeeping

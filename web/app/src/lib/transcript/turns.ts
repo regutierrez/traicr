@@ -11,6 +11,8 @@ export type StreamCounts = {
 	prompts: number;
 	responses: number;
 	thinking: number;
+	/** Thoughts whose reasoning text the export kept; Amp usually leaves it out. */
+	thinkingWithText: number;
 	tools: number;
 	compaction: number;
 	branches: number;
@@ -26,6 +28,7 @@ export function streamCounts(entries: TranscriptEntry[], graph: TranscriptEntry[
 	let prompts = 0;
 	let responses = 0;
 	let thinking = 0;
+	let thinkingWithText = 0;
 	let tools = 0;
 	let compaction = 0;
 	const kinds = new Map<ToolKind, number>();
@@ -35,7 +38,10 @@ export function streamCounts(entries: TranscriptEntry[], graph: TranscriptEntry[
 			const content = entry.message.content ?? [];
 			if (content.some((block) => block.type === 'text')) responses += 1;
 			for (const block of content) {
-				if (block.type === 'thinking') thinking += 1;
+				if (block.type === 'thinking') {
+					thinking += 1;
+					if (block.thinking) thinkingWithText += 1;
+				}
 				if (block.type === 'toolCall') {
 					tools += 1;
 					const kind = toolKind(block.name);
@@ -49,6 +55,7 @@ export function streamCounts(entries: TranscriptEntry[], graph: TranscriptEntry[
 		prompts,
 		responses,
 		thinking,
+		thinkingWithText,
 		tools,
 		compaction,
 		branches: leafCount(graph),

@@ -499,6 +499,10 @@ test('housekeeping tools never trigger a fold and stay out of the summary; autom
 	const rows = streamRows([user, reply, automation, reply]);
 	expect(rows.map((row) => row.chrome)).toEqual(['user', 'agent', 'automation', 'agent']);
 	expect(streamCounts([user, automation]).prompts).toBe(1);
+
+	// Overview hides the Thoughts card when no thought kept its text.
+	const thoughts = { id: 't', parentId: null, type: 'message', message: { role: 'assistant', content: [{ type: 'thinking', thinking: '' }, { type: 'thinking', thinking: 'why' }] } } as TranscriptEntry;
+	expect(streamCounts([thoughts])).toMatchObject({ thinking: 2, thinkingWithText: 1 });
 });
 
 test('active time sums each turn and leaves out idle time between prompts', () => {

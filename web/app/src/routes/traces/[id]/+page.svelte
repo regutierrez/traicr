@@ -105,13 +105,15 @@
 		return withQuery(resolve('/traces/[id]/trace', { id: String(trace?.id) }), query);
 	}
 
-	const activity: { filter: StreamFilter; label: string; icon: ChipIcon; flip?: boolean; count: () => number }[] = [
+	const activityItems: { filter: StreamFilter; label: string; icon: ChipIcon; flip?: boolean; count: () => number }[] = [
 		{ filter: 'prompts', label: 'Prompts', icon: 'prompt', flip: true, count: () => counts.prompts },
 		{ filter: 'responses', label: 'Replies', icon: 'response', count: () => counts.responses },
 		{ filter: 'thinking', label: 'Thoughts', icon: 'brain', count: () => counts.thinking },
 		{ filter: 'tools', label: 'Tool calls', icon: 'wrench', count: () => counts.tools },
 		{ filter: 'compaction', label: 'Compactions', icon: 'compaction', count: () => counts.compaction }
 	];
+	// Thoughts without text would open Trace on a column of empty "Thought" lines.
+	let activity = $derived(activityItems.filter((item) => item.filter !== 'thinking' || counts.thinkingWithText > 0));
 
 	// What the Amp export says about where and how the thread ran. Missing values are empty.
 	function ampSessionFacts(native: SessionNative | null) {
