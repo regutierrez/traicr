@@ -230,6 +230,9 @@
 		return `${resolve('/traces/[id]/trace', { id: String(trace.id) })}?${params}`;
 	}
 
+	// The handlers below edit the address with native history.replaceState, which SvelteKit's page.url
+	// does not see, so each one starts from location.search to keep what the others wrote.
+
 	// Clicking a message's time marks it and puts its link in the address bar, without reloading.
 	function linkMessage(event: MouseEvent, entryId: string) {
 		if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
@@ -263,7 +266,7 @@
 		selection = { key: sessionKey, leaf: leafId, target: hit.target };
 		const owner = targetId;
 		revealedTarget = `${sessionKey}:${owner}`;
-		const params = new URLSearchParams(page.url.searchParams);
+		const params = new URLSearchParams(location.search);
 		params.delete('event');
 		params.set('targetId', hit.target);
 		history.replaceState(history.state, '', `${resolve('/traces/[id]/trace', { id: String(trace.id) })}?${params}`);
@@ -281,7 +284,7 @@
 
 	function clearFind() {
 		findCleared = findKey;
-		const params = new URLSearchParams(page.url.searchParams);
+		const params = new URLSearchParams(location.search);
 		params.delete('q');
 		params.delete('mode');
 		const href = resolve('/traces/[id]/trace', { id: String(trace.id) });
@@ -400,7 +403,7 @@
 		if (!session) return;
 		const leaf = findNewestLeaf(session.entries, entryId);
 		selection = { key: sessionKey, leaf, target: entryId };
-		const params = new URLSearchParams(page.url.searchParams);
+		const params = new URLSearchParams(location.search);
 		params.set('leafId', leaf);
 		params.set('targetId', entryId);
 		const href = resolve('/traces/[id]/trace', { id: String(trace.id) });
@@ -409,7 +412,7 @@
 
 	function showEverything() {
 		filter = 'all';
-		const params = new URLSearchParams(page.url.searchParams);
+		const params = new URLSearchParams(location.search);
 		params.delete('filter');
 		const href = resolve('/traces/[id]/trace', { id: String(trace.id) });
 		history.replaceState(history.state, '', params.size ? `${href}?${params}` : href);
