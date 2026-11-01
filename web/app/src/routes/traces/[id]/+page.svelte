@@ -14,7 +14,9 @@
 		activeTime,
 		displayModel,
 		pathSessionFacts,
+		promptOutline,
 		streamCounts,
+		streamRows,
 		timeSpan,
 		toolNameCounts,
 		usageTotals,
@@ -47,6 +49,9 @@
 	let usage = $derived(usageTotals(session?.entries ?? []));
 	let leaves = $derived(session ? graphLeaves(session.entries).map((entry) => ({ id: entry.id, label: treeLabel(entry) })) : []);
 	let ampFacts = $derived(ampSessionFacts(session?.header.native ?? null));
+	let outline = $derived(promptOutline(streamRows(path)));
+	// The newest reply that says something; a turn can end on tool calls alone.
+	let lastReply = $derived(outline.findLast((item) => item.reply));
 
 	const number = new Intl.NumberFormat();
 	const parseStatus: Record<string, string> = {
@@ -128,6 +133,22 @@
 		<div class="overview">
 			{#if data.loadError}
 				<p class="status error" role="alert">{data.loadError}</p>
+			{/if}
+
+			{#if outline.length}
+				<!-- What the session was about before any facts: the first ask and the last reply, each opening Trace at that message. -->
+				<section class="story">
+					<a class="story-part" href={traceHref({ targetId: outline[0].id })}>
+						<span class="story-label">Ask</span>
+						<span class="story-text">{outline[0].prompt || 'Prompt without text'}</span>
+					</a>
+					{#if lastReply}
+						<a class="story-part" href={traceHref({ targetId: lastReply.replyId })}>
+							<span class="story-label">Last reply</span>
+							<span class="story-text">{lastReply.reply}</span>
+						</a>
+					{/if}
+				</section>
 			{/if}
 
 			<section>
@@ -289,6 +310,43 @@
 		margin: 0 auto;
 		padding: 0.5rem 1.25rem 3rem;
 		font-size: 13px;
+	}
+
+	.story {
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+	}
+
+	.story-part {
+		display: flex;
+		flex-direction: column;
+		gap: 0.2rem;
+		margin-inline: -0.75rem;
+		padding: 0.55rem 0.75rem;
+		border-radius: var(--radius);
+		color: var(--foreground);
+		text-decoration: none;
+	}
+
+	.story-part:hover,
+	.story-part:focus-visible {
+		background: var(--accent);
+	}
+
+	.story-label {
+		color: var(--muted-foreground);
+		font-size: 12px;
+	}
+
+	.story-text {
+		display: -webkit-box;
+		overflow: hidden;
+		font-size: 14.5px;
+		line-height: 1.6;
+		-webkit-box-orient: vertical;
+		-webkit-line-clamp: 4;
+		line-clamp: 4;
 	}
 
 	section {

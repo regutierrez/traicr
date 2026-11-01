@@ -67,7 +67,8 @@ export function withoutSuggestedReplies(text: string) {
 	return text.replace(/(?:^|\n)[ \t]*<suggested-replies>[ \t]*\n[\s\S]*?\n[ \t]*<\/suggested-replies>[ \t]*(?=\n|$)/g, '').trimEnd();
 }
 
-export type PromptItem = { id: string; prompt: string; reply: string };
+/** `id` and `replyId` are the rows' first entries, which message links (?targetId=) open. */
+export type PromptItem = { id: string; prompt: string; at: string; reply: string; replyId: string };
 
 function plainText(entries: TranscriptEntry[]) {
 	const text = entries
@@ -92,9 +93,13 @@ function plainText(entries: TranscriptEntry[]) {
 export function promptOutline(rows: { id: string; chrome: string; entries: TranscriptEntry[] }[]): PromptItem[] {
 	const items: PromptItem[] = [];
 	for (const row of rows) {
-		if (row.chrome === 'user') items.push({ id: row.id, prompt: plainText(row.entries), reply: '' });
+		if (row.chrome === 'user') {
+			const at = row.entries.find((entry) => entry.timestamp)?.timestamp ?? '';
+			items.push({ id: row.id, prompt: plainText(row.entries), at, reply: '', replyId: '' });
+		}
 		const last = items.at(-1);
-		if (row.chrome === 'agent' && last) last.reply = plainText(row.entries) || last.reply;
+		const reply = row.chrome === 'agent' && last ? plainText(row.entries) : '';
+		if (last && reply) Object.assign(last, { reply, replyId: row.entries[0].id });
 	}
 	return items;
 }

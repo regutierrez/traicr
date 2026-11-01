@@ -20,7 +20,8 @@ pairs tool results with their calls, and guards parent cycles lives in
 `web/app/src/lib/transcript/`.
 
 A trace opens on two tabs. **Overview** (the default, `/traces/{id}`) is the
-session at a glance: harness, model, thinking level, start and last activity,
+session at a glance: the first ask and the last reply, each opening Trace at
+that message, then harness, model, thinking level, start and last activity,
 directory, repository, Amp session facts, counts of prompts, replies, thoughts,
 tool calls, and compactions, tool use by name with failures, recorded token
 usage, branches, related traces, and the archive (revisions, native export,

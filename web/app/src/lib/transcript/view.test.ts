@@ -533,8 +533,8 @@ test('the prompt outline pairs each prompt with the last reply of its turn, as p
 		])
 	);
 	expect(promptOutline(rows)).toEqual([
-		{ id: 'u1', prompt: 'Fix the login bug', reply: 'Fixed in auth.ts.' },
-		{ id: 'u2', prompt: 'review it', reply: '' },
-		{ id: 'u3', prompt: 'thanks', reply: '' }
+		{ id: 'u1', prompt: 'Fix the login bug', at: '', reply: 'Fixed in auth.ts.', replyId: 'a2' },
+		{ id: 'u2', prompt: 'review it', at: '', reply: '', replyId: '' },
+		{ id: 'u3', prompt: 'thanks', at: '', reply: '', replyId: '' }
 	]);
 });
