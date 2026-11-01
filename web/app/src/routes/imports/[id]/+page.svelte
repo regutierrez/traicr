@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
-	import MiddleTruncate from '$lib/components/MiddleTruncate.svelte';
 	import { count, dateAndTime } from '$lib/format';
 	import { transcriptHref } from '$lib/links';
 	import type { PageProps } from './$types';
@@ -19,6 +18,14 @@
 				] as const).filter(([, value]) => value)
 			: []
 	);
+
+	type Outcome = NonNullable<NonNullable<typeof report>['traces']>[number];
+	// Failures first, then traces with warnings, so problems are at the top of a long list.
+	const rank = (trace: Outcome) => (trace.status === 'failed' || trace.error ? 0 : trace.status === 'partially_parsed' || trace.status === 'unsupported' || trace.warnings?.length ? 1 : 2);
+	let traces = $derived((report?.traces ?? []).toSorted((a, b) => rank(a) - rank(b)));
+	// One harness for the whole import is said once in the lede instead of on every row.
+	let harness = $derived(new Set(traces.map((trace) => trace.harness)).size === 1 ? traces[0].harness : '');
+	const statusLabel: Record<string, string> = { partially_parsed: 'partly parsed' };
 </script>
 
 <svelte:head><title>Import {report ? `#${report.id}` : 'report'} · Traicr</title></svelte:head>
@@ -29,7 +36,7 @@
 		<h1>Import #{report.id}</h1>
 		<p class="page-lede">
 			<span translate="no">{report.source_machine.hostname}</span> · <time datetime={report.created_at}>{dateAndTime(report.created_at)}</time> ·
-			{count(report.traces?.length ?? 0, 'trace')}
+			{count(traces.length, harness ? `${harness} trace` : 'trace')}
 		</p>
 		{#if totals.length}
 			<p class="totals">
@@ -45,19 +52,19 @@
 	<p class="error" role="alert">{data.error || 'Import not found'}</p>
 {:else}
 	<ul class="traces">
-		{#each report.traces ?? [] as trace (trace.revision_digest)}
+		{#each traces as trace (trace.revision_digest)}
+			{@const tone = rank(trace) === 0 ? 'bad' : rank(trace) === 1 ? 'warn' : ''}
 			<li class="trace" style="--ink: var(--ink-{trace.harness}, var(--muted-foreground))">
-				<div class="line">
-					<span class={['status', trace.error ? 'bad' : trace.warnings?.length ? 'warn' : '']}>{trace.status}</span>
-					<span class="harness" translate="no">{trace.harness}</span>
-					<span class="id">
+				<div class={['line', !harness && 'has-harness']}>
+					{#if !harness}<span class="harness" translate="no">{trace.harness}</span>{/if}
+					<span class="id" title={`${trace.native_trace_id}\n${trace.revision_digest}`}>
 						{#if trace.trace_id}
-							<a href={transcriptHref(trace.trace_id)} title={trace.native_trace_id}>{trace.title || trace.native_trace_id}</a>
+							<a href={transcriptHref(trace.trace_id)}>{trace.title || trace.native_trace_id}</a>
 						{:else}
 							<span translate="no">{trace.native_trace_id}</span>
 						{/if}
 					</span>
-					<span class="digest" translate="no"><MiddleTruncate text={trace.revision_digest} tail={12} /></span>
+					{#if trace.status !== 'imported'}<span class={['status', tone]}>{statusLabel[trace.status] ?? trace.status}</span>{/if}
 				</div>
 				{#if trace.error}<p class="message bad">{trace.error}</p>{/if}
 				{#each trace.warnings ?? [] as warning (`${warning.code}:${warning.message}`)}
@@ -103,15 +110,27 @@
 
 	.line {
 		display: grid;
-		grid-template-columns: 6rem 6rem minmax(0, 1fr) 10rem;
+		grid-template-columns: minmax(0, 1fr) auto;
 		align-items: baseline;
 		gap: 0.75rem;
 		font-size: 13px;
 	}
 
+	.line.has-harness {
+		grid-template-columns: 7rem minmax(0, 1fr) auto;
+	}
+
 	.status {
 		color: var(--muted-foreground);
 		font-size: 12px;
+	}
+
+	.status.bad {
+		color: var(--destructive);
+	}
+
+	.status.warn {
+		color: var(--primary);
 	}
 
 	.harness {
@@ -146,26 +165,8 @@
 		color: var(--primary);
 	}
 
-	.digest {
-		display: flex;
-		justify-content: flex-end;
-		color: var(--muted-foreground);
-		font-family: var(--font-mono);
-		font-size: 11px;
-	}
-
 	.message {
 		margin: 0.35rem 0 0;
 		font-size: 12px;
-	}
-
-	@media (max-width: 640px) {
-		.line {
-			grid-template-columns: auto auto minmax(0, 1fr);
-		}
-
-		.digest {
-			display: none;
-		}
 	}
 </style>
