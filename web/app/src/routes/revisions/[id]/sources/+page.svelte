@@ -29,10 +29,10 @@
 			<tbody>
 				{#each data.files as file (file.path)}
 					<tr>
-						<td class="path"><a href={sourceFileHref(file.revision_id, file.path)}><MiddleTruncate text={file.path} /></a></td>
+						<td class="path"><a href={sourceFileHref(file.revision_id, file.path)} data-sveltekit-reload><MiddleTruncate text={file.path} /></a></td>
 						<td class="num">{count(file.size, 'byte')}</td>
 						<td class="digest" translate="no"><MiddleTruncate text={file.digest} tail={12} /></td>
-						<td class="num"><a class="download" href={sourceFileHref(file.revision_id, file.path, { download: true })} data-sveltekit-reload>Download</a></td>
+						<td class="num"><a class="download" href={sourceFileHref(file.revision_id, file.path)} data-sveltekit-reload>Download</a></td>
 					</tr>
 				{/each}
 			</tbody>

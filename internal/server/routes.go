@@ -101,7 +101,7 @@ func NewHTTPHandler(configuration config.ServerConfig, database *store.Store, lo
 	mux.Handle("POST /traces/{id}/delete", app.browser(app.deletePage))
 	mux.Handle("GET /revisions/{id}/block", app.browser(app.sourceBlock))
 	mux.Handle("GET /revisions/{id}/attachment", app.browser(app.sourceAttachment))
-	mux.Handle("GET /revisions/{id}/file", app.browser(app.revisionFile))
+	mux.Handle("GET /revisions/{id}/file", app.browser(app.downloadSource))
 	for _, route := range app.apiRoutes() {
 		mux.Handle(route.pattern, app.api(route.handler))
 	}

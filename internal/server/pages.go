@@ -177,15 +177,6 @@ func (app *application) sourceFile(w http.ResponseWriter, r *http.Request) {
 	app.downloadSource(w, r)
 }
 
-// revisionFile is the browser route: the original bytes on request, otherwise the preview page.
-func (app *application) revisionFile(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Query().Get("download") == "1" {
-		app.downloadSource(w, r)
-		return
-	}
-	app.spa(w, r)
-}
-
 func (app *application) previewSource(w http.ResponseWriter, r *http.Request) {
 	id, ok := requestID(w, r)
 	if !ok {

@@ -146,12 +146,6 @@ export type SourceFile = {
 	size: number;
 };
 
-export type FilePreview = {
-	path: string;
-	content: string;
-	truncated: boolean;
-};
-
 export const harnesses = [
 	'amp',
 	'claude-code',

@@ -148,7 +148,8 @@ func TestAmpDownloadedImagesSurviveArchiveImport(t *testing.T) {
 	if response := get("/revisions/1/attachment?pointer=/messages/0/content/1"); response.Code != 404 {
 		t.Fatalf("unavailable image fetched: %d", response.Code)
 	}
-	if response := get("/revisions/1/file?path=source/export.json&download=1"); response.Body.String() != export {
+	// The browser file route always downloads; there is no preview page.
+	if response := get("/revisions/1/file?path=source/export.json"); response.Body.String() != export {
 		t.Fatal("original export changed")
 	}
 	var merged, selected store.EventPage

@@ -370,7 +370,7 @@
 								<a class="secondary" href={traceHref({ revision: String(revision.id) })}>Read this revision only</a>
 							{/if}
 							{#if trace.harness === 'amp'}
-								<a class="secondary" href={sourceFileHref(revision.id, 'source/export.json', { download: true })} data-sveltekit-reload>Download Amp export</a>
+								<a class="secondary" href={sourceFileHref(revision.id, 'source/export.json')} data-sveltekit-reload>Download Amp export</a>
 							{/if}
 							{#each revision.diagnostics ?? [] as diagnostic (`${diagnostic.code}:${diagnostic.message}`)}
 								<p class="diagnostic"><strong>{diagnostic.code}</strong> {diagnostic.message}</p>
