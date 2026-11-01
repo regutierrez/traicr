@@ -247,7 +247,7 @@
 	let findKey = $derived(`${sessionKey}:${findMode}:${findQuery}`);
 	let findCleared = $state('');
 	let findExpression = $derived(findQuery && findCleared !== findKey ? searchExpression(findQuery, findMode) : null);
-	let hits = $derived(session && findExpression ? findHits(path, findExpression) : []);
+	let hits = $derived(session && findExpression ? findHits(filtered, findExpression) : []);
 	let findStep = $state.raw<{ key: string; index: number } | null>(null);
 	let findIndex = $derived(findStep?.key === findKey ? findStep.index : -1);
 	// Until the reader steps, the current hit is the message the link opened.
