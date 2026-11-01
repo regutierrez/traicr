@@ -8,7 +8,7 @@
 	import { clockTime, dateAndTime, shortRepository } from '$lib/format';
 	import { submitGoForm } from '$lib/forms';
 	import { revisionSourcesHref, sourceFileHref, transcriptHref, withQuery } from '$lib/links';
-	import { toolChipParts, toolKindIcon, type ChipIcon } from '$lib/transcript/tools';
+	import { isHousekeepingTool, toolChipParts, toolKindIcon, type ChipIcon } from '$lib/transcript/tools';
 	import { getPath, graphLeaves, treeLabel } from '$lib/transcript/tree';
 	import {
 		activeTime,
@@ -57,6 +57,19 @@
 		)
 	);
 	let toolErrors = $derived(tools.reduce((total, tool) => total + tool.errors, 0));
+	// Status lines, tool search, and prompt loading manage the session, not the work; Trace folds
+	// them away, so here they share one muted row at the bottom instead of ranking among real tools.
+	let workTools = $derived(tools.filter((tool) => !isHousekeepingTool(tool.name)));
+	let housekeeping = $derived.by(() => {
+		const items = tools.filter((tool) => isHousekeepingTool(tool.name));
+		if (!items.length) return null;
+		return {
+			names: items.map((tool) => `${tool.name} ${tool.count}`).join(', '),
+			count: items.reduce((total, tool) => total + tool.count, 0),
+			errors: items.reduce((total, tool) => total + tool.errors, 0)
+		};
+	});
+	let toolScale = $derived(Math.max(workTools[0]?.count ?? 0, housekeeping?.count ?? 0));
 	// Every call costs tokens, including ones on branches the Trace tab does not show.
 	let usage = $derived(usageTotals(session?.entries ?? []));
 	let leaves = $derived(session ? graphLeaves(session.entries).map((entry) => ({ id: entry.id, label: treeLabel(entry) })) : []);
@@ -262,14 +275,22 @@
 				<section>
 					<h2>Tools <span class="dim">· {number.format(counts.tools)} calls</span>{#if toolErrors}<span class="dim">{' · '}</span><span class="bad">{toolErrors} failed</span>{/if}</h2>
 					<ul class="tools">
-						{#each tools as tool (tool.name)}
+						{#each workTools as tool (tool.name)}
 							<li>
 								<span class="tool-name" translate="no"><Icon name={toolKindIcon[tool.kind]} size={13} />{tool.name}</span>
-								<span class="bar" style="--share: {tool.count / tools[0].count}" aria-hidden="true"></span>
+								<span class="bar" style="--share: {tool.count / toolScale}" aria-hidden="true"></span>
 								<span class="tool-count">{number.format(tool.count)}</span>
 								<span class="tool-errors bad">{tool.errors ? `${tool.errors} failed` : ''}</span>
 							</li>
 						{/each}
+						{#if housekeeping}
+							<li class="is-housekeeping" title={housekeeping.names}>
+								<span class="tool-name"><Icon name="wrench" size={13} />Housekeeping</span>
+								<span class="bar" style="--share: {housekeeping.count / toolScale}" aria-hidden="true"></span>
+								<span class="tool-count">{number.format(housekeeping.count)}</span>
+								<span class="tool-errors bad">{housekeeping.errors ? `${housekeeping.errors} failed` : ''}</span>
+							</li>
+						{/if}
 					</ul>
 				</section>
 			{/if}
@@ -556,6 +577,15 @@
 			color-mix(in oklab, var(--foreground) 28%, transparent) calc(var(--share) * 100%),
 			color-mix(in oklab, var(--foreground) 6%, transparent) 0
 		);
+	}
+
+	.is-housekeeping {
+		color: var(--muted-foreground);
+	}
+
+	.is-housekeeping .tool-name {
+		font-family: var(--font-sans);
+		font-size: 13px;
 	}
 
 	.tool-count {
