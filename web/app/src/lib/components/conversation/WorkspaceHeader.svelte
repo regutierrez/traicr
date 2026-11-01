@@ -3,6 +3,7 @@
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { count, dateAndTime, shortRepository } from '$lib/format';
+	import { withQuery } from '$lib/links';
 	import { sidebar, toggleSidebar } from '$lib/sidebar.svelte';
 	import type { Trace } from '$lib/types';
 
@@ -22,7 +23,7 @@
 	}: {
 		trace: Trace;
 		revision?: string;
-		tab: 'conversation' | 'details';
+		tab: 'overview' | 'trace';
 		recordCount?: number;
 		model?: string;
 		thinkingLevel?: string;
@@ -43,7 +44,7 @@
 		if (select.value) params.set('revision', select.value);
 		else params.delete('revision');
 		const query = params.toString();
-		await goto(resolve(query ? `/traces/[id]?${query}` : '/traces/[id]', { id: String(trace.id) }), {
+		await goto(resolve(query ? `/traces/[id]/trace?${query}` : '/traces/[id]/trace', { id: String(trace.id) }), {
 			keepFocus: true,
 			noScroll: true
 		});
@@ -55,6 +56,14 @@
 		<span>{on ? onLabel : label}</span>
 		<kbd>{key}</kbd>
 	</button>
+{/snippet}
+
+{#snippet tabLink(id: 'overview' | 'trace', label: string, route: '/traces/[id]' | '/traces/[id]/trace')}
+	<a
+		class={['tab', tab === id && 'is-current']}
+		href={withQuery(resolve(route, { id: String(trace.id) }), revision ? { revision } : {})}
+		aria-current={tab === id ? 'page' : undefined}>{label}</a
+	>
 {/snippet}
 
 <header class="head">
@@ -93,7 +102,7 @@
 		</p>
 	</div>
 	<div class="actions">
-		{#if trace.harness === 'amp' && tab === 'conversation'}
+		{#if trace.harness === 'amp' && tab === 'trace'}
 			<label class="revision">
 				<span>View</span>
 				<select name="revision" value={revision} onchange={changeRevision}>
@@ -104,7 +113,7 @@
 				</select>
 			</label>
 		{/if}
-		{#if tab === 'conversation'}
+		{#if tab === 'trace'}
 			<div class="toggles" role="group" aria-label="Show or hide steps">
 				{@render toggle('Expand all', 'Collapse all', 'E', stepsExpanded, onToggleSteps, 'Show every step the agent took')}
 				{@render toggle('Thinking', 'Thinking', 'T', thinkingExpanded, onToggleThinking, 'Open every thought')}
@@ -113,19 +122,8 @@
 		{/if}
 	</div>
 	<nav class="tabs" aria-label="Trace views">
-		<a
-			class={['tab', tab === 'conversation' && 'is-current']}
-			href={resolve(
-				revision ? `/traces/[id]?revision=${encodeURIComponent(revision)}` : '/traces/[id]',
-				{ id: String(trace.id) }
-			)}
-			aria-current={tab === 'conversation' ? 'page' : undefined}
-		>Conversation</a>
-		<a
-			class={['tab', tab === 'details' && 'is-current']}
-			href={resolve('/traces/[id]/records', { id: String(trace.id) })}
-			aria-current={tab === 'details' ? 'page' : undefined}
-		>Details</a>
+		{@render tabLink('overview', 'Overview', '/traces/[id]')}
+		{@render tabLink('trace', 'Trace', '/traces/[id]/trace')}
 	</nav>
 </header>
 

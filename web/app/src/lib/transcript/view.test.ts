@@ -6,7 +6,7 @@ import { parseSkillBlock } from './skill';
 import { buildTranscriptSession } from './session';
 import { isStructuredOutput, requestedEdit, resultText, toolChipLabel, toolChipParts, toolStatus, toolSummary } from './tools';
 import { defaultLeafId, findNewestLeaf, getPath, graphHasFork, graphLeaves } from './tree';
-import { displayModel, foldWork, groupTurns, isToolOnlyMessage, pathSessionFacts, streamCounts, streamRows, toolResults, workSummary } from './turns';
+import { displayModel, foldWork, groupTurns, isToolOnlyMessage, pathSessionFacts, streamCounts, streamRows, timeSpan, toolNameCounts, toolResults, usageTotals, workSummary } from './turns';
 import type { ToolCallBlock, TranscriptEntry } from './types';
 
 test('shared tools keep original names and display shell and file operations consistently', () => {
@@ -443,4 +443,30 @@ test('runs of three or more quiet rows fold into one work row with a summary', (
 		sentence: 'Ran 2 commands, read 1 file, and thought once'
 	});
 	expect(workSummary([step('9', 'edit', ''), step('8', 'edit', '')])).toEqual({ duration: '', sentence: 'Made 2 edits' });
+});
+
+test('Overview totals sum usage per reply, keep the peak call window, and rank tools by use', () => {
+	const reply = (id: string, usage: Record<string, number>, at: string, calls: [string, string][] = []) =>
+		({
+			id,
+			parentId: null,
+			type: 'message',
+			timestamp: at,
+			message: { role: 'assistant', usage, content: calls.map(([callId, name]) => ({ type: 'toolCall', id: callId, name, arguments: {} })) }
+		}) as TranscriptEntry;
+	const entries = [
+		{ id: 'u', parentId: null, type: 'message', timestamp: '2026-01-01T00:00:00Z', message: { role: 'user', usage: { input: 999 }, content: [] } } as TranscriptEntry,
+		reply('a', { input: 10, output: 5, cacheRead: 100, cacheWrite: 7, context: 117, contextWindow: 200 }, '2026-01-01T00:01:00Z', [['c1', 'read'], ['c2', 'bash']]),
+		reply('b', { input: 1, output: 2, context: 300, contextWindow: 1000 }, '2026-01-01T00:02:30Z', [['c3', 'bash']]),
+		reply('c', { input: 4, context: 250, contextWindow: 200 }, '2026-01-01T00:03:00Z'),
+		{ id: 'r', parentId: null, type: 'message', message: { role: 'toolResult', toolCallId: 'c3', isError: true, content: [] } } as TranscriptEntry
+	];
+	// The user's usage is ignored, and the peak window comes from the peak call, not the last one.
+	expect(usageTotals(entries)).toEqual({ input: 15, output: 7, cacheRead: 100, cacheWrite: 7, peakContext: 300, contextWindow: 1000, messages: 3 });
+	expect(usageTotals(entries.slice(0, 1))).toBeNull();
+	expect(toolNameCounts(entries).map((tool) => [tool.name, tool.count, tool.errors])).toEqual([
+		['bash', 2, 1],
+		['read', 1, 0]
+	]);
+	expect(timeSpan(entries)).toMatchObject({ start: '2026-01-01T00:00:00.000Z', end: '2026-01-01T00:03:00.000Z', duration: '3m' });
 });

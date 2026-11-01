@@ -19,16 +19,22 @@ export DOM is gone. Adapter logic that groups normalized blocks into turns,
 pairs tool results with their calls, and guards parent cycles lives in
 `web/app/src/lib/transcript/`.
 
-Every harness uses the same Conversation chrome: a contents index plus a
-linear stream. The index always lists Prompts, Agent Responses, Thinking, Tool
-Calls (with a kind breakdown when tools exist), Compaction, and Branches —
-including zeros. The stream is always the selected path. User messages are
+A trace opens on two tabs. **Overview** (the default, `/traces/{id}`) is the
+session at a glance: harness, model, thinking level, start and last activity,
+directory, repository, Amp session facts, counts of prompts, replies, thoughts,
+tool calls, and compactions, tool use by name with failures, recorded token
+usage, branches, related traces, and the archive (revisions, native export,
+delete). **Trace** (`/traces/{id}/trace`) is the conversation: one linear
+stream, always the selected path. User messages are
 right-aligned bubbles; agent replies are unfilled prose. Runs of three or more
 tool and thought steps fold into one `Worked for … · Ran 3 commands …` row;
 shorter runs and steps inside an open fold stay quiet rows with traces.com
 icons and labels (`Ran command`, `Read file`, `Thought`, `Used` leftovers).
-Clicking an index row filters that stream. It does not swap in a
-second layout.
+Each Overview count links to Trace with `?filter=`, which shows only that kind
+of row under a "Showing only …" bar. Older links with `event`, `key`,
+`leafId`, `targetId`, or `debug` on `/traces/{id}` redirect to Trace, and
+`/traces/{id}/records` redirects to Overview. Raw records stay on the API and
+the `inspect-trace` script, not a tab.
 
 Forks do not grow a tree pane. Branches stay in the index: the count comes
 from the parent graph, and choosing Branches lists leaf paths so a different
@@ -50,8 +56,8 @@ bytes. Conversation shows the loaded path from the first message. Tool
 results are paired within the selected branch.
 
 This is a view of Traicr's merged normalized records, **not a new native source
-parser**. Details keeps all revisions, parsing warnings, related sessions,
-source inspection, and deletion.
+parser**. Overview keeps revisions, parsing warnings, related sessions, and
+deletion; source inspection stays reachable from revision links and the API.
 
 ## Harness-only extras (flagged, not a second viewer)
 
@@ -83,14 +89,15 @@ Amp-only today:
 - `oracle`, `Task`, `create_thread`, and `apply_patch` use the shared chip
   row (`Oracle`, `Task · …`, `Thread …`, `Edit file`). traces.com also has
   Process and Cron chips; no current fixture emits those tool names.
-- Native JSON download stays on Details.
+- Native JSON download sits under its revision on Overview.
 
 Pi / Claude parent-graph extras:
 
 - `branch_summary` is a Thought-style chip on the path that contains it.
-  Switching paths is the Branches list in the index, not a sidebar tree.
+  Switching paths is the Branch picker above the stream (or the Branches list
+  on Overview), not a sidebar tree.
 - `model_change` and `thinking_level_change` sit in the workspace header
-  above Conversation / Details, not in the stream. Empty thinking levels
+  and on Overview, not in the stream. Empty thinking levels
   are omitted. The model label uses the traces.com display name
   (`gpt-6-astra` → `GPT 6 Astra`).
 - Pi `custom` records are extension sidecars (`plannotator`,
@@ -111,10 +118,10 @@ normalizer retains native block order,
 tool answers and errors, summary blocks, image references, usage, timing, execution
 state, origin, phase, and environment metadata. A written reply has a collapsed
 line labeled Commentary, Final answer, or Details with its model, time, tokens,
-and context use. The Details tab lists the session's agent mode, repository ref
-and commit, client, executor, features, and skills. Unknown content has a visible
+and context use. Overview lists the session's agent mode, branch and commit,
+client, executor, and skills. Unknown content has a visible
 JSON fallback. Hidden context, summaries, tool answers, diffs, and arguments
-can be expanded independently. Source inspection remains in Details.
+can be expanded independently.
 Reasoning signatures are not interpreted as plaintext. Tool status describes the
 recorded export, not a process that Traicr is monitoring.
 
@@ -136,7 +143,7 @@ fragments share one download within a trace. Only HTTPS attachments under
 and local paths are never fetched. Failed downloads produce collection and
 revision warnings, preserve the transcript, and are retried on later collection.
 Reprocessing derives missing-image warnings from the export and retained files,
-so Details also explains images missing from older archives.
+so revision warnings on Overview also explain images missing from older archives.
 Older Amp CLIs without `files get` need an update to collect hosted images.
 
 Downloaded images have a separate 512 MiB total budget per trace and the existing
@@ -162,8 +169,7 @@ still be downloaded. Other normalizers retain their 64 MiB budget. JSON parsing
 uses memory proportional to export size, so near-limit exports need substantially
 more than 512 MiB of server memory. The browser loads 200 records per request and
 keeps requesting pages until the selected transcript is complete, then
-renders the path from the first message. The contents index and loaded-record
-counts cover loaded records; archive search covers all indexed records.
+renders the path from the first message. Overview counts cover loaded records; archive search covers all indexed records.
 If an import or rebuild changes history between pages, the viewer requests a
 reload rather than claiming that the incomplete history is fully loaded.
 Transcript cursors use the latest normalizer-run ID as their generation. Writes

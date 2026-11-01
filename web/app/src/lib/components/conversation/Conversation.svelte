@@ -11,7 +11,7 @@
 		workSummary,
 		pathSessionFacts,
 		customNote,
-		streamCounts,
+		streamFilters,
 		streamRows,
 		toolResults,
 		type StreamFilter
@@ -26,7 +26,6 @@
 	import Markdown from './Markdown.svelte';
 	import MessageDetails from './MessageDetails.svelte';
 	import ToolRow from './ToolRow.svelte';
-	import TraceIndex from './TraceIndex.svelte';
 	import WorkspaceHeader from './WorkspaceHeader.svelte';
 
 	let {
@@ -48,7 +47,17 @@
 	let toolOpen = $state<Record<string, boolean>>({});
 	let stepsExpanded = $state(false);
 	let workOpen = $state<Record<string, boolean>>({});
-	let filter = $state<StreamFilter>('all');
+	// Overview links here with ?filter= to show one kind of row.
+	const filterParam = page.url.searchParams.get('filter') as StreamFilter | null;
+	let filter = $state<StreamFilter>(filterParam && streamFilters.includes(filterParam) ? filterParam : 'all');
+	const filterLabels: Record<StreamFilter, string> = {
+		all: 'everything',
+		prompts: 'prompts',
+		responses: 'replies',
+		thinking: 'thoughts',
+		tools: 'tool calls',
+		compaction: 'compactions'
+	};
 	let expandedUsers = $state<Record<string, boolean>>({});
 
 	let sessionKey = $derived(`${trace.id}:${revision}`);
@@ -101,7 +110,6 @@
 	});
 	let children = $derived(trace.children ?? []);
 	let leftover = $derived(leftoverCards(path, results, children));
-	let counts = $derived(session ? streamCounts(path, session.entries) : streamCounts([]));
 	let leaves = $derived(
 		session ? graphLeaves(session.entries).map((entry) => ({ id: entry.id, label: treeLabel(entry) })) : []
 	);
@@ -178,8 +186,16 @@
 		const params = new URLSearchParams(page.url.searchParams);
 		params.set('leafId', leaf);
 		params.set('targetId', entryId);
-		const href = resolve('/traces/[id]', { id: String(trace.id) });
+		const href = resolve('/traces/[id]/trace', { id: String(trace.id) });
 		history.replaceState(history.state, '', `${href}?${params}`);
+	}
+
+	function showEverything() {
+		filter = 'all';
+		const params = new URLSearchParams(page.url.searchParams);
+		params.delete('filter');
+		const href = resolve('/traces/[id]/trace', { id: String(trace.id) });
+		history.replaceState(history.state, '', params.size ? `${href}?${params}` : href);
 	}
 
 	function incomingCards(entry: TranscriptEntry) {
@@ -204,7 +220,7 @@
 	<WorkspaceHeader
 		{trace}
 		{revision}
-		tab="conversation"
+		tab="trace"
 		recordCount={session?.events.length ?? session?.entries.length ?? 0}
 		model={facts.model ?? ''}
 		thinkingLevel={facts.thinkingLevel ?? ''}
@@ -333,16 +349,26 @@
 			{/if}
 		{/snippet}
 		<div class="body">
-			<TraceIndex
-				{counts}
-				{filter}
-				{leaves}
-				{leafId}
-				onFilter={(next) => (filter = next)}
-				onSelectLeaf={selectNode}
-			/>
 			{#key sessionKey}
 				<div class="stream">
+					{#if filter !== 'all' || leaves.length > 1}
+						<div class="view-bar">
+							{#if filter !== 'all'}
+								<span>Showing only {filterLabels[filter]}</span>
+								<button type="button" onclick={showEverything}>Show everything</button>
+							{/if}
+							{#if leaves.length > 1}
+								<label class="branch">
+									<span>Branch</span>
+									<select value={leafId} onchange={(event) => selectNode(event.currentTarget.value)}>
+										{#each leaves as leaf, index (leaf.id)}
+											<option value={leaf.id}>{index + 1} of {leaves.length} · {leaf.label}</option>
+										{/each}
+									</select>
+								</label>
+							{/if}
+						</div>
+					{/if}
 					{#each shownRows as row (row.id)}
 						{#if row.chrome === 'work'}
 							{@const summary = workSummary(row.entries, results)}
@@ -606,13 +632,50 @@
 		white-space: pre-wrap;
 	}
 
-	@media (min-width: 900px) {
-		.body {
-			flex-direction: row;
-			align-items: stretch;
-			overflow: hidden;
-		}
+	.view-bar {
+		display: flex;
+		max-width: 46rem;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.5rem 0.75rem;
+		margin: 0 auto 1rem;
+		padding: 0.45rem 0.75rem;
+		border: 1px solid var(--border);
+		border-radius: var(--radius);
+		background: var(--card);
+		color: var(--muted-foreground);
+		font-size: 12px;
+	}
 
+	.view-bar button {
+		border: 0;
+		background: transparent;
+		color: var(--primary);
+		padding: 0;
+		font: inherit;
+		cursor: pointer;
+	}
+
+	.branch {
+		display: inline-flex;
+		min-width: 0;
+		align-items: center;
+		gap: 0.4rem;
+		margin-left: auto;
+	}
+
+	.branch select {
+		max-width: 22rem;
+		height: 1.6rem;
+		border: 1px solid var(--input);
+		border-radius: var(--radius);
+		background: var(--background);
+		color: var(--foreground);
+		padding: 0 0.4rem;
+		font: inherit;
+	}
+
+	@media (min-width: 900px) {
 		.stream {
 			padding: 1rem 1.75rem 2.5rem;
 		}

@@ -2,7 +2,9 @@ import { leafCount } from './tree';
 import { toolKind, toolKindLabel, type ToolKind } from './tools';
 import type { TranscriptEntry, Turn } from './types';
 
-export type StreamFilter = 'all' | 'prompts' | 'responses' | 'thinking' | 'tools' | 'compaction' | 'branches';
+export type StreamFilter = 'all' | 'prompts' | 'responses' | 'thinking' | 'tools' | 'compaction';
+
+export const streamFilters: StreamFilter[] = ['all', 'prompts', 'responses', 'thinking', 'tools', 'compaction'];
 
 export type StreamCounts = {
 	prompts: number;
@@ -261,7 +263,7 @@ export function visibleToolCalls(path: TranscriptEntry[]) {
 }
 
 export function entryMatchesFilter(entry: TranscriptEntry, filter: StreamFilter) {
-	if (filter === 'all' || filter === 'branches') return true;
+	if (filter === 'all') return true;
 	if (filter === 'prompts') return entry.message?.role === 'user';
 	if (filter === 'responses') {
 		return Boolean(entry.message?.role === 'assistant' && entry.message.content.some((block) => block.type === 'text'));
@@ -343,4 +345,66 @@ export function toolResults(path: TranscriptEntry[]) {
 		}
 	}
 	return results;
+}
+
+/** Tool calls on the path by recorded tool name, most used first. Errors count results marked as errors. */
+export function toolNameCounts(path: TranscriptEntry[], results: Map<string, TranscriptEntry> = toolResults(path)) {
+	const counts = new Map<string, { name: string; kind: ToolKind; count: number; errors: number }>();
+	for (const entry of path) {
+		for (const block of entry.message?.content ?? []) {
+			if (block.type !== 'toolCall') continue;
+			const item = counts.get(block.name) ?? { name: block.name, kind: toolKind(block.name), count: 0, errors: 0 };
+			item.count += 1;
+			if (results.get(block.id)?.message?.isError) item.errors += 1;
+			counts.set(block.name, item);
+		}
+	}
+	return [...counts.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+}
+
+export type UsageTotals = {
+	input: number;
+	output: number;
+	cacheRead: number;
+	cacheWrite: number;
+	/** The largest context one call sent, and the window it sent it to. */
+	peakContext: number;
+	contextWindow: number;
+	/** Assistant messages that recorded usage. */
+	messages: number;
+};
+
+/**
+ * Sums recorded usage over assistant messages. The adapter puts a message's usage
+ * on that message once, so blocks are not counted twice. Null when nothing recorded usage.
+ */
+export function usageTotals(entries: TranscriptEntry[]): UsageTotals | null {
+	const totals: UsageTotals = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, peakContext: 0, contextWindow: 0, messages: 0 };
+	for (const entry of entries) {
+		const usage = entry.message?.role === 'assistant' ? entry.message.usage : undefined;
+		if (!usage) continue;
+		totals.messages += 1;
+		totals.input += usage.input ?? 0;
+		totals.output += usage.output ?? 0;
+		totals.cacheRead += usage.cacheRead ?? 0;
+		totals.cacheWrite += usage.cacheWrite ?? 0;
+		if ((usage.context ?? 0) > totals.peakContext) {
+			totals.peakContext = usage.context ?? 0;
+			totals.contextWindow = usage.contextWindow ?? 0;
+		}
+	}
+	return totals.messages ? totals : null;
+}
+
+/** First and last recorded timestamps, or null when the export has none. */
+export function timeSpan(entries: TranscriptEntry[]) {
+	let first = Infinity;
+	let last = -Infinity;
+	for (const entry of entries) {
+		const time = entry.timestamp ? Date.parse(entry.timestamp) : NaN;
+		if (!Number.isFinite(time)) continue;
+		first = Math.min(first, time);
+		last = Math.max(last, time);
+	}
+	return Number.isFinite(first) ? { start: new Date(first).toISOString(), end: new Date(last).toISOString(), duration: formatDuration(last - first) } : null;
 }

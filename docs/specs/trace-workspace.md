@@ -6,7 +6,7 @@ I can collect traces into Traicr, but reading them is worse than the products th
 
 ## Solution
 
-Traicr stays a private single-user archive and becomes the place I read my own agent work. After I unlock it I get a dark, Cursor-like three-pane shell: a rail, a dense session list, and a workspace with Conversation, Changes, Timeline, and Details. Conversation is Turns in a column; a tree appears only when the Event graph forks. Changes lists Patches. Timeline is a log with Signal ticks and commit rows. Anchors live only in the archive. Insights wait until this workspace is not finicky.
+Traicr stays a private single-user archive and becomes the place I read my own agent work. After I unlock it I get a dark, Cursor-like three-pane shell: a rail, a dense session list, and a workspace with Overview and Trace (Changes and Timeline later). Trace is Turns in a column; a tree appears only when the Event graph forks. Changes lists Patches. Timeline is a log with Signal ticks and commit rows. Anchors live only in the archive. Insights wait until this workspace is not finicky.
 
 This replaces the Linear-inspired, light-and-dark direction in issue #9. The reference is Cursor's agent list and chat workspace, not Linear and not the old Traicr paper/green theme.
 
@@ -42,7 +42,7 @@ Three panes, hideable:
 
 1. **Rail** (~48px): icon-only. Sessions, Repositories, Archive. Insights is omitted or visibly disabled until that ticket. Active icon: quiet fill + accent, not a badge count.
 2. **Session list** (~272px, beside an open Trace): dense rows grouped by day (`Today`, `Yesterday`, weekday, then date), each a one-line title with a short age (`3h`, `2d`) and a quiet harness · repository line. Not a card grid. `[` hides and shows it, as does a panel button just left of the trace title; the choice is remembered. `/` focuses a filter over the loaded rows. Below ~1100px the list is the full Sessions page instead.
-3. **Workspace**: Conversation / Changes / Timeline / Details. Sticky header with title, harness, counts, Signal chips (only when a Signal fired), Amp revision selector when relevant, and underline tabs — not pill cards.
+3. **Workspace**: Overview (default) / Trace. Sticky header with title, harness, counts, Signal chips (only when a Signal fired), Amp revision selector when relevant, and underline tabs — not pill cards.
 
 `j` / `k` open the next and previous session; `Enter` in the filter opens the first match. The open Trace is the URL. On a wide screen the workspace updates in place so the list stays visible.
 
@@ -51,7 +51,7 @@ Three panes, hideable:
 - A single Turn column. The user prompt is a compact, right-aligned bubble that marks where each Turn starts; agent replies are bubble-free prose at slightly reduced contrast. No avatars and no card stack.
 - Thinking and tools start collapsed. A run of three or more steps between replies folds into one work row: `Worked for 2m 14s · Ran 12 commands, read 3 files, and thought 4 times`. Inside it, a tool is one quiet row (`tool · path or status`) that expands in place for args and result. Steps that open a Child Trace never fold away.
 - The header has an always-visible `Expand all` toggle (`E`) that opens every work row; `T` and `O` open every thought and every tool body. Each button shows its key.
-- Token totals stay on Details, not in the Conversation header.
+- Token totals, counts, and tool use live on Overview, not in the Trace header. Overview counts link to Trace filtered to that kind of row. Raw events and source records are not a tab; they stay on the API and `inspect-trace`.
 - A conversation tree exists only when the Event parent graph forks. Linear graphs must not grow a fake tree.
 - A Child Trace is a compact card/row that opens that Trace in the same workspace. Do not dock a second transcript pane (that was issue #8 concept A / the Linear plan). A missing child says it was never collected.
 
@@ -92,17 +92,17 @@ Three panes, hideable:
 11. As the archive owner, I want a full-page list under 1100px with a back chevron into the workspace, so that a laptop still works.
 12. As the archive owner, I want the URL to be the Trace when one is open, so that refresh keeps my place.
 13. As the archive owner, I want a sticky workspace header with title, harness, counts, Signal chips, and tabs, so that I can change views without losing context.
-14. As the archive owner, I want Conversation, Changes, Timeline, and Details as tabs, so that each job has a surface.
+14. As the archive owner, I want Overview and Trace as tabs, with Overview first, so that I see what a session was before reading it.
 15. As the archive owner, I want Conversation to list Turns, so that I read a session the way I read a chat.
 16. As the archive owner, I want thinking and tools collapsed until I open them, so that prose stays readable.
 17. As the archive owner, I want `T` and `O` to toggle thinking and tools, so that I can skim or inspect without the mouse.
-18. As the archive owner, I want token totals on Details, not in the Conversation header, so that the reading surface stays quiet.
+18. As the archive owner, I want token totals on Overview, not in the Trace header, so that the reading surface stays quiet.
 19. As the archive owner, I want a conversation tree only when the Event parent graph forks, so that branched Pi sessions stay navigable and linear sessions do not grow a fake tree.
 20. As the archive owner, I want clicking a tree node to show that path only, so that a Branch is readable.
 21. As the archive owner, I want a Child Trace to appear as a card that opens that Trace in the same workspace, so that subagents stay honest links.
 22. As the archive owner, I want a missing Child Trace to say it was never collected, so that I do not think the full child is present.
 23. As the archive owner, I want Amp's revision selector on the header, so that I can see merged history or one Trace Revision.
-24. As the archive owner, I want native Amp bytes available from Details, so that I can download the retained export without calling that sharing.
+24. As the archive owner, I want native Amp bytes available from Overview, so that I can download the retained export without calling that sharing.
 25. As the archive owner, I want Changes to list every Patch path, so that I can see what the session edited.
 26. As the archive owner, I want a unified diff when the Patch has one, so that I can read the edit.
 27. As the archive owner, I want tool args and result when there is no diff, so that unknown edit tools still show something true.
@@ -114,7 +114,7 @@ Three panes, hideable:
 33. As the archive owner, I want clicking a Timeline row to jump to Conversation or Changes, so that the log is an index, not a dead view.
 34. As the archive owner, I want Signal chips in the header only when a Signal fired, so that a clean run stays quiet.
 35. As the archive owner, I want clicking a chip to jump to the first matching Timeline row, so that I can see why it fired.
-36. As the archive owner, I want Details to keep revisions, warnings, sources, relations, and delete, so that the forensic view is not lost.
+36. As the archive owner, I want Overview to keep revisions, warnings, relations, and delete, so that archive facts are not lost.
 37. As the archive owner, I want a Repository page with remotes or roots, Traces, and Anchors, so that Changes has somewhere to send a SHA.
 38. As the archive owner, I want copying a SHA and filtering to that commit, so that I can gather every Trace on it.
 39. As the archive owner, I want Archive to group Imports and Machines, so that collection history is one place.
@@ -139,7 +139,7 @@ Three panes, hideable:
 - Rebuild Conversation as Svelte components. Keep the existing adapter that groups Events into Turns and pairs tool calls with results; port it to a typed module. Drop the vendored Pi DOM. Keep Marked and Highlight.js for Markdown and code.
 - Show the conversation tree if and only if the Event parent graph has a fork. Linear graphs are a Turn list. This is data-driven, not harness-named, so Pi forks keep a tree and linear Pi looks like Cursor.
 - Child Traces render as cards that swap the workspace to that Trace. A missing child is an explicit empty state. Do not inline child Turns.
-- Amp revision selector stays on the workspace header. Native export download stays on Details. Other harnesses use merged history.
+- Amp revision selector stays on the workspace header. Native export download sits on Overview. Other harnesses use merged history.
 - Introduce Patch as a derived record from known edit tools at normalize time (write, edit, apply-patch, and the harness-specific names already recognized in the renderer). Persist enough to list path, tool, source Event, and a unified diff when the payload has old/new or patch text.
 - Introduce Signal as a deterministic function over a Trace's Events: tool errors, repeated identical commands, oversized tool results, repeated file reads, repeated searches. Surface as header chips and Timeline gutter ticks. Do not persist a parallel event log if it can be derived on read from stored Events; persist only if read cost is too high after measurement.
 - Introduce Anchor as an archive-only record: repository identity, commit SHA, optional Jujutsu change-id, subject, committer time, linked Trace. Collect at `traicr collect` by reading Git or Jujutsu history in the Trace working directory. Jujutsu: described revisions in the session window, exclude live `@`. Never write `refs/notes` or install a hook that collaborators would run.

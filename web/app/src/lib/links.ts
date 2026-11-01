@@ -10,10 +10,6 @@ export function transcriptHref(traceID: number) {
 	return resolve('/traces/[id]', { id: String(traceID) });
 }
 
-export function recordsHref(traceID: number, params: Record<string, string> = {}) {
-	return withQuery(resolve('/traces/[id]/records', { id: String(traceID) }), params);
-}
-
 export function revisionSourcesHref(revisionID: number) {
 	return resolve('/revisions/[id]/sources', { id: String(revisionID) });
 }
