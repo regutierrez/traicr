@@ -1,7 +1,9 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
+	import SessionSidebar from '$lib/components/SessionSidebar.svelte';
 	import { submitGoForm } from '$lib/forms';
+	import { sidebar, toggleSidebar } from '$lib/sidebar.svelte';
 	import type { LayoutProps } from './$types';
 	import './layout.css';
 
@@ -10,6 +12,13 @@
 	let login = $derived(path === '/login');
 	let workspace = $derived(path.startsWith('/traces/'));
 	let loggingOut = $state(false);
+	function onKeydown(event: KeyboardEvent) {
+		if (!workspace || event.key !== '[' || event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
+		const target = event.target;
+		if (target instanceof HTMLElement && (['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) || target.isContentEditable)) return;
+		event.preventDefault();
+		toggleSidebar();
+	}
 
 	type AppPath = '/' | '/imports' | '/machines';
 
@@ -45,6 +54,8 @@
 <svelte:head>
 	<title>Traicr</title>
 </svelte:head>
+
+<svelte:window onkeydown={onKeydown} />
 
 {#snippet icon(name: 'sessions' | 'archive' | 'machines' | 'logout')}
 	{#if name === 'sessions'}
@@ -106,6 +117,9 @@
 				</button>
 			</form>
 		</aside>
+		{#if workspace && sidebar.open}
+			<SessionSidebar current={page.params.id ?? ''} />
+		{/if}
 		<div class="workspace">
 			<nav class="mobile-rail" aria-label="Main navigation">
 				<a class="rail-brand" href={resolve('/')} aria-label="Traicr home" title="Traicr"><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M3 14.5 7.5 6l4 7 4.5-8.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="3" cy="14.5" r="1.6" fill="currentColor"/><circle cx="16" cy="4.5" r="1.6" fill="currentColor"/></svg></a>

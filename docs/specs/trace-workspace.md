@@ -41,10 +41,10 @@ The agreed aesthetic is **T3 Code-like, dark-only, dense, and quiet**. Implement
 Three panes, hideable:
 
 1. **Rail** (~48px): icon-only. Sessions, Repositories, Archive. Insights is omitted or visibly disabled until that ticket. Active icon: quiet fill + accent, not a badge count.
-2. **Session list** (~320–360px): dense rows grouped by day (`Today`, `Yesterday`, weekday, then date). Not a card grid. `[` / `]` hide and show it; the collapsed state is remembered. Below ~1100px the list is a full page with a back chevron.
+2. **Session list** (~272px, beside an open Trace): dense rows grouped by day (`Today`, `Yesterday`, weekday, then date), each a one-line title with a short age (`3h`, `2d`) and a quiet harness · repository line. Not a card grid. `[` hides and shows it, as does a panel button just left of the trace title; the choice is remembered. `/` focuses a filter over the loaded rows. Below ~1100px the list is the full Sessions page instead.
 3. **Workspace**: Conversation / Changes / Timeline / Details. Sticky header with title, harness, counts, Signal chips (only when a Signal fired), Amp revision selector when relevant, and underline tabs — not pill cards.
 
-`j` / `k` / `Enter` move the list. The open Trace is the URL. On a wide screen the workspace updates in place so the list stays visible.
+`j` / `k` open the next and previous session; `Enter` in the filter opens the first match. The open Trace is the URL. On a wide screen the workspace updates in place so the list stays visible.
 
 ### Conversation
 
