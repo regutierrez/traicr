@@ -91,6 +91,9 @@ function plainText(entries: TranscriptEntry[]) {
 		.replace(/```[^\n]*/g, ' ')
 		.replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
 		.replace(/^\s{0,3}(?:#{1,6}|>|[-*+]|\d+\.)\s+/gm, '')
+		// Tables read as their cell text: separator rows go, pipes become spaces.
+		.replace(/^\s*\|?(?:\s*:?-{3,}:?\s*\|)+\s*:?-*:?\s*$/gm, '')
+		.replace(/\|/g, ' ')
 		.replace(/[*`]+/g, '')
 		.replace(/\s+/g, ' ')
 		.trim();

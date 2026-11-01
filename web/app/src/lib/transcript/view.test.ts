@@ -533,12 +533,13 @@ test('the prompt outline pairs each prompt with the last reply of its turn, as p
 			say('a1', 'assistant', 'Looking.'),
 			say('a2', 'assistant', 'Fixed in `auth.ts`.\n\n<suggested-replies>\nShip it\n</suggested-replies>'),
 			say('u2', 'user', '<skill name="review" location="/skills/review">\nReview steps\n</skill>\n\nreview it'),
-			say('u3', 'user', 'thanks')
+			say('u3', 'user', 'thanks'),
+			say('a3', 'assistant', 'Summary:\n\n| Part | Status |\n|---|:---:|\n| API | done |')
 		])
 	);
 	expect(promptOutline(rows)).toEqual([
 		{ id: 'u1', prompt: 'Fix the login bug', at: '', reply: 'Fixed in auth.ts.', replyId: 'a2' },
 		{ id: 'u2', prompt: 'review it', at: '', reply: '', replyId: '' },
-		{ id: 'u3', prompt: 'thanks', at: '', reply: '', replyId: '' }
+		{ id: 'u3', prompt: 'thanks', at: '', reply: 'Summary: Part Status API done', replyId: 'a3' }
 	]);
 });
