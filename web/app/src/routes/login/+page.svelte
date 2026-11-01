@@ -8,6 +8,9 @@
 	let { data }: PageProps = $props();
 	let error = $state('');
 	let pending = $state(false);
+	// The token crosses the network in clear text only on plain HTTP to another computer.
+	const plainHTTP = location.protocol === 'http:' && !['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
+	let describedBy = $derived([error && 'token-error', plainHTTP && 'token-hint'].filter(Boolean).join(' ') || undefined);
 
 	async function unlock(event: SubmitEvent) {
 		event.preventDefault();
@@ -57,14 +60,16 @@
 			autocomplete="current-password"
 			required
 			aria-invalid={error ? true : undefined}
-			aria-describedby={error ? 'token-error token-hint' : 'token-hint'}
+			aria-describedby={describedBy}
 		/>
 		{#if error}
 			<p class="error" id="token-error" role="alert">{error}</p>
 		{/if}
 		<Button type="submit" disabled={pending}>{pending ? 'Unlocking…' : 'Unlock'}</Button>
 	</form>
-	<p class="hint" id="token-hint">Use only over your private network or HTTPS.</p>
+	{#if plainHTTP}
+		<p class="hint" id="token-hint">This connection is not encrypted. Use it only on your private network, or set up HTTPS.</p>
+	{/if}
 </section>
 
 <style>
