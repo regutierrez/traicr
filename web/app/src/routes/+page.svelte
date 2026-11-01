@@ -69,7 +69,10 @@
 <header class={['page-head', browsing && sidebar.open && 'is-browse']}>
 	<div class="title-row"><SidebarToggle /><h1>{browsing ? 'Sessions' : 'Search'}</h1></div>
 	<p class="count">
-		{query ? `${count(data.cards.length, 'match', 'matches')}${data.partial ? ' so far' : ''} for “${query}”` : `${count(data.cards.length, 'session')} on this page`}
+		<!-- Each card is a session, shown once however many of its messages matched. -->
+		{query
+			? `${count(data.cards.length, 'session')} ${data.cards.length === 1 ? 'matches' : 'match'} “${query}”${data.partial ? ' so far' : data.next ? ' on this page' : ''}`
+			: `${count(data.cards.length, 'session')} on this page`}
 	</p>
 </header>
 
