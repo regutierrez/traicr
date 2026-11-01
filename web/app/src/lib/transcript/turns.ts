@@ -126,6 +126,114 @@ export function streamRows(path: TranscriptEntry[]): StreamRow[] {
 	});
 }
 
+export type WorkRow = {
+	id: string;
+	chrome: 'work';
+	entries: TranscriptEntry[];
+	steps: StreamRow[];
+};
+
+/** Shorter runs stay visible: one "Ran go test" row says more than "Ran 1 command". */
+const MIN_FOLDED_STEPS = 3;
+
+function stepCount(rows: StreamRow[]) {
+	let steps = 0;
+	for (const row of rows) {
+		for (const entry of row.entries) {
+			for (const block of entry.message?.content ?? []) {
+				if (block.type === 'toolCall' || block.type === 'thinking') steps += 1;
+			}
+		}
+	}
+	return steps;
+}
+
+/**
+ * Folds each run of quiet rows (thinking and tool calls between replies) with at
+ * least three steps into one work row. One Amp message can hold several steps. A row that `keepVisible` accepts, such as one that opens a child
+ * trace, ends the run and stays in the stream.
+ */
+export function foldWork(rows: StreamRow[], keepVisible: (row: StreamRow) => boolean = () => false): (StreamRow | WorkRow)[] {
+	const folded: (StreamRow | WorkRow)[] = [];
+	let run: StreamRow[] = [];
+	const flush = () => {
+		if (stepCount(run) >= MIN_FOLDED_STEPS) {
+			folded.push({ id: `work:${run[0].id}`, chrome: 'work', entries: run.flatMap((row) => row.entries), steps: run });
+		} else {
+			folded.push(...run);
+		}
+		run = [];
+	};
+	for (const row of rows) {
+		if (row.chrome === 'quiet' && !keepVisible(row)) {
+			run.push(row);
+			continue;
+		}
+		flush();
+		folded.push(row);
+	}
+	flush();
+	return folded;
+}
+
+const workPhrases: Record<ToolKind | 'thinking', [string, string]> = {
+	exec: ['ran 1 command', 'ran # commands'],
+	read: ['read 1 file', 'read # files'],
+	edit: ['made 1 edit', 'made # edits'],
+	write: ['wrote 1 file', 'wrote # files'],
+	web: ['fetched 1 page', 'fetched # pages'],
+	browser: ['took 1 browser step', 'took # browser steps'],
+	other: ['used 1 tool', 'used # tools'],
+	thinking: ['thought once', 'thought # times']
+};
+
+const workOrder: (ToolKind | 'thinking')[] = ['exec', 'read', 'edit', 'write', 'web', 'browser', 'other', 'thinking'];
+
+function formatDuration(ms: number) {
+	const seconds = Math.round(ms / 1000);
+	if (seconds < 1) return 'under a second';
+	if (seconds < 60) return `${seconds}s`;
+	const minutes = Math.floor(seconds / 60);
+	if (minutes < 60) return seconds % 60 ? `${minutes}m ${seconds % 60}s` : `${minutes}m`;
+	return minutes % 60 ? `${Math.floor(minutes / 60)}h ${minutes % 60}m` : `${Math.floor(minutes / 60)}h`;
+}
+
+/**
+ * "Worked for 2m 14s · Ran 12 commands, read 3 files, and thought 4 times".
+ * The duration runs from the first step to the last recorded tool result; it is
+ * left out when the export has no timestamps.
+ */
+export function workSummary(entries: TranscriptEntry[], results: Map<string, TranscriptEntry> = new Map()) {
+	const counts = new Map<ToolKind | 'thinking', number>();
+	const times: number[] = [];
+	const addTime = (value?: string) => {
+		const time = value ? Date.parse(value) : NaN;
+		if (Number.isFinite(time)) times.push(time);
+	};
+	for (const entry of entries) {
+		addTime(entry.timestamp);
+		for (const block of entry.message?.content ?? []) {
+			if (block.type === 'thinking') counts.set('thinking', (counts.get('thinking') ?? 0) + 1);
+			if (block.type === 'toolCall') {
+				const kind = toolKind(block.name);
+				counts.set(kind, (counts.get(kind) ?? 0) + 1);
+				addTime(results.get(block.id)?.timestamp);
+			}
+		}
+	}
+	const phrases = workOrder
+		.filter((kind) => counts.get(kind))
+		.map((kind) => {
+			const value = counts.get(kind) ?? 0;
+			const [one, many] = workPhrases[kind];
+			return value === 1 ? one : many.replace('#', String(value));
+		});
+	let sentence = phrases.length > 1 ? `${phrases.slice(0, -1).join(', ')}${phrases.length > 2 ? ',' : ''} and ${phrases.at(-1)}` : (phrases[0] ?? '');
+	sentence = sentence.charAt(0).toUpperCase() + sentence.slice(1);
+	const duration = times.length > 1 ? formatDuration(Math.max(...times) - Math.min(...times)) : '';
+	return { duration: duration ? `Worked for ${duration}` : '', sentence };
+}
+
 function turnRole(entry: TranscriptEntry): Turn['role'] {
 	if (entry.message?.role === 'user') return 'user';
 	if (entry.message?.role === 'assistant' || entry.message?.role === 'toolResult') return 'assistant';
@@ -180,6 +288,8 @@ export function displayModel(provider?: string, modelId?: string) {
 	return name
 		.replace(/^gpt-/i, 'GPT ')
 		.replace(/^claude-/i, 'Claude ')
+		// "opus-5-5" is version 5.5; a dated suffix such as "4-20250514" is not.
+		.replace(/\b(\d)-(\d)\b/g, '$1.$2')
 		.replace(/-/g, ' ')
 		.replace(/\b([a-z])/g, (letter) => letter.toUpperCase())
 		.replace(/\bGpt\b/g, 'GPT');

@@ -6,7 +6,9 @@
 	import { childCards, leftoverCards } from '$lib/transcript/children';
 	import {
 		entryMatchesFilter,
+		foldWork,
 		isToolOnlyMessage,
+		workSummary,
 		pathSessionFacts,
 		customNote,
 		streamCounts,
@@ -44,6 +46,8 @@
 	let toolsExpanded = $state(false);
 	let thinkingOpen = $state<Record<string, boolean>>({});
 	let toolOpen = $state<Record<string, boolean>>({});
+	let stepsExpanded = $state(false);
+	let workOpen = $state<Record<string, boolean>>({});
 	let filter = $state<StreamFilter>('all');
 	let expandedUsers = $state<Record<string, boolean>>({});
 
@@ -78,7 +82,8 @@
 	let facts = $derived(pathSessionFacts(path));
 	let results = $derived(toolResults(path));
 	let filtered = $derived(path.filter((entry) => entryMatchesFilter(entry, filter)));
-	let rows = $derived(streamRows(filtered));
+	// A filtered stream already shows only what was asked for, so it is not folded.
+	let rows = $derived(filter === 'all' ? foldWork(streamRows(filtered), opensChild) : streamRows(filtered));
 	// Big traces have thousands of rows. Painting them all in one frame blocks the
 	// page for seconds, so the first rows paint at once and the rest follow in
 	// chunks on later frames.
@@ -118,7 +123,34 @@
 		} else if (key === 'o') {
 			event.preventDefault();
 			toggleTools();
+		} else if (key === 'e') {
+			event.preventDefault();
+			toggleSteps();
 		}
+	}
+
+	function toggleSteps() {
+		stepsExpanded = !stepsExpanded;
+		workOpen = {};
+	}
+
+	// Showing every thought or tool body also has to show the steps they sit in.
+	function workIsOpen(row: { id: string; entries: TranscriptEntry[] }) {
+		return (
+			workOpen[row.id] ??
+			(stepsExpanded || thinkingExpanded || toolsExpanded || row.entries.some((entry) => entry.id === targetId))
+		);
+	}
+
+	// A step that opens a child trace stays visible, so folding never hides a link to another trace.
+	function opensChild(row: { entries: TranscriptEntry[] }) {
+		return row.entries.some(
+			(entry) =>
+				incomingCards(entry).length > 0 ||
+				(entry.message?.content ?? []).some(
+					(block) => block.type === 'toolCall' && childCards(entry, block, results.get(block.id), children).length > 0
+				)
+		);
 	}
 
 	function toggleThinking() {
@@ -178,8 +210,10 @@
 		thinkingLevel={facts.thinkingLevel ?? ''}
 		{thinkingExpanded}
 		{toolsExpanded}
+		{stepsExpanded}
 		onToggleThinking={toggleThinking}
 		onToggleTools={toggleTools}
+		onToggleSteps={toggleSteps}
 	/>
 
 	{#if displayError && !session}
@@ -310,12 +344,33 @@
 			{#key sessionKey}
 				<div class="stream">
 					{#each shownRows as row (row.id)}
+						{#if row.chrome === 'work'}
+							{@const summary = workSummary(row.entries, results)}
+							{@const open = workIsOpen(row)}
+							<section class={['row', 'is-work', open && 'is-open']}>
+								<button
+									type="button"
+									class="work-toggle"
+									aria-expanded={open}
+									onclick={() => (workOpen[row.id] = !open)}
+								>
+									{#if summary.duration}<span class="work-duration">{summary.duration}</span>{/if}
+									<span class="work-sentence">{summary.sentence}</span>
+									<span class="work-chevron"><Icon name="chevron" size={12} /></span>
+								</button>
+								{#if open}
+									<div class="work-steps">
+										{#each row.steps as step (step.id)}
+											{#each step.entries as entry (entry.id)}
+												{@render entryBlocks(entry)}
+											{/each}
+										{/each}
+									</div>
+								{/if}
+							</section>
+						{:else}
 						<section class={['row', `is-${row.chrome}`, row.entries.some((entry) => entry.id === targetId) && 'is-target']}>
-							{#if row.chrome !== 'quiet'}
-								<div class="avatar" aria-hidden="true">
-									<Icon name={row.chrome === 'user' ? 'user' : 'agent'} size={12} />
-								</div>
-							{/if}
+							{#if row.chrome === 'user'}<h2 class="sr-only">You</h2>{:else if row.chrome === 'agent'}<h2 class="sr-only">Agent</h2>{/if}
 							<div class={['turn-body', row.chrome === 'user' && 'bubble']}>
 								<div class={['clamp', row.chrome === 'user' && userPromptLength(row.entries) > 700 && !expandedUsers[row.id] && 'is-clamped']}>
 									{#each row.entries as entry (entry.id)}
@@ -327,6 +382,7 @@
 								{/if}
 							</div>
 						</section>
+						{/if}
 					{/each}
 					{#each leftover as child (child.native_trace_id)}
 						<ChildCard child={{ id: child.native_trace_id, title: child.title || child.native_trace_id, collected: true, traceId: child.id, meta: 'Child trace' }} />
@@ -377,26 +433,102 @@
 
 	.row {
 		position: relative;
-		max-width: 48rem;
+		max-width: 46rem;
 		margin-inline: auto;
-		padding: 0 0 0 40px;
 		font-size: 14.5px;
-		line-height: 1.6;
+		line-height: 1.65;
 		/* Off-screen rows skip layout and paint until they scroll near view. */
 		content-visibility: auto;
 		contain-intrinsic-size: auto 3rem;
 	}
 
+	/* The prompt is the landmark of each turn: a compact bubble on the right. */
 	.row.is-user {
-		margin-block: 0 20px;
+		display: flex;
+		justify-content: flex-end;
+		margin-block: 2rem 1rem;
 	}
 
+	.row.is-user:first-child {
+		margin-top: 0.5rem;
+	}
+
+	/* Replies are plain prose, a step quieter than full white for long reading. */
 	.row.is-agent {
-		margin-block: 24px 40px;
+		margin-block: 0.75rem;
+		color: color-mix(in oklab, var(--foreground) 90%, transparent);
 	}
 
 	.row.is-quiet {
 		margin-block: 0;
+	}
+
+	.row.is-work {
+		margin-block: 0.35rem;
+	}
+
+	.work-toggle {
+		display: inline-flex;
+		max-width: 100%;
+		align-items: center;
+		gap: 0.5rem;
+		min-height: 28px;
+		border: 0;
+		background: transparent;
+		color: var(--muted-foreground);
+		padding: 0;
+		font: inherit;
+		font-size: 13px;
+		font-variant-numeric: tabular-nums;
+		text-align: left;
+		cursor: pointer;
+	}
+
+	.work-toggle:hover,
+	.work-toggle:focus-visible {
+		color: var(--foreground);
+	}
+
+	.work-duration {
+		flex-shrink: 0;
+		color: var(--foreground);
+		font-weight: 500;
+		opacity: 0.8;
+	}
+
+	.work-duration + .work-sentence::before {
+		content: '·';
+		margin-right: 0.5rem;
+		opacity: 0.6;
+	}
+
+	.work-sentence {
+		overflow: hidden;
+		min-width: 0;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.work-chevron {
+		display: inline-flex;
+		flex-shrink: 0;
+		opacity: 0.5;
+		transition: transform 150ms ease, opacity 150ms ease;
+	}
+
+	.is-open .work-chevron {
+		transform: rotate(90deg);
+	}
+
+	.work-toggle:hover .work-chevron {
+		opacity: 1;
+	}
+
+	/* Expanded steps hang off a hairline so they read as one unit of work. */
+	.work-steps {
+		margin: 0.15rem 0 0.5rem 0.3rem;
+		padding-left: 0.9rem;
+		border-left: 1px solid var(--border);
 	}
 
 	/* Containment clips paint at the row edge; the one target row shows its full outline. */
@@ -409,44 +541,16 @@
 		outline-offset: 3px;
 	}
 
-	.avatar {
-		position: absolute;
-		top: 8px;
-		left: 1px;
-		display: flex;
-		width: 18px;
-		height: 18px;
-		align-items: center;
-		justify-content: center;
-		border-radius: 999px;
-		background: var(--muted);
-		box-shadow: inset 0 0 0 1px var(--border);
-		color: var(--muted-foreground);
-	}
-
-	.row.is-user .avatar {
-		top: 12px;
-		background: var(--primary);
-		box-shadow: none;
-		color: var(--primary-foreground);
-	}
-
-	.row.is-agent .avatar {
-		top: 0.2rem;
-	}
-
 	.turn-body {
 		min-width: 0;
 	}
 
 	.bubble {
-		margin-left: -14px;
-		padding: 10px 14px;
-		border: 1px solid var(--border);
-		border-left: 2px solid var(--primary);
-		border-radius: 4px 10px 10px 4px;
-		background: var(--card);
-		font-size: 15px;
+		max-width: min(80%, 38rem);
+		padding: 0.6rem 0.9rem;
+		border-radius: 1rem;
+		background: var(--message);
+		color: var(--foreground);
 	}
 
 	.clamp.is-clamped {

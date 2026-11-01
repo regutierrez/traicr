@@ -73,7 +73,7 @@
 	<p class="text-destructive p-6" role="alert">{data.error || 'Trace not found'}</p>
 {:else}
 	<WorkspaceHeader {trace} tab="details" />
-	<div class="details-grid grid min-h-0 flex-1 items-start gap-6 overflow-auto px-5 py-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
+	<div class="details-grid grid min-h-0 flex-1 items-start gap-6 overflow-auto px-5 py-5 lg:grid-cols-[minmax(0,1fr)_22rem]">
 		<section class="flex flex-col gap-4" aria-label="Trace events">
 			{#each data.events as event (event.id)}
 				<Card id="event-{event.id}">
@@ -106,15 +106,15 @@
 			<CardContent class="flex flex-col gap-4 text-sm">
 				<dl class="grid grid-cols-[7rem_1fr] gap-2">
 					<dt class="text-muted-foreground">Harness</dt><dd>{trace.harness}</dd>
-					<dt class="text-muted-foreground">Directory</dt><dd class="break-all">{trace.working_directory}</dd>
-					<dt class="text-muted-foreground">Repository</dt><dd class="break-all">{trace.repository}</dd>
+					<dt class="text-muted-foreground">Directory</dt><dd class="[overflow-wrap:anywhere]">{trace.working_directory}</dd>
+					<dt class="text-muted-foreground">Repository</dt><dd class="[overflow-wrap:anywhere]">{trace.repository}</dd>
 				</dl>
 				{#if sessionFacts.length}
 					<div>
 						<h2 class="mb-2 font-medium">Amp session</h2>
 						<dl class="grid grid-cols-[7rem_1fr] gap-2">
 							{#each sessionFacts as [label, value] (label)}
-								<dt class="text-muted-foreground">{label}</dt><dd class="break-all">{value}</dd>
+								<dt class="text-muted-foreground">{label}</dt><dd class="[overflow-wrap:anywhere]">{value}</dd>
 							{/each}
 						</dl>
 					</div>

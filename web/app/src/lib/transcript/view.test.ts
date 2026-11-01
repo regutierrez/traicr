@@ -6,7 +6,7 @@ import { parseSkillBlock } from './skill';
 import { buildTranscriptSession } from './session';
 import { isStructuredOutput, requestedEdit, resultText, toolChipLabel, toolChipParts, toolStatus, toolSummary } from './tools';
 import { defaultLeafId, findNewestLeaf, getPath, graphHasFork, graphLeaves } from './tree';
-import { displayModel, groupTurns, isToolOnlyMessage, pathSessionFacts, streamCounts, streamRows, toolResults } from './turns';
+import { displayModel, foldWork, groupTurns, isToolOnlyMessage, pathSessionFacts, streamCounts, streamRows, toolResults, workSummary } from './turns';
 import type { ToolCallBlock, TranscriptEntry } from './types';
 
 test('shared tools keep original names and display shell and file operations consistently', () => {
@@ -334,6 +334,8 @@ test('model and thinking facts leave the stream and keep the latest display name
 		{ id: 'later', parentId: 'u', type: 'thinking_level_change', thinkingLevel: 'high' }
 	] as TranscriptEntry[];
 	expect(displayModel('openai-codex', 'gpt-6-astra')).toBe('GPT 6 Astra');
+	expect(displayModel('anthropic', 'claude-opus-5-5')).toBe('Claude Opus 5.5');
+	expect(displayModel('anthropic', 'claude-sonnet-4-20250514')).toBe('Claude Sonnet 4 20250514');
 	expect(pathSessionFacts(path)).toEqual({ model: 'GPT 6 Astra', thinkingLevel: 'high' });
 	expect(streamRows(path).map((row) => row.id)).toEqual(['u']);
 });
@@ -400,4 +402,45 @@ test('a Claude Code subagent card sits on the Agent call that started it', () =>
 	]);
 	// Other tools that print agentId are not subagent launches.
 	expect(childCards(entry, { ...call, name: 'Bash' }, launched, kids)).toEqual([]);
+});
+
+test('runs of three or more quiet rows fold into one work row with a summary', () => {
+	const step = (id: string, name: string, at: string) =>
+		({
+			id,
+			parentId: null,
+			type: 'message',
+			timestamp: at,
+			message: { role: 'assistant', content: [{ type: 'toolCall', id: `c${id}`, name, arguments: {} }] }
+		}) as TranscriptEntry;
+	const thought = { id: 't', parentId: null, type: 'message', timestamp: '2026-01-01T00:00:01Z', message: { role: 'assistant', content: [{ type: 'thinking', thinking: 'hm' }] } } as TranscriptEntry;
+	const reply = { id: 'r', parentId: null, type: 'message', message: { role: 'assistant', content: [{ type: 'text', text: 'done' }] } } as TranscriptEntry;
+	const user = { id: 'u', parentId: null, type: 'message', message: { role: 'user', content: [{ type: 'text', text: 'go' }] } } as TranscriptEntry;
+	const rows = streamRows([
+		user,
+		step('1', 'bash', '2026-01-01T00:00:00Z'),
+		step('2', 'read', '2026-01-01T00:00:02Z'),
+		step('3', 'bash', '2026-01-01T00:00:03Z'),
+		reply,
+		step('4', 'bash', '2026-01-01T00:00:04Z'),
+		thought
+	]);
+	const folded = foldWork(rows);
+	expect(folded.map((row) => row.chrome)).toEqual(['user', 'work', 'agent', 'quiet', 'quiet']);
+	expect(folded[1].entries.map((entry) => entry.id)).toEqual(['1', '2', '3']);
+
+	// Steps count, not rows: one message holding three steps folds on its own.
+	const packed = { id: 'p', parentId: null, type: 'message', message: { role: 'assistant', content: [thought.message!.content[0], ...step('5', 'bash', '').message!.content, ...step('6', 'read', '').message!.content] } } as TranscriptEntry;
+	expect(foldWork(streamRows([user, packed, reply])).map((row) => row.chrome)).toEqual(['user', 'work', 'agent']);
+
+	// A row that must stay visible splits the run, and the shorter halves stay unfolded.
+	expect(foldWork(rows, (row) => row.id === '2').map((row) => row.chrome)).toEqual(['user', 'quiet', 'quiet', 'quiet', 'agent', 'quiet', 'quiet']);
+
+	// The last result's timestamp ends the work, not the last call's.
+	const results = new Map([['c3', { id: 'x', parentId: null, type: 'message', timestamp: '2026-01-01T00:02:05Z' } as TranscriptEntry]]);
+	expect(workSummary([...folded[1].entries, thought], results)).toEqual({
+		duration: 'Worked for 2m 5s',
+		sentence: 'Ran 2 commands, read 1 file, and thought once'
+	});
+	expect(workSummary([step('9', 'edit', ''), step('8', 'edit', '')])).toEqual({ duration: '', sentence: 'Made 2 edits' });
 });

@@ -104,7 +104,7 @@
 		{/if}
 		{#if result}
 			{#if output}
-				<details>
+				<details open>
 					<summary>Tool output</summary>
 					{#if isShellTool(call.name) || isFileTool(call.name) || structured}
 						<pre class="code"><code class="hljs">{@html highlightCode(output, structured ? 'json' : highlightLanguage)}</code></pre>
@@ -159,20 +159,57 @@
 		font-size: 11px;
 	}
 
+	/* One disclosure style everywhere: muted label, chevron that turns when open. */
+	summary {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
+		margin: 0.15rem 0;
+		color: var(--muted-foreground);
+		font-size: 12px;
+		list-style: none;
+		cursor: pointer;
+	}
+
+	summary::-webkit-details-marker {
+		display: none;
+	}
+
+	summary::before {
+		content: '';
+		width: 0.35rem;
+		height: 0.35rem;
+		border-right: 1.5px solid currentColor;
+		border-bottom: 1.5px solid currentColor;
+		transform: rotate(-45deg);
+		opacity: 0.6;
+		transition: transform 150ms ease;
+	}
+
+	details[open] > summary::before {
+		transform: rotate(45deg);
+	}
+
+	summary:hover,
+	summary:focus-visible {
+		color: var(--foreground);
+	}
+
 	pre {
-		overflow-x: auto;
-		margin: 0.4rem 0;
-		padding: 0.55rem 0.65rem;
+		overflow: auto;
+		max-height: 28rem;
+		margin: 0.3rem 0 0.5rem;
+		padding: 0.6rem 0.75rem;
 		border: 1px solid var(--border);
 		border-radius: var(--radius);
-		background: #181818;
+		background: var(--card);
 		font-family: var(--font-mono);
 		font-size: 12px;
 		white-space: pre-wrap;
 	}
 
 	.command {
-		color: #d4d4d4;
+		color: var(--foreground);
 	}
 
 	.diff {

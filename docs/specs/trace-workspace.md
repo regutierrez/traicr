@@ -12,20 +12,21 @@ This replaces the Linear-inspired, light-and-dark direction in issue #9. The ref
 
 ## Visual language
 
-The agreed aesthetic is **Cursor-like, dark-only, dense, and quiet**. Implementers treat this section as a constraint, not a later polish pass. Token-level pixel matching waits on screenshots; until those exist, use shadcn-svelte dark tokens tuned toward Cursor, not a new brand.
+The agreed aesthetic is **T3 Code-like, dark-only, dense, and quiet**. Implementers treat this section as a constraint, not a later polish pass. T3 Code is a live chat client and Traicr is an archive, so copy what makes T3 Code easy to read and navigate, and skip what only serves a live session (composer, run status, copy, fork, and retry buttons).
 
 ### Reference
 
-- **Primary**: Cursor Cloud Agents / agent list, and Cursor's chat workspace (composer + agent transcript).
+- **Primary**: T3 Code's chat timeline and thread sidebar ([`pingdotgg/t3code`](https://github.com/pingdotgg/t3code), `apps/web`). This replaces Cursor as the reference.
+- **Secondary**: Cursor's agent list, for session-list density.
 - **Not the reference**: Linear (issue #9), traces.com marketing, AgentTrace eval dashboards, the current Traicr paper/green tokens (`--paper`, `--ink`, `--green`), daisyUI, or the vendored Pi transcript chrome.
-- A later screenshot pass may retune exact greys, accent, and radius. Do not invent a second theme while waiting.
+- Keep Traicr's own yellow highlighter accent rather than T3 Code's blue. Do not invent a second theme.
 
 ### Surfaces and color
 
 - Dark mode only. No light theme, no theme toggle, no `prefers-color-scheme` flip.
 - Near-black application canvas. The rail is the darkest strip. The session list and workspace sit on a slightly lighter surface. Selected rows and sticky headers use a third, still-quiet lift — not a bright card.
-- Hairline separators (`1px` border at ~10–12% white) instead of boxed cards, drop shadows, or tinted panels.
-- One muted accent (Cursor-like blue/teal) for selection, focus, and the active rail icon. Semantic color is reserved for Signal chips and diff hunks: red/green only on `+/-` and errors; amber only on warnings.
+- Hairline separators (`1px` translucent white, ~8%) instead of boxed cards, drop shadows, or tinted panels.
+- One accent (highlighter yellow) for selection, focus, search hits, and the active rail icon. Semantic color is reserved for Signal chips and diff hunks: red/green only on `+/-` and errors; amber only on warnings.
 - No decorative gradients, glass, or blur. Respect `prefers-reduced-motion`; if motion exists it is short and spatial (pane collapse), never ornamental.
 
 ### Type and density
@@ -47,8 +48,9 @@ Three panes, hideable:
 
 ### Conversation
 
-- A single Turn column. User and assistant share a left-aligned document flow (Cursor chat), not chat bubbles and not a card stack.
-- Thinking and tools start collapsed. A tool is one quiet row (`tool · path or status`); expand in place for args and result. `T` and `O` toggle thinking and tools.
+- A single Turn column. The user prompt is a compact, right-aligned bubble that marks where each Turn starts; agent replies are bubble-free prose at slightly reduced contrast. No avatars and no card stack.
+- Thinking and tools start collapsed. A run of three or more steps between replies folds into one work row: `Worked for 2m 14s · Ran 12 commands, read 3 files, and thought 4 times`. Inside it, a tool is one quiet row (`tool · path or status`) that expands in place for args and result. Steps that open a Child Trace never fold away.
+- The header has an always-visible `Expand all` toggle (`E`) that opens every work row; `T` and `O` open every thought and every tool body. Each button shows its key.
 - Token totals stay on Details, not in the Conversation header.
 - A conversation tree exists only when the Event parent graph forks. Linear graphs must not grow a fake tree.
 - A Child Trace is a compact card/row that opens that Trace in the same workspace. Do not dock a second transcript pane (that was issue #8 concept A / the Linear plan). A missing child says it was never collected.

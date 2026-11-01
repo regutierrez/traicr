@@ -79,7 +79,7 @@
 		display: inline-flex;
 		margin-right: 7px;
 		transform: translateY(-0.5px);
-		color: #808080;
+		opacity: 0.8;
 	}
 
 	.verb {

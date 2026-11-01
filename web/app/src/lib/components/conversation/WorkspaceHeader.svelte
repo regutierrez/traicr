@@ -14,8 +14,10 @@
 		thinkingLevel = '',
 		thinkingExpanded = false,
 		toolsExpanded = false,
+		stepsExpanded = false,
 		onToggleThinking,
-		onToggleTools
+		onToggleTools,
+		onToggleSteps
 	}: {
 		trace: Trace;
 		revision?: string;
@@ -25,8 +27,10 @@
 		thinkingLevel?: string;
 		thinkingExpanded?: boolean;
 		toolsExpanded?: boolean;
+		stepsExpanded?: boolean;
 		onToggleThinking?: () => void;
 		onToggleTools?: () => void;
+		onToggleSteps?: () => void;
 	} = $props();
 
 	let title = $derived(trace.title || trace.native_trace_id);
@@ -44,6 +48,13 @@
 		});
 	}
 </script>
+
+{#snippet toggle(label: string, onLabel: string, key: string, on: boolean, action: (() => void) | undefined, hint: string)}
+	<button type="button" class={['toggle', on && 'is-on']} aria-pressed={on} aria-keyshortcuts={key} onclick={action} title="{hint} ({key})">
+		<span>{on ? onLabel : label}</span>
+		<kbd>{key}</kbd>
+	</button>
+{/snippet}
 
 <header class="head">
 	<div class="titles">
@@ -76,25 +87,10 @@
 			</label>
 		{/if}
 		{#if tab === 'conversation'}
-			<div class="toggles">
-				<button
-					type="button"
-					class={['toggle', thinkingExpanded && 'is-on']}
-					aria-pressed={thinkingExpanded}
-					onclick={onToggleThinking}
-					title="Toggle thinking (T)"
-				>
-					Thinking
-				</button>
-				<button
-					type="button"
-					class={['toggle', toolsExpanded && 'is-on']}
-					aria-pressed={toolsExpanded}
-					onclick={onToggleTools}
-					title="Toggle tools (O)"
-				>
-					Tools
-				</button>
+			<div class="toggles" role="group" aria-label="Show or hide steps">
+				{@render toggle('Expand all', 'Collapse all', 'E', stepsExpanded, onToggleSteps, 'Show every step the agent took')}
+				{@render toggle('Thinking', 'Thinking', 'T', thinkingExpanded, onToggleThinking, 'Open every thought')}
+				{@render toggle('Tools', 'Tools', 'O', toolsExpanded, onToggleTools, 'Open every tool call')}
 			</div>
 		{/if}
 	</div>
@@ -228,26 +224,56 @@
 		font-size: 12px;
 	}
 
+	.toggles {
+		gap: 0.25rem;
+	}
+
 	.toggle {
+		display: inline-flex;
 		height: 1.75rem;
-		border: 1px solid var(--border);
+		align-items: center;
+		gap: 0.4rem;
+		border: 1px solid transparent;
 		border-radius: var(--radius);
 		background: transparent;
 		color: var(--muted-foreground);
-		padding: 0 0.55rem;
-		font-size: 11px;
+		padding: 0 0.4rem 0 0.55rem;
+		font: inherit;
+		font-size: 12px;
 		cursor: pointer;
+		transition: background-color 120ms ease, color 120ms ease;
 	}
 
-	.toggle:hover {
+	.toggle:hover,
+	.toggle:focus-visible {
+		background: var(--accent);
 		color: var(--foreground);
-		border-color: var(--input);
 	}
 
 	.toggle.is-on {
-		background: color-mix(in oklch, var(--primary) 14%, transparent);
-		border-color: color-mix(in oklch, var(--primary) 50%, transparent);
+		background: color-mix(in oklch, var(--primary) 12%, transparent);
+		border-color: color-mix(in oklch, var(--primary) 30%, transparent);
 		color: var(--primary);
+	}
+
+	kbd {
+		display: inline-grid;
+		min-width: 1.1rem;
+		height: 1.1rem;
+		place-items: center;
+		border-radius: 4px;
+		background: color-mix(in oklab, var(--foreground) 8%, transparent);
+		color: inherit;
+		font-family: var(--font-sans);
+		font-size: 10px;
+		line-height: 1;
+		opacity: 0.85;
+	}
+
+	@media (pointer: coarse) {
+		kbd {
+			display: none;
+		}
 	}
 
 	.tabs {

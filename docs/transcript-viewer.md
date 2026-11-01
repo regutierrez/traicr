@@ -12,8 +12,8 @@ uses a separate session-card query; API clients do not need to change.
 
 ## Viewer
 
-Conversation is native Svelte. It uses the same dark, Cursor-like tokens as the
-rest of the embedded app: a left-aligned turn column, collapsed thinking and
+Conversation is native Svelte. It uses the same dark, T3 Code-like tokens as the
+rest of the embedded app: a turn column, work rows that fold thinking and
 tools, and client-side navigation through the existing rail. The vendored Pi
 export DOM is gone. Adapter logic that groups normalized blocks into turns,
 pairs tool results with their calls, and guards parent cycles lives in
@@ -23,8 +23,9 @@ Every harness uses the same Conversation chrome: a contents index plus a
 linear stream. The index always lists Prompts, Agent Responses, Thinking, Tool
 Calls (with a kind breakdown when tools exist), Compaction, and Branches —
 including zeros. The stream is always the selected path. User messages are
-chat cards with a small avatar; agent replies use the same avatar column and
-unfilled prose; tool and thought rows stay quiet — no avatar — with traces.com
+right-aligned bubbles; agent replies are unfilled prose. Runs of three or more
+tool and thought steps fold into one `Worked for … · Ran 3 commands …` row;
+shorter runs and steps inside an open fold stay quiet rows with traces.com
 icons and labels (`Ran command`, `Read file`, `Thought`, `Used` leftovers).
 Clicking an index row filters that stream. It does not swap in a
 second layout.
@@ -32,7 +33,7 @@ second layout.
 Forks do not grow a tree pane. Branches stay in the index: the count comes
 from the parent graph, and choosing Branches lists leaf paths so a different
 path can be selected without changing the page shape. Existing event/key links
-resolve to their containing turn. `T` and `O` toggle thinking and tools.
+resolve to their containing turn. `E` expands or collapses every work row; `T` and `O` toggle thinking and tools.
 
 Display features depend on the available data, not the harness name. Tool
 arguments and output start collapsed. Shell tools (`bash`, `Bash`,
