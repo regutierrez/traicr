@@ -39,7 +39,7 @@ the `inspect-trace` script, not a tab.
 Forks do not grow a tree pane. Branches stay in the index: the count comes
 from the parent graph, and choosing Branches lists leaf paths so a different
 path can be selected without changing the page shape. Existing event/key links
-resolve to their containing turn. `E` expands or collapses every work row; `T` and `O` toggle thinking and tools.
+resolve to their containing turn. `E` expands or collapses every work row; single thoughts and tools open one at a time.
 
 Display features depend on the available data, not the harness name. Tool
 arguments and output start collapsed. Shell tools (`bash`, `Bash`,

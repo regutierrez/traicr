@@ -51,7 +51,7 @@
 
 	function traceHref(params: Record<string, string> = {}) {
 		const query = new URLSearchParams(params);
-		if (data.revision) query.set('revision', data.revision);
+		if (data.revision && !query.has('revision')) query.set('revision', data.revision);
 		return withQuery(resolve('/traces/[id]/trace', { id: String(trace?.id) }), query);
 	}
 
@@ -238,6 +238,9 @@
 							<a href={revisionSourcesHref(revision.id)}>
 								Revision {revision.id} <span class="dim">· {revision.status}{revision.collected_at ? ` · collected ${dateAndTime(revision.collected_at)}` : ''}</span>
 							</a>
+							{#if trace.harness === 'amp' && (trace.revisions?.length ?? 0) > 1}
+								<a class="secondary" href={traceHref({ revision: String(revision.id) })}>Read this revision only</a>
+							{/if}
 							{#if trace.harness === 'amp'}
 								<a class="secondary" href={sourceFileHref(revision.id, 'source/export.json', { download: true })} data-sveltekit-reload>Download Amp export</a>
 							{/if}

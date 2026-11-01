@@ -1,8 +1,6 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { page } from '$app/state';
-	import { count, dateAndTime, shortRepository } from '$lib/format';
+	import { shortRepository } from '$lib/format';
 	import { withQuery } from '$lib/links';
 	import { sidebar, toggleSidebar } from '$lib/sidebar.svelte';
 	import type { Trace } from '$lib/types';
@@ -11,52 +9,23 @@
 		trace,
 		revision = '',
 		tab,
-		recordCount = 0,
 		model = '',
 		thinkingLevel = '',
-		thinkingExpanded = false,
-		toolsExpanded = false,
 		stepsExpanded = false,
-		onToggleThinking,
-		onToggleTools,
 		onToggleSteps
 	}: {
 		trace: Trace;
 		revision?: string;
 		tab: 'overview' | 'trace';
-		recordCount?: number;
 		model?: string;
 		thinkingLevel?: string;
-		thinkingExpanded?: boolean;
-		toolsExpanded?: boolean;
 		stepsExpanded?: boolean;
-		onToggleThinking?: () => void;
-		onToggleTools?: () => void;
 		onToggleSteps?: () => void;
 	} = $props();
 
 	let title = $derived(trace.title || trace.native_trace_id);
 
-	async function changeRevision(event: Event) {
-		const select = event.currentTarget;
-		if (!(select instanceof HTMLSelectElement)) return;
-		const params = new URLSearchParams(page.url.searchParams);
-		if (select.value) params.set('revision', select.value);
-		else params.delete('revision');
-		const query = params.toString();
-		await goto(resolve(query ? `/traces/[id]/trace?${query}` : '/traces/[id]/trace', { id: String(trace.id) }), {
-			keepFocus: true,
-			noScroll: true
-		});
-	}
 </script>
-
-{#snippet toggle(label: string, onLabel: string, key: string, on: boolean, action: (() => void) | undefined, hint: string)}
-	<button type="button" class={['toggle', on && 'is-on']} aria-pressed={on} aria-keyshortcuts={key} onclick={action} title="{hint} ({key})">
-		<span>{on ? onLabel : label}</span>
-		<kbd>{key}</kbd>
-	</button>
-{/snippet}
 
 {#snippet tabLink(id: 'overview' | 'trace', label: string, route: '/traces/[id]' | '/traces/[id]/trace')}
 	<a
@@ -97,30 +66,23 @@
 			{#if trace.repository || trace.working_directory}
 				<span class="cwd" translate="no" title={trace.working_directory}>{shortRepository(trace.repository || trace.working_directory)}</span>
 			{/if}
-			{#if recordCount}<span>{count(recordCount, 'record')}</span>{/if}
-			<time datetime={trace.updated_at}>{dateAndTime(trace.updated_at)}</time>
 		</p>
 	</div>
-	<div class="actions">
-		{#if trace.harness === 'amp' && tab === 'trace'}
-			<label class="revision">
-				<span>View</span>
-				<select name="revision" value={revision} onchange={changeRevision}>
-					<option value="">Merged archive</option>
-					{#each trace.revisions ?? [] as item (item.id)}
-						<option value={String(item.id)}>Revision {item.id}{item.native_updated_at ? `, ${dateAndTime(item.native_updated_at)}` : ''}</option>
-					{/each}
-				</select>
-			</label>
-		{/if}
-		{#if tab === 'trace'}
-			<div class="toggles" role="group" aria-label="Show or hide steps">
-				{@render toggle('Expand all', 'Collapse all', 'E', stepsExpanded, onToggleSteps, 'Show every step the agent took')}
-				{@render toggle('Thinking', 'Thinking', 'T', thinkingExpanded, onToggleThinking, 'Open every thought')}
-				{@render toggle('Tools', 'Tools', 'O', toolsExpanded, onToggleTools, 'Open every tool call')}
-			</div>
-		{/if}
-	</div>
+	{#if tab === 'trace'}
+		<div class="actions">
+			<button
+				type="button"
+				class={['toggle', stepsExpanded && 'is-on']}
+				aria-pressed={stepsExpanded}
+				aria-keyshortcuts="E"
+				onclick={onToggleSteps}
+				title="Show every step the agent took (E)"
+			>
+				<span>{stepsExpanded ? 'Collapse all' : 'Expand all'}</span>
+				<kbd>E</kbd>
+			</button>
+		</div>
+	{/if}
 	<nav class="tabs" aria-label="Trace views">
 		{@render tabLink('overview', 'Overview', '/traces/[id]')}
 		{@render tabLink('trace', 'Trace', '/traces/[id]/trace')}
@@ -255,34 +217,6 @@
 		flex-wrap: wrap;
 		align-items: center;
 		gap: 0.65rem;
-	}
-
-	.revision,
-	.toggles {
-		display: flex;
-		align-items: center;
-		gap: 0.4rem;
-	}
-
-	.revision span {
-		color: var(--muted-foreground);
-		font-size: 11px;
-	}
-
-	select {
-		max-width: 16rem;
-		height: 1.75rem;
-		border: 1px solid var(--input);
-		border-radius: var(--radius);
-		background: var(--background);
-		color: var(--foreground);
-		padding: 0 0.45rem;
-		font: inherit;
-		font-size: 12px;
-	}
-
-	.toggles {
-		gap: 0.25rem;
 	}
 
 	.toggle {

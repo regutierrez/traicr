@@ -41,8 +41,6 @@
 	} = $props();
 
 	let selection = $state.raw<{ key: string; leaf: string; target: string } | null>(null);
-	let thinkingExpanded = $state(false);
-	let toolsExpanded = $state(false);
 	let thinkingOpen = $state<Record<string, boolean>>({});
 	let toolOpen = $state<Record<string, boolean>>({});
 	let stepsExpanded = $state(false);
@@ -124,14 +122,7 @@
 	function onKeydown(event: KeyboardEvent) {
 		if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey || event.isComposing) return;
 		if (isEditable(event.target)) return;
-		const key = event.key.toLowerCase();
-		if (key === 't') {
-			event.preventDefault();
-			toggleThinking();
-		} else if (key === 'o') {
-			event.preventDefault();
-			toggleTools();
-		} else if (key === 'e') {
+		if (event.key.toLowerCase() === 'e') {
 			event.preventDefault();
 			toggleSteps();
 		}
@@ -142,12 +133,9 @@
 		workOpen = {};
 	}
 
-	// Showing every thought or tool body also has to show the steps they sit in.
+	// A linked message opens the fold it sits in.
 	function workIsOpen(row: { id: string; entries: TranscriptEntry[] }) {
-		return (
-			workOpen[row.id] ??
-			(stepsExpanded || thinkingExpanded || toolsExpanded || row.entries.some((entry) => entry.id === targetId))
-		);
+		return workOpen[row.id] ?? (stepsExpanded || row.entries.some((entry) => entry.id === targetId));
 	}
 
 	// A step that opens a child trace stays visible, so folding never hides a link to another trace.
@@ -161,22 +149,12 @@
 		);
 	}
 
-	function toggleThinking() {
-		thinkingExpanded = !thinkingExpanded;
-		thinkingOpen = {};
-	}
-
-	function toggleTools() {
-		toolsExpanded = !toolsExpanded;
-		toolOpen = {};
-	}
-
 	function thinkingIsOpen(id: string) {
-		return thinkingOpen[id] ?? thinkingExpanded;
+		return thinkingOpen[id] ?? false;
 	}
 
 	function toolIsOpen(id: string) {
-		return toolOpen[id] ?? toolsExpanded;
+		return toolOpen[id] ?? false;
 	}
 
 	function selectNode(entryId: string) {
@@ -221,14 +199,9 @@
 		{trace}
 		{revision}
 		tab="trace"
-		recordCount={session?.events.length ?? session?.entries.length ?? 0}
 		model={facts.model ?? ''}
 		thinkingLevel={facts.thinkingLevel ?? ''}
-		{thinkingExpanded}
-		{toolsExpanded}
 		{stepsExpanded}
-		onToggleThinking={toggleThinking}
-		onToggleTools={toggleTools}
 		onToggleSteps={toggleSteps}
 	/>
 
@@ -351,8 +324,12 @@
 		<div class="body">
 			{#key sessionKey}
 				<div class="stream">
-					{#if filter !== 'all' || leaves.length > 1}
+					{#if filter !== 'all' || leaves.length > 1 || revision}
 						<div class="view-bar">
+							{#if revision}
+								<span>Showing revision {revision} only</span>
+								<a href={resolve('/traces/[id]/trace', { id: String(trace.id) })}>Show merged archive</a>
+							{/if}
 							{#if filter !== 'all'}
 								<span>Showing only {filterLabels[filter]}</span>
 								<button type="button" onclick={showEverything}>Show everything</button>
@@ -647,7 +624,9 @@
 		font-size: 12px;
 	}
 
+	.view-bar a,
 	.view-bar button {
+		text-decoration: none;
 		border: 0;
 		background: transparent;
 		color: var(--primary);
