@@ -42,10 +42,12 @@ path can be selected without changing the page shape. Existing event/key links
 resolve to their containing turn. `E` expands or collapses every work row; single thoughts and tools open one at a time.
 
 Display features depend on the available data, not the harness name. Tool
-arguments and output start collapsed. Shell tools (`bash`, `Bash`,
+bodies start collapsed. Opened, a tool shows the command, the file path, the
+edit as a diff, the output, and the exit code only when it failed; raw
+arguments appear only for tools with nothing more readable. Shell tools (`bash`, `Bash`,
 `shell_command`) keep their recorded names in the adapter and expand to the
-command; the chip says `Ran` plus that command. File tools show paths, highlighted code,
-and requested edits. Empty reasoning blocks explain that the export omitted
+command; the chip says `Ran` plus that command. File tools (including Amp's `edit_file` and `create_file`) show paths,
+highlighted code, and edits as diffs. Empty reasoning blocks explain that the export omitted
 their text.
 
 Display features depend on the available data, not the harness name. Archived
@@ -116,9 +118,8 @@ other blocks by their number among blocks of the same kind, because later export
 can drop thinking blocks. Keys from earlier versions stay as aliases. The
 normalizer retains native block order,
 tool answers and errors, summary blocks, image references, usage, timing, execution
-state, origin, phase, and environment metadata. A written reply has a collapsed
-line labeled Commentary, Final answer, or Details with its model, time, tokens,
-and context use. Overview lists the session's agent mode, branch and commit,
+state, origin, phase, and environment metadata. Prompts and written replies show when
+they were sent while hovered; per-reply tokens are summed on Overview instead. Overview lists the session's agent mode, branch and commit,
 client, executor, and skills. Unknown content has a visible
 JSON fallback. Hidden context, summaries, tool answers, diffs, and arguments
 can be expanded independently.

@@ -17,6 +17,7 @@
 		type StreamFilter
 	} from '$lib/transcript/turns';
 	import type { LoadedSession, TranscriptEntry } from '$lib/transcript/types';
+	import { dateAndTime } from '$lib/format';
 	import type { Trace } from '$lib/types';
 	import AttachmentBlock from './AttachmentBlock.svelte';
 	import ChildCard from './ChildCard.svelte';
@@ -24,7 +25,6 @@
 	import ExpandChip from './ExpandChip.svelte';
 	import Icon from './Icon.svelte';
 	import Markdown from './Markdown.svelte';
-	import MessageDetails from './MessageDetails.svelte';
 	import ToolRow from './ToolRow.svelte';
 	import WorkspaceHeader from './WorkspaceHeader.svelte';
 
@@ -180,6 +180,10 @@
 		return childCards(entry, undefined, undefined, children);
 	}
 
+	function sentAt(entries: TranscriptEntry[]) {
+		return entries.find((entry) => entry.timestamp)?.timestamp ?? '';
+	}
+
 	function userPromptLength(entries: TranscriptEntry[]) {
 		return entries
 			.flatMap((entry) => entry.message?.content ?? [])
@@ -301,7 +305,6 @@
 						{@const error = message.nativeDetails?.state?.errorMessage}
 						<p class="note error">Recorded response state: {message.stopReason}{error ? ` · ${error}` : ''}</p>
 					{/if}
-					<MessageDetails {entry} />
 				</article>
 			{:else if entry.type === 'compaction' || entry.type === 'branch_summary'}
 				<div id="entry-{entry.id}">
@@ -384,6 +387,9 @@
 									<button class="more" type="button" onclick={() => (expandedUsers[row.id] = true)}>Show more</button>
 								{/if}
 							</div>
+							{#if row.chrome !== 'quiet' && sentAt(row.entries)}
+								<time class="row-time" datetime={sentAt(row.entries)}>{dateAndTime(sentAt(row.entries))}</time>
+							{/if}
 						</section>
 						{/if}
 					{/each}
@@ -448,7 +454,8 @@
 	/* The prompt is the landmark of each turn: a compact bubble on the right. */
 	.row.is-user {
 		display: flex;
-		justify-content: flex-end;
+		flex-direction: column;
+		align-items: flex-end;
 		margin-block: 2rem 1rem;
 	}
 
@@ -468,6 +475,27 @@
 
 	.row.is-work {
 		margin-block: 0.35rem;
+	}
+
+	/* When a message was sent shows only while it is hovered, like T3 Code; touch screens always show it. */
+	.row-time {
+		display: block;
+		margin-top: 0.2rem;
+		color: var(--muted-foreground);
+		font-size: 11px;
+		opacity: 0;
+		transition: opacity 150ms ease;
+	}
+
+	.row:hover .row-time,
+	.row:focus-within .row-time {
+		opacity: 1;
+	}
+
+	@media (pointer: coarse) {
+		.row-time {
+			opacity: 1;
+		}
 	}
 
 	.work-toggle {

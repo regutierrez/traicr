@@ -4,7 +4,7 @@ import { renderMarkdown, sanitizeMarkdownUrl } from './markdown';
 import { childCards, leftoverCards } from './children';
 import { parseSkillBlock } from './skill';
 import { buildTranscriptSession } from './session';
-import { isStructuredOutput, requestedEdit, resultText, toolChipLabel, toolChipParts, toolStatus, toolSummary } from './tools';
+import { isStructuredOutput, requestedEdit, resultFiles, resultText, toolChipLabel, toolChipParts, toolStatus, toolSummary } from './tools';
 import { defaultLeafId, findNewestLeaf, getPath, graphHasFork, graphLeaves } from './tree';
 import { displayModel, foldWork, groupTurns, isToolOnlyMessage, pathSessionFacts, streamCounts, streamRows, timeSpan, toolNameCounts, toolResults, usageTotals, workSummary } from './turns';
 import type { ToolCallBlock, TranscriptEntry } from './types';
@@ -24,6 +24,10 @@ test('shared tools keep original names and display shell and file operations con
 	);
 	expect(toolChipLabel({ type: 'toolCall', id: 'w', name: 'write_stdin', arguments: {} })).toBe('Used Write Stdin');
 	expect(toolChipLabel({ type: 'toolCall', id: 'p', name: 'apply_patch', arguments: { path: 'range.go' } })).toBe('Edit range.go');
+	// Amp's own file tools are edits and writes, not unknown tools.
+	expect(toolChipLabel({ type: 'toolCall', id: 'e', name: 'edit_file', arguments: { path: '/tmp/a/body.md' } })).toBe('Edit body.md');
+	expect(toolChipLabel({ type: 'toolCall', id: 'c', name: 'create_file', arguments: { path: 'new.go' } })).toBe('Write new.go');
+	expect(resultFiles({ diff: '````diff\n--- a\n+++ b\n-old\n+new\n````' })[0].diff.map((line) => line.kind)).toEqual(['removed', 'added', 'removed', 'added']);
 	expect(toolChipLabel({ type: 'toolCall', id: 't', name: 'create_thread', arguments: { title: 'Review boundary documentation' } })).toBe(
 		'Thread Review boundary documentation'
 	);

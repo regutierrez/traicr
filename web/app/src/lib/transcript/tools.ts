@@ -28,7 +28,7 @@ export function isShellTool(name: string) {
 }
 
 export function isFileTool(name: string) {
-	return ['read', 'write', 'edit', 'ls', 'glob', 'grep', 'find'].includes(name.toLowerCase());
+	return ['read', 'write', 'edit', 'edit_file', 'create_file', 'ls', 'glob', 'grep', 'find'].includes(name.toLowerCase());
 }
 
 export function toolPath(args: Record<string, unknown>) {
@@ -69,8 +69,8 @@ export const toolKindLabel: Record<ToolKind, string> = {
 export function toolKind(name: string): ToolKind {
 	const n = name.toLowerCase();
 	if (['read', 'cat', 'view', 'ls', 'glob', 'grep', 'find'].includes(n)) return 'read';
-	if (['edit', 'apply_patch', 'apply-patch', 'strreplace'].includes(n)) return 'edit';
-	if (n === 'write') return 'write';
+	if (['edit', 'edit_file', 'apply_patch', 'apply-patch', 'strreplace'].includes(n)) return 'edit';
+	if (n === 'write' || n === 'create_file') return 'write';
 	if (['bash', 'shell', 'shell_command', 'exec'].includes(n)) return 'exec';
 	if (['web_fetch', 'webfetch', 'web_search', 'websearch'].includes(n)) return 'web';
 	if (n.includes('browser')) return 'browser';
@@ -163,8 +163,8 @@ export function toolChipParts(call: ToolCallBlock) {
 }
 
 export function requestedEdit(args: Record<string, unknown>): DiffLine[] {
-	const before = args.oldText ?? args.old_string;
-	const after = args.newText ?? args.new_string;
+	const before = args.oldText ?? args.old_string ?? args.old_str;
+	const after = args.newText ?? args.new_string ?? args.new_str;
 	if (typeof before !== 'string' || typeof after !== 'string') return [];
 	return [
 		...before.split('\n').map((text) => ({ kind: 'removed' as const, text: `-${text}` })),
@@ -198,6 +198,11 @@ export function resultText(result?: TranscriptEntry) {
 }
 
 export function resultFiles(payload?: ToolResultPayload) {
+	// Amp's edit_file answers with one fenced unified diff for the file it edited.
+	if (typeof payload?.diff === 'string' && !Array.isArray(payload.files)) {
+		const diff = payload.diff.replace(/^`{3,}\w*\n/, '').replace(/\n?`{3,}\s*$/, '');
+		return [{ label: '', additions: undefined, deletions: undefined, diff: diffLines(diff) }];
+	}
 	if (!Array.isArray(payload?.files)) return [];
 	return payload.files.flatMap((file) => {
 		if (!file || typeof file !== 'object') return [];

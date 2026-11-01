@@ -14,6 +14,7 @@
 		toolChipParts,
 		toolCommand,
 		toolPath,
+		toolKind,
 		toolStatus
 	} from '$lib/transcript/tools';
 	import ExpandChip from './ExpandChip.svelte';
@@ -65,73 +66,47 @@
 		{onToggle}
 	>
 		{#if isShellTool(call.name) && command}
-			<pre class="command">> {command}</pre>
-			{#if typeof args.workdir === 'string' && args.workdir}
-				<p class="field">Working directory · {args.workdir}</p>
-			{/if}
-		{/if}
-		{#if isFileTool(call.name) && path}
-			<p class="field">
-				File · {path}
-				{#if args.offset != null} · start {args.offset}{/if}
-				{#if args.limit != null} · limit {args.limit}{/if}
+			<pre class="command">$ {command}</pre>
+		{:else if isFileTool(call.name) && path}
+			<p class="field" translate="no">
+				{path}{#if args.offset != null} · from line {args.offset}{/if}{#if args.limit != null} · {args.limit} lines{/if}
 			</p>
-		{/if}
-		{#if call.name === 'skill' && typeof args.name === 'string'}
-			<p class="field">Skill · {args.name}</p>
-		{/if}
-		{#if typeof args.content === 'string' && call.name.toLowerCase() === 'write'}
-			<details>
-				<summary>Requested content</summary>
-				<pre class="code"><code class="hljs">{@html highlightCode(args.content, languageForPath(path))}</code></pre>
-			</details>
-		{/if}
-		{#if edit.length}
-			<details>
-				<summary>Requested edit</summary>
-				<pre class="diff">{#each edit as line, index (`${index}:${line.text}`)}<span class={line.kind}>{line.text + '\n'}</span>{/each}</pre>
-			</details>
-		{/if}
-		<details>
-			<summary>Arguments</summary>
+		{:else if Object.keys(args).length}
+			<!-- An unknown tool has nothing more readable than what it was asked to do. -->
 			<pre>{JSON.stringify(args, null, 2)}</pre>
-		</details>
-		{#if typeof payload?.pid === 'number'}
-			<p class="field">Process ID · {payload.pid}</p>
 		{/if}
-		{#if typeof payload?.exitCode === 'number'}
-			<p class="field">Exit code · {payload.exitCode}</p>
+		{#if typeof args.content === 'string' && toolKind(call.name) === 'write'}
+			<pre class="code"><code class="hljs">{@html highlightCode(args.content, languageForPath(path))}</code></pre>
 		{/if}
-		{#if result}
-			{#if output}
-				<details open>
-					<summary>Tool output</summary>
-					{#if isShellTool(call.name) || isFileTool(call.name) || structured}
-						<pre class="code"><code class="hljs">{@html highlightCode(output, structured ? 'json' : highlightLanguage)}</code></pre>
-					{:else}
-						<Markdown text={output} />
-					{/if}
-				</details>
-			{:else}
-				<p class="field">No text output recorded.</p>
+		{#if edit.length && !files.some((file) => file.diff.length)}
+			<pre class="diff">{#each edit as line, index (`${index}:${line.text}`)}<span class={line.kind}>{line.text + '\n'}</span>{/each}</pre>
+		{/if}
+		{#each files as file, index (`${file.label}:${index}`)}
+			{#if file.label}<p class="field" translate="no">
+				{file.label}{#if file.additions != null || file.deletions != null}<span class="added-count"> +{file.additions ?? '?'}</span><span class="removed-count"> −{file.deletions ?? '?'}</span>{/if}
+			</p>{/if}
+			{#if file.diff.length}
+				<pre class="diff">{#each file.diff as line, lineIndex (`${lineIndex}:${line.text}`)}<span class={line.kind}>{line.text + '\n'}</span>{/each}</pre>
 			{/if}
-			{#each files as file, index (`${file.label}:${index}`)}
-				<details>
-					<summary>{file.label}{#if file.additions != null || file.deletions != null} · +{file.additions ?? '?'} −{file.deletions ?? '?'}{/if}</summary>
-					{#if file.diff.length}
-						<pre class="diff">{#each file.diff as line, lineIndex (`${lineIndex}:${line.text}`)}<span class={line.kind}>{line.text + '\n'}</span>{/each}</pre>
-					{/if}
-				</details>
-			{/each}
+		{/each}
+		{#if result}
+			{#if typeof payload?.exitCode === 'number' && payload.exitCode !== 0}
+				<p class="field failed">Exited with code {payload.exitCode}</p>
+			{/if}
+			{#if output && !files.some((file) => file.diff.length)}
+				{#if isShellTool(call.name) || isFileTool(call.name) || structured}
+					<pre class="code"><code class="hljs">{@html highlightCode(output, structured ? 'json' : highlightLanguage)}</code></pre>
+				{:else}
+					<div class="output"><Markdown text={output} /></div>
+				{/if}
+			{:else if payload && typeof payload === 'object' && !files.length}
+				<pre>{JSON.stringify(payload, null, 2)}</pre>
+			{:else if !files.length && !attachments.length}
+				<p class="field">No output recorded.</p>
+			{/if}
 			{#each attachments as attachment, index (`${attachment.path ?? attachment.url ?? index}`)}
 				<AttachmentBlock {attachment} />
 			{/each}
-			{#if payload && typeof payload === 'object'}
-				<details>
-					<summary>Structured result</summary>
-					<pre>{JSON.stringify(payload, null, 2)}</pre>
-				</details>
-			{/if}
 		{/if}
 	</ExpandChip>
 	{#each cards as child (child.id)}
@@ -159,42 +134,6 @@
 		font-size: 11px;
 	}
 
-	/* One disclosure style everywhere: muted label, chevron that turns when open. */
-	summary {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.35rem;
-		margin: 0.15rem 0;
-		color: var(--muted-foreground);
-		font-size: 12px;
-		list-style: none;
-		cursor: pointer;
-	}
-
-	summary::-webkit-details-marker {
-		display: none;
-	}
-
-	summary::before {
-		content: '';
-		width: 0.35rem;
-		height: 0.35rem;
-		border-right: 1.5px solid currentColor;
-		border-bottom: 1.5px solid currentColor;
-		transform: rotate(-45deg);
-		opacity: 0.6;
-		transition: transform 150ms ease;
-	}
-
-	details[open] > summary::before {
-		transform: rotate(45deg);
-	}
-
-	summary:hover,
-	summary:focus-visible {
-		color: var(--foreground);
-	}
-
 	pre {
 		overflow: auto;
 		max-height: 28rem;
@@ -206,10 +145,28 @@
 		font-family: var(--font-mono);
 		font-size: 12px;
 		white-space: pre-wrap;
+		overflow-wrap: anywhere;
 	}
 
 	.command {
 		color: var(--foreground);
+	}
+
+	.failed,
+	.removed-count {
+		color: var(--destructive);
+	}
+
+	.added-count {
+		color: #89d185;
+	}
+
+	.output {
+		margin: 0.3rem 0 0.5rem;
+		padding: 0.6rem 0.75rem;
+		border-left: 2px solid var(--border);
+		color: var(--muted-foreground);
+		font-size: 13px;
 	}
 
 	.diff {
@@ -232,6 +189,7 @@
 	}
 
 	.hljs {
+		padding: 0;
 		background: transparent;
 	}
 </style>
