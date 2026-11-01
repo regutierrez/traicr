@@ -8,6 +8,7 @@
 		verb,
 		rest = '',
 		status = '',
+		title,
 		open = false,
 		onToggle,
 		children
@@ -16,6 +17,7 @@
 		verb: string;
 		rest?: string;
 		status?: string;
+		title?: string;
 		open?: boolean;
 		onToggle?: (open: boolean) => void;
 		children?: Snippet;
@@ -25,39 +27,48 @@
 	let shown = $state(false);
 </script>
 
-<details
-	class="chip"
-	bind:open={() => open, (value) => {
-		shown = value;
-		if (value !== open) onToggle?.(value);
-	}}
->
-	<summary>
-		<span class="kind"><Icon name={icon} size={14} /></span>
-		<span class="verb">{verb}</span>
-		{#if rest}
-			<span class="rest">{rest}</span>
-		{/if}
-		<span class="chevron"><Icon name="chevron" size={12} /></span>
-		{#if status}
-			<span class="status">{status}</span>
-		{/if}
-	</summary>
-	<!-- Render the body only once opened: highlighting every collapsed tool
-	     output made large sessions take tens of seconds to display. -->
-	{#if children && (open || shown)}
-		<div class="body">
-			{@render children()}
-		</div>
+{#snippet line(expandable: boolean)}
+	<span class="kind"><Icon name={icon} size={14} /></span>
+	<span class="verb">{verb}</span>
+	{#if rest}
+		<span class="rest">{rest}</span>
 	{/if}
-</details>
+	{#if expandable}
+		<span class="chevron"><Icon name="chevron" size={12} /></span>
+	{/if}
+	{#if status}
+		<span class="status">{status}</span>
+	{/if}
+{/snippet}
+
+<!-- A chip with nothing to show, such as a thought whose text the export left out, is a plain line, not a control. -->
+{#if !children}
+	<div class="chip"><span class="summary is-static" {title}>{@render line(false)}</span></div>
+{:else}
+	<details
+		class="chip"
+		bind:open={() => open, (value) => {
+			shown = value;
+			if (value !== open) onToggle?.(value);
+		}}
+	>
+		<summary class="summary">{@render line(true)}</summary>
+		<!-- Render the body only once opened: highlighting every collapsed tool
+		     output made large sessions take tens of seconds to display. -->
+		{#if open || shown}
+			<div class="body">
+				{@render children()}
+			</div>
+		{/if}
+	</details>
+{/if}
 
 <style>
 	.chip {
 		margin: 0;
 	}
 
-	summary {
+	.summary {
 		display: inline-flex;
 		max-width: 100%;
 		align-items: center;
@@ -69,6 +80,11 @@
 		font-size: 13px;
 		line-height: 20px;
 		list-style: none;
+	}
+
+	.summary.is-static {
+		cursor: default;
+		opacity: 0.75;
 	}
 
 	summary::-webkit-details-marker {

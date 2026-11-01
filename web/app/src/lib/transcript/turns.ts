@@ -57,6 +57,15 @@ export function streamCounts(entries: TranscriptEntry[], graph: TranscriptEntry[
 	};
 }
 
+/**
+ * Amp turns a reply's closing `<suggested-replies>` block into buttons, so the
+ * reply is read without it. Only a block on its own lines is removed, not a tag
+ * the agent mentions in prose.
+ */
+export function withoutSuggestedReplies(text: string) {
+	return text.replace(/(?:^|\n)[ \t]*<suggested-replies>[ \t]*\n[\s\S]*?\n[ \t]*<\/suggested-replies>[ \t]*(?=\n|$)/g, '').trimEnd();
+}
+
 export function isToolOnlyMessage(entry: TranscriptEntry) {
 	const message = entry.message;
 	if (!message || message.role !== 'assistant') return false;

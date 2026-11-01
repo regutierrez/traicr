@@ -14,6 +14,7 @@
 		streamFilters,
 		streamRows,
 		toolResults,
+		withoutSuggestedReplies,
 		type StreamFilter
 	} from '$lib/transcript/turns';
 	import type { LoadedSession, TranscriptEntry } from '$lib/transcript/types';
@@ -278,7 +279,7 @@
 									<Markdown text={skill.userMessage} />
 								{/if}
 							{:else}
-								<Markdown text={block.text} />
+								<Markdown text={message.role === 'assistant' ? withoutSuggestedReplies(block.text) : block.text} />
 							{/if}
 						{:else if block.type === 'hidden'}
 							<ExpandChip icon="compaction" verb={message.role === 'system' ? 'System message' : 'Hidden context'}>
@@ -286,6 +287,9 @@
 							</ExpandChip>
 						{:else if block.type === 'thinking'}
 							{@const thinkKey = `${entry.id}:${index}`}
+							{#if !block.thinking}
+								<ExpandChip icon="brain" verb="Thought" title="The export left out the reasoning text." />
+							{:else}
 							<ExpandChip
 								icon="brain"
 								verb="Thought"
@@ -294,8 +298,9 @@
 									if (next !== thinkingIsOpen(thinkKey)) thinkingOpen[thinkKey] = next;
 								}}
 							>
-								<div class="think">{block.thinking || 'Reasoning text not included in export.'}</div>
+								<div class="think">{block.thinking}</div>
 							</ExpandChip>
+							{/if}
 						{:else if block.type === 'attachment'}
 							<AttachmentBlock attachment={block} />
 						{:else if block.type === 'toolCall'}

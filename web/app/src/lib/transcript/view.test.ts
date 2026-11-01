@@ -6,7 +6,7 @@ import { parseSkillBlock } from './skill';
 import { buildTranscriptSession } from './session';
 import { isStructuredOutput, requestedEdit, resultFiles, resultText, toolChipLabel, toolChipParts, toolStatus, toolSummary } from './tools';
 import { defaultLeafId, findNewestLeaf, getPath, graphHasFork, graphLeaves } from './tree';
-import { displayModel, foldWork, groupTurns, isToolOnlyMessage, pathSessionFacts, streamCounts, streamRows, activeTime, timeSpan, toolNameCounts, toolResults, usageTotals, workSummary } from './turns';
+import { displayModel, foldWork, groupTurns, isToolOnlyMessage, pathSessionFacts, streamCounts, streamRows, activeTime, timeSpan, toolNameCounts, toolResults, usageTotals, withoutSuggestedReplies, workSummary } from './turns';
 import type { ToolCallBlock, TranscriptEntry } from './types';
 
 test('shared tools keep original names and display shell and file operations consistently', () => {
@@ -512,4 +512,10 @@ test('active time sums each turn and leaves out idle time between prompts', () =
 	];
 	expect(activeTime(path)).toBe('2m 30s');
 	expect(activeTime([at('u', 'user', '')])).toBe('');
+});
+
+test("replies drop Amp's suggested-replies block but keep the tag when it is mentioned in prose", () => {
+	const reply = 'Done. The `<suggested-replies>` tag is stripped by Amp.\n\n<suggested-replies>\n**Ship it**\nRevert it\n</suggested-replies>';
+	expect(withoutSuggestedReplies(reply)).toBe('Done. The `<suggested-replies>` tag is stripped by Amp.');
+	expect(withoutSuggestedReplies('<suggested-replies>\nOK\n</suggested-replies>')).toBe('');
 });
