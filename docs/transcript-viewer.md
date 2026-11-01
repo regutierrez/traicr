@@ -47,6 +47,9 @@ resolve to their containing turn. `E` expands or collapses every work row; singl
 The prompt rail in the right gutter has one tick per prompt; hovering previews the
 prompt and its turn's last reply, clicking jumps to it, and `n` / `p` jump to
 the next and previous prompt.
+A message's hover time is a link to it (`?targetId=`): clicking it outlines the
+message and puts the link in the address bar, and opening such a link scrolls
+the message to the top, opening its work row if it sits in one.
 
 Display features depend on the available data, not the harness name. Tool
 bodies start collapsed. Opened, a tool shows the command, the file path, the

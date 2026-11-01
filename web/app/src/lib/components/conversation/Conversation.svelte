@@ -139,23 +139,57 @@
 		void tick().then(updateCurrentPrompt);
 	});
 
-	async function jumpToPrompt(index: number) {
-		const id = prompts[index]?.id;
-		if (!stream || !id) return;
-		const rowIndex = rows.findIndex((row) => row.id === id);
+	// Paints rows up to `rowIndex` if needed, then scrolls to the element. Rows that have not
+	// painted yet are sized by estimate, and the rows near the landing spot change size once they
+	// paint, so it scrolls again until the position holds.
+	async function reveal(rowIndex: number, find: (root: HTMLElement) => Element | null, block: ScrollLogicalPosition) {
+		if (!stream) return;
 		if (rowIndex >= shownCount) {
 			grown = { rows, count: rowIndex + MORE_ROWS };
 			await tick();
 		}
-		const element = stream.querySelector(`[data-prompt="${CSS.escape(id)}"]`);
-		// Rows that have not painted yet are sized by estimate, and the rows near the landing spot
-		// change size once they paint. Scroll again until the position holds.
+		const element = find(stream);
 		let last = -1;
 		for (let attempt = 0; element && attempt < 8 && stream.scrollTop !== last; attempt += 1) {
 			last = stream.scrollTop;
-			element.scrollIntoView({ block: 'start' });
+			element.scrollIntoView({ block });
 			await new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)));
 		}
+	}
+
+	function jumpToPrompt(index: number) {
+		const id = prompts[index]?.id;
+		if (!id) return;
+		void reveal(rows.findIndex((row) => row.id === id), (root) => root.querySelector(`[data-prompt="${CSS.escape(id)}"]`), 'start');
+	}
+
+	// A link to one message (?targetId=) opens with that message in view, once per target.
+	let revealedTarget = '';
+	$effect(() => {
+		const target = targetId;
+		const key = `${sessionKey}:${target}`;
+		if (!target || !stream || revealedTarget === key) return;
+		const rowIndex = rows.findIndex((row) => row.entries.some((entry) => entry.id === target));
+		if (rowIndex === -1) return;
+		revealedTarget = key;
+		void reveal(rowIndex, (root) => root.querySelector('.row.is-target') ?? root.querySelector(`#entry-${CSS.escape(target)}`), 'start');
+	});
+
+	function messageHref(entryId: string) {
+		const params = new URLSearchParams();
+		if (revision) params.set('revision', revision);
+		if (leaves.length > 1) params.set('leafId', leafId);
+		params.set('targetId', entryId);
+		return `${resolve('/traces/[id]/trace', { id: String(trace.id) })}?${params}`;
+	}
+
+	// Clicking a message's time marks it and puts its link in the address bar, without reloading.
+	function linkMessage(event: MouseEvent, entryId: string) {
+		if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+		event.preventDefault();
+		revealedTarget = `${sessionKey}:${entryId}`;
+		selection = { key: sessionKey, leaf: leafId, target: entryId };
+		history.replaceState(history.state, '', messageHref(entryId));
 	}
 
 	// The next prompt starts below the top edge; the previous one starts above it.
@@ -475,7 +509,9 @@
 								{/if}
 							</div>
 							{#if row.chrome !== 'quiet' && sentAt(row.entries)}
-								<time class="row-time" datetime={sentAt(row.entries)}>{dateAndTime(sentAt(row.entries))}</time>
+								<a class="row-time" href={messageHref(row.entries[0].id)} title="Link to this message" onclick={(event) => linkMessage(event, row.entries[0].id)}>
+									<time datetime={sentAt(row.entries)}>{dateAndTime(sentAt(row.entries))}</time>
+								</a>
 							{/if}
 						</section>
 						{/if}
@@ -549,7 +585,8 @@
 		margin-block: 2rem 1rem;
 	}
 
-	.row.is-user {
+	.row,
+	[id^='entry-'] {
 		scroll-margin-top: 1rem;
 	}
 
@@ -586,11 +623,20 @@
 	/* When a message was sent shows only while it is hovered, like T3 Code; touch screens always show it. */
 	.row-time {
 		display: block;
+		width: fit-content;
 		margin-top: 0.2rem;
 		color: var(--muted-foreground);
 		font-size: 11px;
+		text-decoration: none;
 		opacity: 0;
 		transition: opacity 150ms ease;
+	}
+
+	.row-time:hover,
+	.row-time:focus-visible {
+		color: var(--foreground);
+		text-decoration: underline;
+		text-underline-offset: 2px;
 	}
 
 	.row:hover .row-time,
