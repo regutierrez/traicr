@@ -134,7 +134,7 @@
 				</select>
 			</label>
 			<label>Model
-				<Input name="model" value={field('model')} placeholder="claude-opus-5…" autocomplete="off" spellcheck="false" />
+				<Input name="model" value={field('model')} placeholder="Any model" title="The model ID as recorded, such as claude-opus-5" autocomplete="off" spellcheck="false" />
 			</label>
 			<label>Machine
 				<select name="machine">
@@ -145,7 +145,7 @@
 				</select>
 			</label>
 			<label>Repository
-				<Input name="repository" value={field('repository')} placeholder="github.com/you/repo…" autocomplete="off" spellcheck="false" />
+				<Input name="repository" value={field('repository')} placeholder="Any repository" title="A remote such as github.com/you/repo, or a local path" autocomplete="off" spellcheck="false" />
 			</label>
 			<label>From
 				<Input type="date" name="after" value={field('after')} />
