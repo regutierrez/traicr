@@ -36,11 +36,11 @@
 </script>
 
 <svelte:head>
-	<title>Open your archive · Traicr</title>
+	<title>Unlock · Traicr</title>
 </svelte:head>
 
 <section class="login">
-	<svg class="mark" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M3 14.5 7.5 6l4 7 4.5-8.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="3" cy="14.5" r="1.6" fill="currentColor"/><circle cx="16" cy="4.5" r="1.6" fill="currentColor"/></svg>
+	<p class="brand"><svg class="mark" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M3 14.5 7.5 6l4 7 4.5-8.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="3" cy="14.5" r="1.6" fill="currentColor"/><circle cx="16" cy="4.5" r="1.6" fill="currentColor"/></svg><span>Traicr</span></p>
 	<h1>Unlock your archive</h1>
 	<p class="lede">Enter the admin token configured on this server.</p>
 	<form class="form" method="post" action="/login" onsubmit={unlock} aria-busy={pending}>
@@ -62,7 +62,7 @@
 		{#if error}
 			<p class="error" id="token-error" role="alert">{error}</p>
 		{/if}
-		<Button type="submit" disabled={pending}>{pending ? 'Unlocking…' : 'Unlock archive'}</Button>
+		<Button type="submit" disabled={pending}>{pending ? 'Unlocking…' : 'Unlock'}</Button>
 	</form>
 	<p class="hint" id="token-hint">Use only over your private network or HTTPS.</p>
 </section>
@@ -76,10 +76,19 @@
 		background: var(--card);
 	}
 
+	.brand {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		margin: 0 0 1.25rem;
+		font-size: 15px;
+		font-weight: 600;
+		letter-spacing: -0.01em;
+	}
+
 	.mark {
-		width: 28px;
-		height: 28px;
-		margin-bottom: 1.25rem;
+		width: 24px;
+		height: 24px;
 		color: var(--primary);
 	}
 
