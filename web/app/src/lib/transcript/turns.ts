@@ -425,3 +425,19 @@ export function timeSpan(entries: TranscriptEntry[]) {
 	}
 	return Number.isFinite(first) ? { start: new Date(first).toISOString(), end: new Date(last).toISOString(), duration: formatDuration(last - first) } : null;
 }
+
+/**
+ * How long the agent was working: for each turn, from its prompt to the last thing
+ * recorded before the next prompt, summed. Idle time between turns is left out.
+ */
+export function activeTime(path: TranscriptEntry[]) {
+	let total = 0;
+	let timed = false;
+	for (const turn of groupTurns(path)) {
+		const times = turn.entries.map((entry) => (entry.timestamp ? Date.parse(entry.timestamp) : NaN)).filter(Number.isFinite);
+		if (times.length < 2) continue;
+		timed = true;
+		total += Math.max(...times) - Math.min(...times);
+	}
+	return timed ? formatDuration(total) : '';
+}

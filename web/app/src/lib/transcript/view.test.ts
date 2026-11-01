@@ -6,7 +6,7 @@ import { parseSkillBlock } from './skill';
 import { buildTranscriptSession } from './session';
 import { isStructuredOutput, requestedEdit, resultFiles, resultText, toolChipLabel, toolChipParts, toolStatus, toolSummary } from './tools';
 import { defaultLeafId, findNewestLeaf, getPath, graphHasFork, graphLeaves } from './tree';
-import { displayModel, foldWork, groupTurns, isToolOnlyMessage, pathSessionFacts, streamCounts, streamRows, timeSpan, toolNameCounts, toolResults, usageTotals, workSummary } from './turns';
+import { displayModel, foldWork, groupTurns, isToolOnlyMessage, pathSessionFacts, streamCounts, streamRows, activeTime, timeSpan, toolNameCounts, toolResults, usageTotals, workSummary } from './turns';
 import type { ToolCallBlock, TranscriptEntry } from './types';
 
 test('shared tools keep original names and display shell and file operations consistently', () => {
@@ -499,4 +499,17 @@ test('housekeeping tools never trigger a fold and stay out of the summary; autom
 	const rows = streamRows([user, reply, automation, reply]);
 	expect(rows.map((row) => row.chrome)).toEqual(['user', 'agent', 'automation', 'agent']);
 	expect(streamCounts([user, automation]).prompts).toBe(1);
+});
+
+test('active time sums each turn and leaves out idle time between prompts', () => {
+	const at = (id: string, role: string, time: string) =>
+		({ id, parentId: null, type: 'message', timestamp: time, message: { role, content: [{ type: 'text', text: id }] } }) as TranscriptEntry;
+	const path = [
+		at('u1', 'user', '2026-01-01T00:00:00Z'),
+		at('a1', 'assistant', '2026-01-01T00:02:00Z'),
+		at('u2', 'user', '2026-01-02T00:00:00Z'),
+		at('a2', 'assistant', '2026-01-02T00:00:30Z')
+	];
+	expect(activeTime(path)).toBe('2m 30s');
+	expect(activeTime([at('u', 'user', '')])).toBe('');
 });

@@ -11,6 +11,7 @@
 	import { toolKindIcon, type ChipIcon } from '$lib/transcript/tools';
 	import { getPath, graphLeaves, treeLabel } from '$lib/transcript/tree';
 	import {
+		activeTime,
 		displayModel,
 		pathSessionFacts,
 		streamCounts,
@@ -39,6 +40,7 @@
 		)
 	]);
 	let span = $derived(timeSpan(session?.entries ?? []));
+	let active = $derived(activeTime(path));
 	let tools = $derived(toolNameCounts(path));
 	let toolErrors = $derived(tools.reduce((total, tool) => total + tool.errors, 0));
 	// Every call costs tokens, including ones on branches the Trace tab does not show.
@@ -47,6 +49,12 @@
 	let ampFacts = $derived(ampSessionFacts(session?.header.native ?? null));
 
 	const number = new Intl.NumberFormat();
+	const parseStatus: Record<string, string> = {
+		normalized: 'parsed OK',
+		partially_parsed: 'partly parsed',
+		unsupported: 'format not supported',
+		failed: 'could not be parsed'
+	};
 	const compact = new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 });
 
 	function traceHref(params: Record<string, string> = {}) {
@@ -132,7 +140,8 @@
 					{#if facts.thinkingLevel}<dt>Thinking level</dt><dd>{facts.thinkingLevel}</dd>{/if}
 					{#if span}
 						<dt>Started</dt><dd><time datetime={span.start}>{dateAndTime(span.start)}</time></dd>
-						<dt>Last activity</dt><dd><time datetime={span.end}>{dateAndTime(span.end)}</time> <span class="dim">· {span.duration} after start</span></dd>
+						<dt>Last activity</dt><dd><time datetime={span.end}>{dateAndTime(span.end)}</time></dd>
+						{#if active}<dt>Active time</dt><dd>{active} <span class="dim">· idle time between prompts left out</span></dd>{/if}
 					{/if}
 					{#if trace.working_directory}
 						<dt>Directory</dt><dd translate="no"><MiddleTruncate text={trace.working_directory.replace(/^file:\/\//, '')} /></dd>
@@ -235,8 +244,9 @@
 				<ul class="links">
 					{#each trace.revisions ?? [] as revision (revision.id)}
 						<li class="revision">
-							<a href={revisionSourcesHref(revision.id)}>
-								Revision {revision.id} <span class="dim">· {revision.status}{revision.collected_at ? ` · collected ${dateAndTime(revision.collected_at)}` : ''}</span>
+							<a href={revisionSourcesHref(revision.id)} title="Open the original files for revision {revision.id}">
+								Collected {revision.collected_at ? dateAndTime(revision.collected_at) : `as revision ${revision.id}`}
+								<span class={revision.status === 'normalized' ? 'dim' : 'bad'}>· {parseStatus[revision.status] ?? revision.status}</span>
 							</a>
 							{#if trace.harness === 'amp' && (trace.revisions?.length ?? 0) > 1}
 								<a class="secondary" href={traceHref({ revision: String(revision.id) })}>Read this revision only</a>
