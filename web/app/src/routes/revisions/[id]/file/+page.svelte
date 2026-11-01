@@ -9,19 +9,35 @@
 
 <svelte:head><title>{data.preview?.path || 'Source file'} · Traicr</title></svelte:head>
 
-<Button class="mb-4" variant="ghost" href={revisionSourcesHref(revisionID)}>Revision files</Button>
 {#if data.error || !data.preview}
+	<header class="page-head">
+		<nav class="crumbs" aria-label="Breadcrumbs"><a href={revisionSourcesHref(revisionID)}>Revision {data.id} files</a></nav>
+	</header>
 	<p class="text-destructive" role="alert">{data.error || 'Choose a source file to preview.'}</p>
 {:else}
-	<div class="mb-6 flex flex-wrap items-end justify-between gap-4">
-		<div>
-			<p class="text-primary mb-2 font-mono text-[11px] tracking-widest">NATIVE SOURCE / PREVIEW</p>
-			<h1 class="text-3xl font-semibold tracking-tight break-all">{data.preview.path}</h1>
+	<header class="page-head head-row">
+		<div class="min-w-0">
+			<nav class="crumbs" aria-label="Breadcrumbs"><a href={revisionSourcesHref(revisionID)}>Revision {data.id} files</a><span>Preview</span></nav>
+			<h1 class="font-mono [overflow-wrap:anywhere]">{data.preview.path}</h1>
 		</div>
-		<Button variant="outline" href={sourceFileHref(revisionID, data.preview.path, { download: true })} data-sveltekit-reload>Download original</Button>
-	</div>
+		<Button variant="outline" size="sm" href={sourceFileHref(revisionID, data.preview.path, { download: true })} data-sveltekit-reload>Download original</Button>
+	</header>
 	{#if data.preview.truncated}
-		<p class="bg-muted mb-4 rounded-lg border px-3 py-2 text-sm">Preview limited to 1 MiB. Download the original for the complete file.</p>
+		<p class="text-muted-foreground mb-3 text-xs">Preview limited to 1 MiB. Download the original for the complete file.</p>
 	{/if}
-	<pre class="bg-muted overflow-x-auto rounded-lg p-4 font-mono text-xs whitespace-pre-wrap">{data.preview.content}</pre>
+	<pre class="bg-card overflow-x-auto rounded-lg border p-4 font-mono text-xs leading-relaxed whitespace-pre-wrap">{data.preview.content}</pre>
 {/if}
+
+<style>
+	.head-row {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: flex-end;
+		justify-content: space-between;
+		gap: 1rem;
+	}
+
+	.head-row h1 {
+		font-size: 1.15rem;
+	}
+</style>

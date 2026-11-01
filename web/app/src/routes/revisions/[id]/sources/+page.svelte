@@ -1,4 +1,6 @@
 <script lang="ts">
+	import MiddleTruncate from '$lib/components/MiddleTruncate.svelte';
+	import { count } from '$lib/format';
 	import { sourceFileHref } from '$lib/links';
 	import type { PageProps } from './$types';
 
@@ -6,32 +8,104 @@
 </script>
 
 <svelte:head><title>Native source files · Traicr</title></svelte:head>
-<p class="text-primary mb-2 font-mono text-[11px] tracking-widest">REVISION {data.id} / LOSSLESS SOURCE</p>
-<h1 class="text-3xl font-semibold tracking-tight">Native source files</h1>
-<p class="text-muted-foreground mt-2 mb-6 max-w-2xl">These files are the retained source of truth, including fields the normalizer does not yet understand.</p>
+<header class="page-head">
+	<p class="crumbs"><span>Revision {data.id}</span><span>Lossless source</span></p>
+	<h1>Native source files</h1>
+	<p class="page-lede">These files are the retained source of truth, including fields the normalizer does not yet understand.</p>
+</header>
 {#if data.error}
 	<p class="text-destructive" role="alert">{data.error}</p>
 {:else}
-	<div class="overflow-x-auto rounded-xl ring-1 ring-foreground/10">
-		<table class="w-full text-sm">
+	<div class="table-wrap">
+		<table>
 			<thead>
-				<tr class="bg-muted/60 text-muted-foreground text-left text-xs">
-					<th class="px-3 py-2 font-medium">File</th>
-					<th class="px-3 py-2 font-medium">Bytes</th>
-					<th class="px-3 py-2 font-medium">SHA-256</th>
-					<th class="px-3 py-2"></th>
+				<tr>
+					<th scope="col">File</th>
+					<th scope="col" class="num">Size</th>
+					<th scope="col">SHA-256</th>
+					<th scope="col"><span class="sr-only">Download</span></th>
 				</tr>
 			</thead>
 			<tbody>
 				{#each data.files as file (file.path)}
-					<tr class="border-t">
-						<td class="px-3 py-3"><a href={sourceFileHref(file.revision_id, file.path)}>{file.path}</a></td>
-						<td class="px-3 py-3">{file.size}</td>
-						<td class="px-3 py-3 font-mono text-xs break-all">{file.digest}</td>
-						<td class="px-3 py-3"><a href={sourceFileHref(file.revision_id, file.path, { download: true })} data-sveltekit-reload>Download</a></td>
+					<tr>
+						<td class="path"><a href={sourceFileHref(file.revision_id, file.path)}><MiddleTruncate text={file.path} /></a></td>
+						<td class="num">{count(file.size, 'byte')}</td>
+						<td class="digest" translate="no"><MiddleTruncate text={file.digest} tail={12} /></td>
+						<td class="num"><a class="download" href={sourceFileHref(file.revision_id, file.path, { download: true })} data-sveltekit-reload>Download</a></td>
 					</tr>
 				{/each}
 			</tbody>
 		</table>
 	</div>
 {/if}
+
+<style>
+	.table-wrap {
+		overflow-x: auto;
+	}
+
+	table {
+		width: 100%;
+		border-collapse: collapse;
+		table-layout: fixed;
+		font-size: 13px;
+	}
+
+	th,
+	td {
+		padding: 0.6rem 0.6rem;
+		border-bottom: 1px solid var(--border);
+		text-align: left;
+		white-space: nowrap;
+	}
+
+	th {
+		color: var(--muted-foreground);
+		font-size: 12px;
+		font-weight: 500;
+	}
+
+	th:nth-child(2) {
+		width: 9rem;
+	}
+
+	th:nth-child(3) {
+		width: 12rem;
+	}
+
+	th:nth-child(4) {
+		width: 6rem;
+	}
+
+	tbody tr:hover {
+		background: var(--accent);
+	}
+
+	.path a {
+		display: flex;
+		color: var(--foreground);
+		font-family: var(--font-mono);
+		font-size: 12px;
+		text-decoration: none;
+	}
+
+	.path a:hover {
+		color: var(--primary);
+	}
+
+	.num {
+		text-align: right;
+	}
+
+	.digest {
+		color: var(--muted-foreground);
+		font-family: var(--font-mono);
+		font-size: 11px;
+	}
+
+	.download {
+		color: var(--muted-foreground);
+		font-size: 12px;
+	}
+</style>

@@ -12,7 +12,7 @@
 
 <header class="page-head">
 	<h1>Imports</h1>
-	<p class="lede">Every upload, its outcome, and anything that needs your attention.</p>
+	<p class="page-lede">Every upload, its outcome, and anything that needs your attention.</p>
 </header>
 
 {#if data.error}
@@ -58,29 +58,11 @@
 {/if}
 
 <style>
-	.page-head {
-		margin: 0.5rem 0 1.5rem;
-	}
-
-	.lede,
 	.empty,
 	.error {
 		margin: 0;
 		color: var(--muted-foreground);
 		font-size: 12px;
-	}
-
-	h1 {
-		margin: 0;
-		font-size: 1.75rem;
-		font-weight: 600;
-		letter-spacing: -0.02em;
-		line-height: 1.1;
-	}
-
-	.lede {
-		margin-top: 0.4rem;
-		font-size: 13px;
 	}
 
 	.error {

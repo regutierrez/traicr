@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { Card, CardContent } from '$lib/components/ui/card';
 	import { revisionSourcesHref } from '$lib/links';
 	import type { PageProps } from './$types';
 
@@ -7,22 +6,50 @@
 </script>
 
 <svelte:head><title>Source records · Traicr</title></svelte:head>
-<p class="text-primary mb-2 font-mono text-[11px] tracking-widest">EVENT {data.id} / PROVENANCE</p>
-<h1 class="mb-2 text-3xl font-semibold tracking-tight">Source Records</h1>
-<p class="text-muted-foreground mb-6 max-w-2xl">Native records are retained exactly as collected. Conflicting observations remain inspectable.</p>
+<header class="page-head">
+	<p class="crumbs"><span>Event {data.id}</span><span>Provenance</span></p>
+	<h1>Source records</h1>
+	<p class="page-lede">Native records are retained exactly as collected. Conflicting observations remain inspectable.</p>
+</header>
 {#if data.error}
 	<p class="text-destructive" role="alert">{data.error}</p>
 {:else}
-	<div class="flex flex-col gap-4">
-		{#each data.sources as source, index (source.observation_id ?? index)}
-			<Card>
-				<CardContent>
-					<pre class="bg-muted overflow-x-auto rounded-lg p-3 font-mono text-xs whitespace-pre-wrap">{JSON.stringify(source, null, 2)}</pre>
-					<a href={revisionSourcesHref(source.revision_id)}>Open revision files</a>
-				</CardContent>
-			</Card>
-		{:else}
-			<p class="text-muted-foreground">No source references for this event.</p>
-		{/each}
-	</div>
+	{#each data.sources as source, index (source.observation_id ?? index)}
+		<section class="source">
+			<a class="files" href={revisionSourcesHref(source.revision_id)}>Revision {source.revision_id} files</a>
+			<pre>{JSON.stringify(source, null, 2)}</pre>
+		</section>
+	{:else}
+		<p class="text-muted-foreground">No source references for this event.</p>
+	{/each}
 {/if}
+
+<style>
+	.source + .source {
+		margin-top: 1.5rem;
+	}
+
+	.files {
+		color: var(--muted-foreground);
+		font-size: 12px;
+		text-decoration: none;
+	}
+
+	.files:hover {
+		color: var(--foreground);
+	}
+
+	pre {
+		overflow: auto;
+		margin: 0.4rem 0 0;
+		padding: 0.75rem 0.9rem;
+		border: 1px solid var(--border);
+		border-radius: var(--radius);
+		background: var(--card);
+		font-family: var(--font-mono);
+		font-size: 12px;
+		line-height: 1.55;
+		white-space: pre-wrap;
+		overflow-wrap: anywhere;
+	}
+</style>

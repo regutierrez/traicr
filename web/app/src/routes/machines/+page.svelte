@@ -12,7 +12,7 @@
 
 <header class="page-head">
 	<h1>Machines</h1>
-	<p class="lede">Where your traces were collected. A session seen on two machines is still one session.</p>
+	<p class="page-lede">Where your traces were collected. A session seen on two machines is still one session.</p>
 </header>
 
 {#if data.error}
@@ -37,30 +37,12 @@
 </ul>
 
 <style>
-	.page-head {
-		margin: 0.5rem 0 1.5rem;
-	}
-
-	.lede,
 	.empty,
 	.error,
 	.meta-row {
 		margin: 0;
 		color: var(--muted-foreground);
 		font-size: 12px;
-	}
-
-	h1 {
-		margin: 0;
-		font-size: 1.75rem;
-		font-weight: 600;
-		letter-spacing: -0.02em;
-		line-height: 1.1;
-	}
-
-	.lede {
-		margin-top: 0.4rem;
-		font-size: 13px;
 	}
 
 	.error {
