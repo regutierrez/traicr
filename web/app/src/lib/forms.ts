@@ -1,4 +1,4 @@
-type Failure = { error?: { message?: string } };
+type Failure = { error?: { code?: string; message?: string } };
 
 // Go mutation handlers return JSON on failure and 303 + HTML on success.
 // Native form navigation would replace the Svelte document with that JSON.
@@ -6,7 +6,7 @@ type Failure = { error?: { message?: string } };
 // The CSRF token is refreshed with window.fetch immediately before POST so it
 // matches the cookie the browser will actually send. SvelteKit's load fetch can
 // mint a token for a cookie that never lands in the jar.
-export async function submitGoForm(form: HTMLFormElement): Promise<{ ok: true; url: string } | { ok: false; message: string }> {
+export async function submitGoForm(form: HTMLFormElement): Promise<{ ok: true; url: string } | { ok: false; code: string; message: string }> {
 	const body = new URLSearchParams();
 	for (const [name, value] of new FormData(form)) {
 		if (typeof value === 'string') body.set(name, value);
@@ -36,7 +36,7 @@ export async function submitGoForm(form: HTMLFormElement): Promise<{ ok: true; u
 	const type = response.headers.get('content-type') ?? '';
 	if (type.includes('application/json')) {
 		const payload = (await response.json().catch(() => ({}))) as Failure;
-		return { ok: false, message: payload.error?.message ?? 'request failed' };
+		return { ok: false, code: payload.error?.code ?? '', message: payload.error?.message ?? 'request failed' };
 	}
-	return { ok: false, message: 'request failed' };
+	return { ok: false, code: '', message: 'request failed' };
 }

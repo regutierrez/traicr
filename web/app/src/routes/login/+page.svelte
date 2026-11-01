@@ -16,7 +16,12 @@
 		pending = true;
 		error = '';
 		try {
-			const result = await submitGoForm(form);
+			let result = await submitGoForm(form);
+			// A tab left open past the login cookie's 24 hours: GET /login mints a fresh one, then try once more.
+			if (!result.ok && result.code === 'login_expired') {
+				await fetch('/login', { credentials: 'same-origin' });
+				result = await submitGoForm(form);
+			}
 			if (result.ok) {
 				location.assign(result.url);
 				return;

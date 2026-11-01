@@ -165,12 +165,12 @@ func (app *application) csrfAPI(w http.ResponseWriter, r *http.Request) {
 func (app *application) login(w http.ResponseWriter, r *http.Request) {
 	if app.session(r, "login") == "" || !app.validForm(w, r) {
 		if app.session(r, "login") == "" {
-			writeError(w, http.StatusForbidden, "login_expired", "reload the login page and try again")
+			writeError(w, http.StatusForbidden, "login_expired", "The login form expired. Reload the page and try again.")
 		}
 		return
 	}
 	if !app.validToken(r.PostForm.Get("token")) {
-		writeError(w, http.StatusUnauthorized, "unauthorized", "invalid admin token")
+		writeError(w, http.StatusUnauthorized, "unauthorized", "That token does not match. Use the TRAICR_ADMIN_TOKEN value from the server.")
 		return
 	}
 	app.setSession(w, "session")
