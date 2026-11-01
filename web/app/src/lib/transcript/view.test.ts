@@ -440,6 +440,13 @@ test('runs of three or more quiet rows fold into one work row with a summary', (
 	// A row that must stay visible splits the run, and the shorter halves stay unfolded.
 	expect(foldWork(rows, (row) => row.id === '2').map((row) => row.chrome)).toEqual(['user', 'quiet', 'quiet', 'quiet', 'agent', 'quiet', 'quiet']);
 
+	// A compaction in the middle of a run stays in the stream between the folded parts.
+	const compaction = { id: 'k', parentId: null, type: 'compaction', summary: 'Earlier work summarized.' } as TranscriptEntry;
+	const compacted = foldWork(
+		streamRows([user, step('1', 'bash', ''), step('2', 'read', ''), step('3', 'bash', ''), compaction, step('4', 'bash', ''), step('5', 'read', ''), step('6', 'bash', ''), reply])
+	);
+	expect(compacted.map((row) => (row.chrome === 'work' ? 'work' : row.id))).toEqual(['u', 'work', 'k', 'work', 'r']);
+
 	// The last result's timestamp ends the work, not the last call's.
 	const results = new Map([['c3', { id: 'x', parentId: null, type: 'message', timestamp: '2026-01-01T00:02:05Z' } as TranscriptEntry]]);
 	expect(workSummary([...folded[1].entries, thought], results)).toEqual({

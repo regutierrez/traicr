@@ -262,11 +262,16 @@ function stepCount(rows: StreamRow[]) {
 	return steps;
 }
 
+/** Compactions, branch summaries, and session notes say something the work summary does not, so they never fold. */
+function isNoteRow(row: StreamRow) {
+	return row.entries.some((entry) => entry.type === 'compaction' || entry.type === 'branch_summary' || customNote(entry));
+}
+
 /**
  * Folds each run of quiet rows (thinking and tool calls between replies) with at
  * least three steps into one work row; housekeeping in the run folds with it. One
- * Amp message can hold several steps. A row that `keepVisible` accepts, such as one
- * that opens a child trace, ends the run and stays in the stream.
+ * Amp message can hold several steps. A note row, or a row that `keepVisible`
+ * accepts, such as one that opens a child trace, ends the run and stays in the stream.
  */
 export function foldWork(rows: StreamRow[], keepVisible: (row: StreamRow) => boolean = () => false): (StreamRow | WorkRow)[] {
 	const folded: (StreamRow | WorkRow)[] = [];
@@ -280,7 +285,7 @@ export function foldWork(rows: StreamRow[], keepVisible: (row: StreamRow) => boo
 		run = [];
 	};
 	for (const row of rows) {
-		if (row.chrome === 'quiet' && !keepVisible(row)) {
+		if (row.chrome === 'quiet' && !isNoteRow(row) && !keepVisible(row)) {
 			run.push(row);
 			continue;
 		}
