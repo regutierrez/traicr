@@ -104,6 +104,15 @@
 		const owner = path.find((entry) => (entry.message?.content ?? []).some((block) => block.type === 'toolCall' && block.id === call));
 		return owner?.id ?? linkedId;
 	});
+	// A message link whose message is not on the shown path would otherwise open at the top without a word.
+	let missingTarget = $derived.by(() => {
+		const params = page.url.searchParams;
+		if (!session || !(params.get('targetId') || params.get('event') || params.get('key'))) return '';
+		if (linkedId && path.some((entry) => entry.id === linkedId)) return '';
+		return linkedId && session.entries.some((entry) => entry.id === linkedId)
+			? 'That message is on another branch of this session, not the one shown here.'
+			: 'That message is not in this session. Showing the start.';
+	});
 	let facts = $derived(pathSessionFacts(path));
 	let results = $derived(toolResults(path));
 	let filtered = $derived(path.filter((entry) => entryMatchesFilter(entry, filter)));
@@ -572,6 +581,9 @@
 			{/if}
 		{/snippet}
 		<div class="body">
+			{#if missingTarget}
+				<p class="link-notice" role="status">{missingTarget}</p>
+			{/if}
 			{#if findExpression}
 				<div class="find-bar" role="search" aria-label="Matches in this trace">
 					<span class="find-query">“{findQuery}”</span>
@@ -949,6 +961,17 @@
 		font-family: var(--font-mono);
 		font-size: 12px;
 		white-space: pre-wrap;
+	}
+
+	.link-notice {
+		width: min(46rem, calc(100% - 2.5rem));
+		margin: 0.6rem auto 0;
+		padding: 0.45rem 0.75rem;
+		border: 1px solid var(--border);
+		border-radius: var(--radius);
+		background: var(--card);
+		color: var(--muted-foreground);
+		font-size: 12px;
 	}
 
 	/* Above the stream, so it stays in view while the reader steps through matches. */
