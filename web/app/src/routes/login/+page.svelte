@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { page } from '$app/state';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { submitGoForm } from '$lib/forms';
@@ -39,6 +40,8 @@
 	<p class="lede">Enter the admin token configured on this server.</p>
 	<form class="form" method="post" action="/login" onsubmit={unlock} aria-busy={pending}>
 		<input type="hidden" name="csrf" value={data.csrf} />
+		<!-- The page that sent them here; the server checks it stays inside Traicr. -->
+		<input type="hidden" name="next" value={page.url.searchParams.get('next') ?? ''} />
 		<label class="label" for="token">Admin token</label>
 		<Input
 			id="token"

@@ -107,7 +107,7 @@ func (app *application) validForm(w http.ResponseWriter, r *http.Request) bool {
 func (app *application) browser(next http.HandlerFunc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if app.session(r, "session") == "" {
-			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			http.Redirect(w, r, loginURL(r), http.StatusSeeOther)
 			return
 		}
 		if r.Method != http.MethodGet && r.Method != http.MethodHead && !app.validForm(w, r) {
@@ -117,9 +117,27 @@ func (app *application) browser(next http.HandlerFunc) http.Handler {
 	})
 }
 
+// loginURL sends a signed-out reader to /login and remembers the page they
+// opened, so a shared message link still lands on its message after login.
+func loginURL(r *http.Request) string {
+	if (r.Method != http.MethodGet && r.Method != http.MethodHead) || r.URL.RequestURI() == "/" {
+		return "/login"
+	}
+	return "/login?next=" + url.QueryEscape(r.URL.RequestURI())
+}
+
+// afterLogin keeps the redirect after login inside Traicr. Browsers read "//",
+// "/\", and paths with tabs or newlines as another host, so those go home.
+func afterLogin(next string) string {
+	if !strings.HasPrefix(next, "/") || strings.HasPrefix(next, "//") || strings.HasPrefix(next, "/login") || strings.ContainsAny(next, "\\\t\r\n") {
+		return "/"
+	}
+	return next
+}
+
 func (app *application) loginPage(w http.ResponseWriter, r *http.Request) {
 	if app.session(r, "session") != "" {
-		http.Redirect(w, r, "/", http.StatusSeeOther)
+		http.Redirect(w, r, afterLogin(r.URL.Query().Get("next")), http.StatusSeeOther)
 		return
 	}
 	// Reuse a live login cookie so a second GET /login cannot invalidate the
@@ -156,7 +174,7 @@ func (app *application) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	app.setSession(w, "session")
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+	http.Redirect(w, r, afterLogin(r.PostForm.Get("next")), http.StatusSeeOther)
 }
 
 func (app *application) logout(w http.ResponseWriter, r *http.Request) {

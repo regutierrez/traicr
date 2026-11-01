@@ -25,8 +25,8 @@ func TestBrowserSessionExpiryAndPurposeBoundaries(t *testing.T) {
 	request.AddCookie(expired)
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
-	if response.Code != http.StatusSeeOther || response.Header().Get("Location") != "/login" {
-		t.Fatalf("session expiring now was accepted: %d", response.Code)
+	if response.Code != http.StatusSeeOther || response.Header().Get("Location") != "/login?next=%2Fmachines" {
+		t.Fatalf("session expiring now was accepted: %d %s", response.Code, response.Header().Get("Location"))
 	}
 
 	loginPurpose := signedCookie("login", now+60)
@@ -43,6 +43,33 @@ func TestBrowserSessionExpiryAndPurposeBoundaries(t *testing.T) {
 	response = submit(handler, "/login", form, sessionPurpose, "http://example.com")
 	if response.Code != http.StatusForbidden || !strings.Contains(response.Body.String(), `"code":"login_expired"`) {
 		t.Fatalf("session-purpose cookie authorized login: %d %s", response.Code, response.Body)
+	}
+}
+
+func TestLoginReturnsToThePageItInterrupted(t *testing.T) {
+	handler := testHandler(t, false)
+	page := "/traces/11/trace?targetId=4232&q=a%20b"
+	response := request(handler, http.MethodGet, page, nil, "")
+	location := response.Header().Get("Location")
+	if response.Code != http.StatusSeeOther || location != "/login?next="+url.QueryEscape(page) {
+		t.Fatalf("signed-out page: %d %q", response.Code, location)
+	}
+	next, _ := url.Parse(location)
+	for value, want := range map[string]string{
+		next.Query().Get("next"):   page,
+		"":                         "/",
+		"https://attacker.invalid": "/",
+		"//attacker.invalid/x":     "/",
+		"/\\attacker.invalid":      "/",
+		"/\t/attacker.invalid":     "/",
+		"/login?next=/imports":     "/",
+	} {
+		cookie, csrf := freshLoginForm(t, handler)
+		form := url.Values{"csrf": {csrf}, "token": {adminToken}, "next": {value}}
+		response := submit(handler, "/login", form, cookie, "http://example.com")
+		if response.Code != http.StatusSeeOther || response.Header().Get("Location") != want {
+			t.Errorf("next %q: %d %q, want %q", value, response.Code, response.Header().Get("Location"), want)
+		}
 	}
 }
 
