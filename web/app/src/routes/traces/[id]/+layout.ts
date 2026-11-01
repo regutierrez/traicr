@@ -6,7 +6,7 @@ import type { LayoutLoad } from './$types';
 
 // Overview and Trace share one load, so switching tabs does not fetch the transcript again.
 export const load: LayoutLoad = async ({ fetch, params, url }) => {
-	const result = await readJSON<Trace>(fetch, `/api/v1/traces/${params.id}`);
+	const result = await readJSON<Trace>(fetch, `/api/v1/traces/${params.id}`, url);
 	stopIfMissing(result, 'This session is not in the archive. It may have been deleted.');
 	if (!result.ok) return { trace: null, revision: '', session: null, loadError: '', error: result.message };
 	const revision = url.searchParams.get('revision') ?? '';

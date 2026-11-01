@@ -4,8 +4,8 @@ import type { PageLoad } from './$types';
 
 export const load: PageLoad = async ({ fetch, url }) => {
 	const [result, machines] = await Promise.all([
-		readJSON<TranscriptCardPage>(fetch, `/api/v1/cards?${url.searchParams.toString()}`),
-		readJSON<Machine[]>(fetch, '/api/v1/machines')
+		readJSON<TranscriptCardPage>(fetch, `/api/v1/cards?${url.searchParams.toString()}`, url),
+		readJSON<Machine[]>(fetch, '/api/v1/machines', url)
 	]);
 	const known = machines.ok ? (machines.data ?? []) : [];
 	if (!result.ok) return { cards: [], machines: known, error: result.message, next: '', partial: false };

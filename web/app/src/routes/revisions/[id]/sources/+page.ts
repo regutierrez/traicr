@@ -5,8 +5,8 @@ import type { PageLoad } from './$types';
 export const load: PageLoad = async ({ fetch, params, url }) => {
 	const traceID = url.searchParams.get('trace');
 	const [result, owner] = await Promise.all([
-		readJSON<SourceFile[]>(fetch, `/api/v1/revisions/${params.id}/sources`),
-		traceID ? readJSON<Trace>(fetch, `/api/v1/traces/${encodeURIComponent(traceID)}`) : null
+		readJSON<SourceFile[]>(fetch, `/api/v1/revisions/${params.id}/sources`, url),
+		traceID ? readJSON<Trace>(fetch, `/api/v1/traces/${encodeURIComponent(traceID)}`, url) : null
 	]);
 	stopIfMissing(result, 'This revision is not in the archive. Its session may have been deleted.');
 	// Only a trace that owns this revision may label the page and its way back.
