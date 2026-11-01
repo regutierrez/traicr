@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { Button } from '$lib/components/ui/button';
-	import { dateAndTime } from '$lib/format';
+	import { count, dateAndTime } from '$lib/format';
 	import { withQuery } from '$lib/links';
 	import type { ImportReport } from '$lib/types';
 	import type { PageProps } from './$types';
@@ -20,13 +20,54 @@
 		add(item.failed, 'failed', 'bad');
 		return parts.length ? parts : [{ text: 'No traces', tone: '' as const }];
 	}
+
+	const sizeUnits = ['byte', 'kilobyte', 'megabyte', 'gigabyte', 'terabyte'];
+	function size(bytes: number) {
+		let unit = 0;
+		while (bytes >= 1000 && unit < sizeUnits.length - 1) {
+			bytes /= 1000;
+			unit++;
+		}
+		return new Intl.NumberFormat(undefined, { style: 'unit', unit: sizeUnits[unit], unitDisplay: 'short', maximumFractionDigits: bytes < 10 ? 1 : 0 }).format(bytes);
+	}
+
+	// Problems first, so a glance at the top says whether anything needs a look.
+	let problems = $derived.by(() => {
+		const health = data.health;
+		if (!health) return [];
+		const lines: { text: string; tone: 'warn' | 'bad' | '' }[] = [];
+		if (health.running_import_id) lines.push({ text: `Import #${health.running_import_id} is running`, tone: '' });
+		if (health.imports.with_failed_traces) lines.push({ text: `${count(health.imports.with_failed_traces, 'import')} had failed traces`, tone: 'bad' });
+		if (health.imports.incomplete) lines.push({ text: `${count(health.imports.incomplete, 'import')} stopped before finishing`, tone: 'warn' });
+		if (health.titles.enabled && health.titles.pending) lines.push({ text: `${count(health.titles.pending, 'title')} waiting to be named`, tone: '' });
+		return lines;
+	});
 </script>
 
 <svelte:head><title>Archive · Traicr</title></svelte:head>
 
 <header class="page-head">
 	<h1>Archive</h1>
-	<p class="page-lede">Where your traces came from and every upload, with anything that needs your attention.</p>
+	{#if data.health}
+		{@const health = data.health}
+		<p class="page-lede health">
+			{[
+				count(health.traces, 'trace'),
+				count(health.events, 'event'),
+				count(health.imports.total, 'import'),
+				`${size(health.storage.database_bytes + health.storage.objects_bytes)} stored`
+			].join(' · ')}
+		</p>
+		{#if problems.length}
+			<p class="health-state">
+				{#each problems as problem (problem.text)}<span class={problem.tone}>{problem.text}</span>{/each}
+			</p>
+		{:else if health.imports.total}
+			<p class="health-state ok">Every import finished cleanly</p>
+		{/if}
+	{:else}
+		<p class="page-lede">Where your traces came from and every upload, with anything that needs your attention.</p>
+	{/if}
 </header>
 
 {#if data.error}
@@ -109,6 +150,22 @@
 
 	.warn {
 		color: var(--primary);
+	}
+
+	.health {
+		font-variant-numeric: tabular-nums;
+	}
+
+	.health-state {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.25rem 1rem;
+		margin: 0.35rem 0 0;
+		font-size: 13px;
+	}
+
+	.health-state.ok {
+		color: var(--muted-foreground);
 	}
 
 	.machines {

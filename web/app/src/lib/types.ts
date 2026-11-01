@@ -60,6 +60,24 @@ export type Machine = {
 	last_seen: string;
 };
 
+/** GET /api/v1/status: archive health. */
+export type ArchiveStatus = {
+	running_import_id?: number;
+	machines: {
+		id: string;
+		hostname: string;
+		last_import_at: string;
+		last_import_id: number;
+		last_import_complete: boolean;
+		last_import_failed_traces: number;
+	}[];
+	imports: { total: number; with_failed_traces: number; incomplete: number };
+	traces: number;
+	events: number;
+	titles: { enabled: boolean; pending: number };
+	storage: { database_bytes: number; objects_bytes: number };
+};
+
 export type TraceRef = { id: number; native_trace_id: string; title?: string };
 
 export type Revision = {
