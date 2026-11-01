@@ -28,7 +28,11 @@ delete). **Trace** (`/traces/{id}/trace`) is the conversation: one linear
 stream, always the selected path. User messages are
 right-aligned bubbles; agent replies are unfilled prose. Runs of three or more
 tool and thought steps fold into one `Worked for … · Ran 3 commands …` row;
-shorter runs and steps inside an open fold stay quiet rows with traces.com
+housekeeping tools (`set_thread_status`, `tool_search`, `load_prompt`, todo
+lists) do not count as steps: they fold only inside a run that already has
+three real steps, and they are left out of the summary sentence. Amp automation
+messages (`fromAutomation`) are a quiet one-line note, not a prompt, and are not
+counted as prompts. Shorter runs and steps inside an open fold stay quiet rows with traces.com
 icons and labels (`Ran command`, `Read file`, `Thought`, `Used` leftovers).
 Each Overview count links to Trace with `?filter=`, which shows only that kind
 of row under a "Showing only …" bar. Older links with `event`, `key`,

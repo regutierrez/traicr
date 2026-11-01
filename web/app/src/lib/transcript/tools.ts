@@ -54,6 +54,11 @@ export function toolSummary(call: ToolCallBlock) {
 	return name;
 }
 
+/** Tools that manage the agent's own session rather than doing the work: status lines, tool discovery, prompt loading, todo lists. */
+export function isHousekeepingTool(name: string) {
+	return ['set_thread_status', 'tool_search', 'load_prompt', 'todowrite', 'todo_write', 'todoread', 'todo_read'].includes(name.toLowerCase());
+}
+
 export type ToolKind = 'read' | 'edit' | 'write' | 'exec' | 'web' | 'browser' | 'other';
 
 export const toolKindLabel: Record<ToolKind, string> = {

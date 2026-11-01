@@ -180,6 +180,14 @@
 		return childCards(entry, undefined, undefined, children);
 	}
 
+	function automationText(entries: TranscriptEntry[]) {
+		return entries
+			.flatMap((entry) => entry.message?.content ?? [])
+			.flatMap((block) => (block.type === 'text' ? [block.text] : []))
+			.join('\n\n')
+			.trim();
+	}
+
 	function sentAt(entries: TranscriptEntry[]) {
 		return entries.find((entry) => entry.timestamp)?.timestamp ?? '';
 	}
@@ -374,6 +382,13 @@
 									</div>
 								{/if}
 							</section>
+						{:else if row.chrome === 'automation'}
+							<!-- Amp wrote this on the user's behalf; it is a note in the flow, not a prompt. -->
+							<section class={['row', 'is-automation', row.entries.some((entry) => entry.id === targetId) && 'is-target']} id="entry-{row.id}">
+								<ExpandChip icon="agent" verb="Automation" rest={automationText(row.entries).split('\n')[0]}>
+									<div class="automation-body"><Markdown text={automationText(row.entries)} /></div>
+								</ExpandChip>
+							</section>
 						{:else}
 						<section class={['row', `is-${row.chrome}`, row.entries.some((entry) => entry.id === targetId) && 'is-target']}>
 							{#if row.chrome === 'user'}<h2 class="sr-only">You</h2>{:else if row.chrome === 'agent'}<h2 class="sr-only">Agent</h2>{/if}
@@ -471,6 +486,18 @@
 
 	.row.is-quiet {
 		margin-block: 0;
+	}
+
+	.row.is-automation {
+		margin-block: 1rem;
+	}
+
+	.automation-body {
+		margin: 0.25rem 0 0.5rem;
+		padding-left: 0.9rem;
+		border-left: 1px solid var(--border);
+		color: var(--muted-foreground);
+		font-size: 13px;
 	}
 
 	.row.is-work {

@@ -474,3 +474,29 @@ test('Overview totals sum usage per reply, keep the peak call window, and rank t
 	]);
 	expect(timeSpan(entries)).toMatchObject({ start: '2026-01-01T00:00:00.000Z', end: '2026-01-01T00:03:00.000Z', duration: '3m' });
 });
+
+test('housekeeping tools never trigger a fold and stay out of the summary; automation messages are not prompts', () => {
+	const call = (id: string, name: string) =>
+		({ id, parentId: null, type: 'message', message: { role: 'assistant', content: [{ type: 'toolCall', id: `c${id}`, name, arguments: {} }] } }) as TranscriptEntry;
+	const user = { id: 'u', parentId: null, type: 'message', message: { role: 'user', content: [{ type: 'text', text: 'go' }] } } as TranscriptEntry;
+	const automation = {
+		id: 'n',
+		parentId: null,
+		type: 'message',
+		message: { role: 'user', nativeDetails: { message_meta: { fromAutomation: true } }, content: [{ type: 'text', text: 'A subagent ended.' }] }
+	} as unknown as TranscriptEntry;
+	const reply = { id: 'r', parentId: null, type: 'message', message: { role: 'assistant', content: [{ type: 'text', text: 'ok' }] } } as TranscriptEntry;
+
+	// Housekeeping is not a step: two real steps beside it stay visible, three fold and take it along.
+	const folded = foldWork(
+		streamRows([user, call('1', 'set_thread_status'), call('2', 'bash'), call('3', 'read'), reply, call('4', 'set_thread_status'), call('5', 'bash'), call('6', 'read'), call('7', 'bash')])
+	);
+	expect(folded.map((row) => row.chrome)).toEqual(['user', 'quiet', 'quiet', 'quiet', 'agent', 'work']);
+	expect(folded[5].entries.map((entry) => entry.id)).toEqual(['4', '5', '6', '7']);
+	expect(workSummary(folded[5].entries).sentence).toBe('Ran 2 commands and read 1 file');
+	expect(workSummary([call('5', 'set_thread_status'), call('6', 'tool_search')]).sentence).toBe('2 housekeeping steps');
+
+	const rows = streamRows([user, reply, automation, reply]);
+	expect(rows.map((row) => row.chrome)).toEqual(['user', 'agent', 'automation', 'agent']);
+	expect(streamCounts([user, automation]).prompts).toBe(1);
+});

@@ -1,5 +1,5 @@
 import { leafCount } from './tree';
-import { toolKind, toolKindLabel, type ToolKind } from './tools';
+import { isHousekeepingTool, toolKind, toolKindLabel, type ToolKind } from './tools';
 import type { TranscriptEntry, Turn } from './types';
 
 export type StreamFilter = 'all' | 'prompts' | 'responses' | 'thinking' | 'tools' | 'compaction';
@@ -16,6 +16,11 @@ export type StreamCounts = {
 	toolKinds: { kind: ToolKind; label: string; count: number }[];
 };
 
+/** A message Amp sent on the user's behalf, such as "a background subagent ended". */
+export function isAutomationMessage(entry: TranscriptEntry) {
+	return entry.message?.role === 'user' && Boolean(entry.message.nativeDetails?.message_meta?.fromAutomation);
+}
+
 export function streamCounts(entries: TranscriptEntry[], graph: TranscriptEntry[] = entries): StreamCounts {
 	let prompts = 0;
 	let responses = 0;
@@ -24,7 +29,7 @@ export function streamCounts(entries: TranscriptEntry[], graph: TranscriptEntry[
 	let compaction = 0;
 	const kinds = new Map<ToolKind, number>();
 	for (const entry of entries) {
-		if (entry.message?.role === 'user') prompts += 1;
+		if (entry.message?.role === 'user' && !isAutomationMessage(entry)) prompts += 1;
 		if (entry.message?.role === 'assistant') {
 			const content = entry.message.content ?? [];
 			if (content.some((block) => block.type === 'text')) responses += 1;
@@ -95,7 +100,7 @@ export function chatRows(grouped: Turn[]): Turn[] {
 	});
 }
 
-export type StreamChrome = 'user' | 'agent' | 'quiet';
+export type StreamChrome = 'user' | 'automation' | 'agent' | 'quiet';
 
 export type StreamRow = {
 	id: string;
@@ -121,7 +126,10 @@ function isPairedToolResult(entry: TranscriptEntry, calls: Set<string>) {
 export function streamRows(path: TranscriptEntry[]): StreamRow[] {
 	const calls = visibleToolCalls(path);
 	return chatRows(groupTurns(path)).flatMap((turn) => {
-		if (turn.role === 'user') return [{ id: turn.id, chrome: 'user' as const, entries: turn.entries }];
+		if (turn.role === 'user') {
+			const chrome = turn.entries.every(isAutomationMessage) ? ('automation' as const) : ('user' as const);
+			return [{ id: turn.id, chrome, entries: turn.entries }];
+		}
 		return turn.entries
 			.filter((entry) => !isPairedToolResult(entry, calls))
 			.map((entry) => ({ id: entry.id, chrome: entryChrome(entry), entries: [entry] }));
@@ -138,12 +146,13 @@ export type WorkRow = {
 /** Shorter runs stay visible: one "Ran go test" row says more than "Ran 1 command". */
 const MIN_FOLDED_STEPS = 3;
 
+/** Housekeeping tools do not count: a status update next to one command is still one step of work. */
 function stepCount(rows: StreamRow[]) {
 	let steps = 0;
 	for (const row of rows) {
 		for (const entry of row.entries) {
 			for (const block of entry.message?.content ?? []) {
-				if (block.type === 'toolCall' || block.type === 'thinking') steps += 1;
+				if (block.type === 'thinking' || (block.type === 'toolCall' && !isHousekeepingTool(block.name))) steps += 1;
 			}
 		}
 	}
@@ -152,8 +161,9 @@ function stepCount(rows: StreamRow[]) {
 
 /**
  * Folds each run of quiet rows (thinking and tool calls between replies) with at
- * least three steps into one work row. One Amp message can hold several steps. A row that `keepVisible` accepts, such as one that opens a child
- * trace, ends the run and stays in the stream.
+ * least three steps into one work row; housekeeping in the run folds with it. One
+ * Amp message can hold several steps. A row that `keepVisible` accepts, such as one
+ * that opens a child trace, ends the run and stays in the stream.
  */
 export function foldWork(rows: StreamRow[], keepVisible: (row: StreamRow) => boolean = () => false): (StreamRow | WorkRow)[] {
 	const folded: (StreamRow | WorkRow)[] = [];
@@ -207,6 +217,7 @@ function formatDuration(ms: number) {
  */
 export function workSummary(entries: TranscriptEntry[], results: Map<string, TranscriptEntry> = new Map()) {
 	const counts = new Map<ToolKind | 'thinking', number>();
+	let housekeeping = 0;
 	const times: number[] = [];
 	const addTime = (value?: string) => {
 		const time = value ? Date.parse(value) : NaN;
@@ -217,9 +228,14 @@ export function workSummary(entries: TranscriptEntry[], results: Map<string, Tra
 		for (const block of entry.message?.content ?? []) {
 			if (block.type === 'thinking') counts.set('thinking', (counts.get('thinking') ?? 0) + 1);
 			if (block.type === 'toolCall') {
+				addTime(results.get(block.id)?.timestamp);
+				// Housekeeping is left out of the sentence: "used 3 tools" for status updates hides the real work.
+				if (isHousekeepingTool(block.name)) {
+					housekeeping += 1;
+					continue;
+				}
 				const kind = toolKind(block.name);
 				counts.set(kind, (counts.get(kind) ?? 0) + 1);
-				addTime(results.get(block.id)?.timestamp);
 			}
 		}
 	}
@@ -231,6 +247,7 @@ export function workSummary(entries: TranscriptEntry[], results: Map<string, Tra
 			return value === 1 ? one : many.replace('#', String(value));
 		});
 	let sentence = phrases.length > 1 ? `${phrases.slice(0, -1).join(', ')}${phrases.length > 2 ? ',' : ''} and ${phrases.at(-1)}` : (phrases[0] ?? '');
+	if (!sentence && housekeeping) sentence = housekeeping === 1 ? '1 housekeeping step' : `${housekeeping} housekeeping steps`;
 	sentence = sentence.charAt(0).toUpperCase() + sentence.slice(1);
 	const duration = times.length > 1 ? formatDuration(Math.max(...times) - Math.min(...times)) : '';
 	return { duration: duration ? `Worked for ${duration}` : '', sentence };
@@ -264,7 +281,7 @@ export function visibleToolCalls(path: TranscriptEntry[]) {
 
 export function entryMatchesFilter(entry: TranscriptEntry, filter: StreamFilter) {
 	if (filter === 'all') return true;
-	if (filter === 'prompts') return entry.message?.role === 'user';
+	if (filter === 'prompts') return entry.message?.role === 'user' && !isAutomationMessage(entry);
 	if (filter === 'responses') {
 		return Boolean(entry.message?.role === 'assistant' && entry.message.content.some((block) => block.type === 'text'));
 	}
