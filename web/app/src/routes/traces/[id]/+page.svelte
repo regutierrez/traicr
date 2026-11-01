@@ -8,7 +8,7 @@
 	import { clockTime, dateAndTime, shortRepository } from '$lib/format';
 	import { submitGoForm } from '$lib/forms';
 	import { revisionSourcesHref, sourceFileHref, transcriptHref, withQuery } from '$lib/links';
-	import { toolKindIcon, type ChipIcon } from '$lib/transcript/tools';
+	import { toolChipParts, toolKindIcon, type ChipIcon } from '$lib/transcript/tools';
 	import { getPath, graphLeaves, treeLabel } from '$lib/transcript/tree';
 	import {
 		activeTime,
@@ -19,6 +19,7 @@
 		streamRows,
 		timeSpan,
 		toolNameCounts,
+		toolResults,
 		usageTotals,
 		type StreamFilter
 	} from '$lib/transcript/turns';
@@ -43,7 +44,18 @@
 	]);
 	let span = $derived(timeSpan(session?.entries ?? []));
 	let active = $derived(activeTime(path));
-	let tools = $derived(toolNameCounts(path));
+	let results = $derived(toolResults(path));
+	let tools = $derived(toolNameCounts(path, results));
+	// Each failed tool call, linked to the message that made it.
+	let failures = $derived(
+		path.flatMap((entry) =>
+			(entry.message?.content ?? []).flatMap((block) => {
+				const result = block.type === 'toolCall' ? results.get(block.id) : undefined;
+				if (block.type !== 'toolCall' || !result?.message?.isError) return [];
+				return [{ id: block.id, entryId: entry.id, chip: toolChipParts(block), exitCode: result.message.run?.result?.exitCode }];
+			})
+		)
+	);
 	let toolErrors = $derived(tools.reduce((total, tool) => total + tool.errors, 0));
 	// Every call costs tokens, including ones on branches the Trace tab does not show.
 	let usage = $derived(usageTotals(session?.entries ?? []));
@@ -225,6 +237,24 @@
 							{allPrompts ? 'Show fewer' : `Show all ${outline.length} prompts`}
 						</button>
 					{/if}
+				</section>
+			{/if}
+
+			{#if failures.length}
+				<section>
+					<h2>Failures <span class="dim">· {failures.length}</span></h2>
+					<ul class="failures">
+						{#each failures as failure (failure.id)}
+							<li>
+								<a href={traceHref({ targetId: failure.entryId })}>
+									<Icon name={failure.chip.icon} size={13} />
+									<span class="failure-verb">{failure.chip.verb}</span>
+									<span class="failure-rest" translate="no">{failure.chip.rest}</span>
+									{#if failure.exitCode}<span class="bad failure-exit">exit {failure.exitCode}</span>{/if}
+								</a>
+							</li>
+						{/each}
+					</ul>
 				</section>
 			{/if}
 
@@ -581,6 +611,45 @@
 	.more:hover,
 	.more:focus-visible {
 		color: var(--foreground);
+	}
+
+	.failures a {
+		display: grid;
+		grid-template-columns: auto auto minmax(0, 1fr) auto;
+		align-items: center;
+		gap: 0.5rem;
+		margin-inline: -0.6rem;
+		padding: 0.3rem 0.6rem;
+		border-radius: var(--radius);
+		color: var(--foreground);
+		text-decoration: none;
+	}
+
+	.failures a:hover,
+	.failures a:focus-visible {
+		background: var(--accent);
+	}
+
+	.failures :global(svg) {
+		color: var(--muted-foreground);
+	}
+
+	.failure-verb {
+		font-weight: 500;
+	}
+
+	.failure-rest {
+		overflow: hidden;
+		color: var(--muted-foreground);
+		font-family: var(--font-mono);
+		font-size: 12px;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.failure-exit {
+		font-size: 12px;
+		font-variant-numeric: tabular-nums;
 	}
 
 	.links li + li {

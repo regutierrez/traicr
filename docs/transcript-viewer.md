@@ -24,7 +24,8 @@ session at a glance: the first ask and the last reply, each opening Trace at
 that message, then harness, model, thinking level, start and last activity,
 directory, repository, Amp session facts, counts of prompts, replies, thoughts,
 tool calls, and compactions, a numbered list of every prompt (the first eight,
-then all on request) that opens Trace at each one, tool use by name with failures, recorded token
+then all on request) that opens Trace at each one, every failed tool call with
+its command and exit code, linked to it in Trace, tool use by name with failures, recorded token
 usage, branches, related traces, and the archive (revisions, native export,
 delete). **Trace** (`/traces/{id}/trace`) is the conversation: one linear
 stream, always the selected path. User messages are
