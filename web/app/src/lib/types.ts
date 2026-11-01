@@ -10,6 +10,8 @@ export type TranscriptCard = {
 	revision_count: number;
 	/** Set when the search matched a Child Trace listed under this Trace. */
 	matched_child?: { id: number; title?: string };
+	/** With a query, the Event that matched, in matched_child when that is set. */
+	matched_event_id?: number;
 };
 
 export type TranscriptCardPage = {

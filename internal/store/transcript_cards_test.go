@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/regutierrez/traicr/internal/domain"
@@ -32,7 +33,7 @@ func TestTranscriptCardsDeduplicateMatchesAndPageBySession(t *testing.T) {
 	if err != nil || len(browse.Cards) != 3 {
 		t.Fatalf("browse: %+v, %v", browse, err)
 	}
-	if browse.Cards[0].NativeTraceID != "2" || browse.Cards[0].EventCount != 0 {
+	if browse.Cards[0].NativeTraceID != "2" || browse.Cards[0].EventCount != 0 || browse.Cards[1].MatchedEventID != 0 {
 		t.Fatalf("missing empty transcript or wrong recency: %+v", browse.Cards)
 	}
 	if browse.Cards[1].Preview != "Build a transcript viewer" || browse.Cards[1].EventCount != 3 || browse.Cards[1].RevisionCount != 1 {
@@ -43,6 +44,11 @@ func TestTranscriptCardsDeduplicateMatchesAndPageBySession(t *testing.T) {
 		first, err := s.TranscriptCards(ctx, query)
 		if err != nil || len(first.Cards) != 1 || first.NextCursor == "" {
 			t.Fatalf("%s first: %+v %v", mode, first, err)
+		}
+		// The result opens at the earliest matching Event, not the later one.
+		want, err := s.EventsFromKey(ctx, first.Cards[0].ID, "call:1", 1)
+		if err != nil || first.Cards[0].MatchedEventID != want.Events[0].ID || !strings.HasPrefix(first.Cards[0].MatchSnippet, "needle first") {
+			t.Fatalf("%s matched event = %d %q, want %+v %v", mode, first.Cards[0].MatchedEventID, first.Cards[0].MatchSnippet, want.Events, err)
 		}
 		query.Cursor = first.NextCursor
 		second, err := s.TranscriptCards(ctx, query)

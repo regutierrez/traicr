@@ -56,6 +56,8 @@ type transcriptCard struct {
 	RevisionCount int    `json:"revision_count"`
 	// MatchedChild is set when the search matched a Child Trace of this Trace.
 	MatchedChild *traceRef `json:"matched_child,omitempty"`
+	// MatchedEventID is the Event that matched `q`, in the matched child when there is one.
+	MatchedEventID int64 `json:"matched_event_id,omitempty"`
 }
 
 type traceRef struct {
@@ -77,7 +79,7 @@ func newTranscriptCard(item store.TranscriptCard) transcriptCard {
 	card := transcriptCard{
 		ID: item.ID, Title: item.Title, Harness: item.Harness, NativeTraceID: item.NativeTraceID,
 		Repository: item.Repository, UpdatedAt: item.UpdatedAt, Snippet: snippet,
-		EventCount: item.EventCount, RevisionCount: item.RevisionCount,
+		EventCount: item.EventCount, RevisionCount: item.RevisionCount, MatchedEventID: item.MatchedEventID,
 	}
 	if item.MatchedChildID != 0 {
 		card.MatchedChild = &traceRef{ID: item.MatchedChildID, Title: item.MatchedChildTitle}

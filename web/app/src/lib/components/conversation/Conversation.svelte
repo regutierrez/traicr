@@ -83,13 +83,25 @@
 		if (selection?.key === sessionKey) return selection.leaf;
 		return idsFromURL(session).leaf;
 	});
-	let targetId = $derived.by(() => {
+	let linkedId = $derived.by(() => {
 		if (!session) return '';
 		if (selection?.key === sessionKey) return selection.target;
 		return idsFromURL(session).target;
 	});
 
 	let path = $derived(session && leafId ? getPath(session.entries, leafId) : []);
+	// A tool result shows inside its call's row, so a link to the result (such as a search match in
+	// tool output) targets the message holding the call and opens that tool.
+	let targetCall = $derived.by(() => {
+		const message = path.find((entry) => entry.id === linkedId)?.message;
+		return message?.role === 'toolResult' ? (message.toolCallId ?? '') : '';
+	});
+	let targetId = $derived.by(() => {
+		const call = targetCall;
+		if (!call) return linkedId;
+		const owner = path.find((entry) => (entry.message?.content ?? []).some((block) => block.type === 'toolCall' && block.id === call));
+		return owner?.id ?? linkedId;
+	});
 	let facts = $derived(pathSessionFacts(path));
 	let results = $derived(toolResults(path));
 	let filtered = $derived(path.filter((entry) => entryMatchesFilter(entry, filter)));
@@ -253,7 +265,7 @@
 	}
 
 	function toolIsOpen(id: string) {
-		return toolOpen[id] ?? false;
+		return toolOpen[id] ?? id === targetCall;
 	}
 
 	function selectNode(entryId: string) {
@@ -341,7 +353,7 @@
 					/>
 				{/if}
 			{:else if message && isToolOnlyMessage(entry)}
-				<div class="block" id="entry-{entry.id}">
+				<div class={['block', entry.id === targetId && 'is-target-block']} id="entry-{entry.id}">
 					{#each incomingCards(entry) as child (child.id)}
 						<ChildCard {child} />
 					{/each}
@@ -359,7 +371,7 @@
 					{/each}
 				</div>
 			{:else if message}
-				<article class="block" id="entry-{entry.id}">
+				<article class={['block', entry.id === targetId && 'is-target-block']} id="entry-{entry.id}">
 					{#if message.nativeDetails?.message_meta?.fromAutomation}
 						<p class="note">Automation message</p>
 					{/if}
@@ -720,6 +732,13 @@
 	}
 
 	.row.is-target .turn-body {
+		outline: 1px solid color-mix(in oklch, var(--primary) 45%, transparent);
+		outline-offset: 3px;
+	}
+
+	/* Inside an open work row the linked step gets the outline, since the row itself is a fold. */
+	.work-steps .is-target-block {
+		border-radius: 4px;
 		outline: 1px solid color-mix(in oklch, var(--primary) 45%, transparent);
 		outline-offset: 3px;
 	}

@@ -27,6 +27,9 @@ type TranscriptCard struct {
 	// the Trace itself. Child Traces are listed under their top ancestor.
 	MatchedChildID    int64
 	MatchedChildTitle string
+	// MatchedEventID is the earliest Event of the matched Trace whose text matched q,
+	// so a result can open at that message. It is 0 without q.
+	MatchedEventID int64
 }
 
 // TranscriptPage uses session-level cursors so repeated matches cannot duplicate cards.
@@ -78,7 +81,7 @@ func (s *Store) TranscriptCards(ctx context.Context, query SearchQuery) (Transcr
 	// chunks, or from the matching observations when no index applies, never from
 	// every Trace: checking each Trace's observations for a match took over 30 seconds
 	// on a 1.5M-observation archive.
-	var from, observation, revision string
+	var from, event, observation, revision string
 	where := []string{"r.id<=?", "t.id<=?"}
 	args := []any{position.MaxID, position.MaxID}
 	needsEvents := query.Query != "" || query.Model != "" || query.Role != "" || query.Kind != "" || query.Tool != "" || query.After != "" || query.Before != ""
@@ -86,11 +89,11 @@ func (s *Store) TranscriptCards(ctx context.Context, query SearchQuery) (Transcr
 	switch {
 	case !needsEvents:
 		// Browsing lists top-level Traces; their children open from the parent.
-		from, observation, revision = " FROM traces t", "0", "0"
+		from, event, observation, revision = " FROM traces t", "0", "0", "0"
 		where = append(where, "t.id=r.id")
 	case prepared.index != "":
 		from = " FROM " + prepared.index + " JOIN search_chunks sc ON sc.id=" + prepared.index + ".rowid JOIN events e ON e.id=sc.event_id JOIN traces t ON t.id=e.trace_id"
-		observation, revision = "sc.observation_id", "sc.revision_id"
+		event, observation, revision = "e.id", "sc.observation_id", "sc.revision_id"
 		if needsObservation {
 			from += " JOIN event_observations o ON o.id=sc.observation_id"
 		}
@@ -98,7 +101,7 @@ func (s *Store) TranscriptCards(ctx context.Context, query SearchQuery) (Transcr
 		args = append(args, prepared.indexQuery)
 	default:
 		from = " FROM event_observations o JOIN observation_revisions ox ON ox.observation_id=o.id JOIN events e ON e.id=o.event_id JOIN traces t ON t.id=e.trace_id"
-		observation, revision = "o.id", "ox.revision_id"
+		event, observation, revision = "e.id", "o.id", "ox.revision_id"
 	}
 	from += " LEFT JOIN lineage l ON l.id=t.id JOIN traces r ON r.id=COALESCE(l.root,t.id)"
 	if position.ID != 0 {
@@ -126,7 +129,12 @@ func (s *Store) TranscriptCards(ctx context.Context, query SearchQuery) (Transcr
 		}
 		args = append(args, query.Machine)
 	}
-	rows, err := s.db.QueryContext(ctx, lineage+"SELECT r.id,r.updated_at,t.id,"+observation+","+revision+from+" WHERE "+strings.Join(where, " AND ")+" ORDER BY r.updated_at DESC,r.id DESC,t.id=r.id DESC", args...)
+	// Within a card, a match in the Trace itself comes first, then the earliest Event.
+	order := " ORDER BY r.updated_at DESC,r.id DESC,t.id=r.id DESC"
+	if needsEvents {
+		order += ",e.id"
+	}
+	rows, err := s.db.QueryContext(ctx, lineage+"SELECT r.id,r.updated_at,t.id,"+event+","+observation+","+revision+from+" WHERE "+strings.Join(where, " AND ")+order, args...)
 	if err != nil {
 		return TranscriptPage{}, err
 	}
@@ -140,8 +148,8 @@ func (s *Store) TranscriptCards(ctx context.Context, query SearchQuery) (Transcr
 	for rows.Next() {
 		var card TranscriptCard
 		var matchedText string
-		var matchedID, observationID, revisionID int64
-		if err := rows.Scan(&card.ID, &card.UpdatedAt, &matchedID, &observationID, &revisionID); err != nil {
+		var matchedID, eventID, observationID, revisionID int64
+		if err := rows.Scan(&card.ID, &card.UpdatedAt, &matchedID, &eventID, &observationID, &revisionID); err != nil {
 			rows.Close()
 			return TranscriptPage{}, err
 		}
@@ -173,6 +181,7 @@ func (s *Store) TranscriptCards(ctx context.Context, query SearchQuery) (Transcr
 			card.MatchedChildID = matchedID
 		}
 		if query.Query != "" {
+			card.MatchedEventID = eventID
 			if prepared.expression != nil {
 				location := prepared.expression.FindStringIndex(matchedText)
 				card.MatchSnippet = searchtext.SnippetRange(matchedText, location[0], location[1])

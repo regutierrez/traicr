@@ -1413,6 +1413,11 @@
           "revision_count": {
             "type": "integer"
           },
+          "matched_event_id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "With `q`, the earliest Event whose text matched, in `matched_child` when that is set. Open it with `?event=` on the Trace page."
+          },
           "matched_child": {
             "type": "object",
             "description": "Set when `q` or an Event filter matched a Child Trace of this Trace. Child Traces whose parent is collected are listed under their top ancestor, not on their own.",

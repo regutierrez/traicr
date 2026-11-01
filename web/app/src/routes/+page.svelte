@@ -45,6 +45,13 @@
 		return page.url.searchParams.get(name) ?? '';
 	}
 
+	// A search result opens Trace at the message that matched, in the subagent when the match was there.
+	function cardHref(card: TranscriptCard) {
+		const id = String(card.matched_child?.id ?? card.id);
+		if (!card.matched_event_id) return resolve('/traces/[id]', { id });
+		return withQuery(resolve('/traces/[id]/trace', { id }), new URLSearchParams({ event: String(card.matched_event_id) }));
+	}
+
 	function nextHref(cursor: string) {
 		const params = new URLSearchParams(page.url.searchParams);
 		params.set('cursor', cursor);
@@ -158,7 +165,7 @@
 
 {#snippet session(card: TranscriptCard)}
 	<li>
-		<a class="session" href={resolve('/traces/[id]', { id: String(card.id) })} style="--ink: var(--ink-{card.harness}, var(--muted-foreground))">
+		<a class="session" href={cardHref(card)} style="--ink: var(--ink-{card.harness}, var(--muted-foreground))">
 			<span class="when">
 				<time datetime={card.updated_at}>{clockTime(card.updated_at)}</time>
 				<span class="harness" translate="no">{card.harness}</span>
