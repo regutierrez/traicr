@@ -362,7 +362,7 @@
 				<ul class="links">
 					{#each trace.revisions ?? [] as revision (revision.id)}
 						<li class="revision">
-							<a href={revisionSourcesHref(revision.id)} title="Open the original files for revision {revision.id}">
+							<a href={revisionSourcesHref(revision.id, trace.id)} title="Open the original files for revision {revision.id}">
 								Collected {revision.collected_at ? dateAndTime(revision.collected_at) : `as revision ${revision.id}`}
 								<span class={revision.status === 'normalized' ? 'dim' : 'bad'}>· {parseStatus[revision.status] ?? revision.status}</span>
 							</a>

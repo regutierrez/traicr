@@ -1,7 +1,7 @@
 <script lang="ts">
 	import MiddleTruncate from '$lib/components/MiddleTruncate.svelte';
 	import { count } from '$lib/format';
-	import { sourceFileHref } from '$lib/links';
+	import { sourceFileHref, transcriptHref } from '$lib/links';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -9,7 +9,10 @@
 
 <svelte:head><title>Native source files · Traicr</title></svelte:head>
 <header class="page-head">
-	<p class="crumbs"><span>Revision {data.id}</span><span>Lossless source</span></p>
+	<nav class="crumbs" aria-label="Breadcrumbs">
+		{#if data.trace}<a href={transcriptHref(data.trace.id)}>{data.trace.title || data.trace.native_trace_id}</a>{/if}
+		<span>Revision {data.id}</span>
+	</nav>
 	<h1>Native source files</h1>
 	<p class="page-lede">These files are the retained source of truth, including fields the normalizer does not yet understand.</p>
 </header>

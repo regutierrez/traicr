@@ -10,8 +10,10 @@ export function transcriptHref(traceID: number) {
 	return resolve('/traces/[id]', { id: String(traceID) });
 }
 
-export function revisionSourcesHref(revisionID: number) {
-	return resolve('/revisions/[id]/sources', { id: String(revisionID) });
+// The trace lets the files page link back to its session; no API maps a revision to its trace.
+export function revisionSourcesHref(revisionID: number, traceID?: number) {
+	const path = resolve('/revisions/[id]/sources', { id: String(revisionID) });
+	return traceID ? withQuery(path, { trace: String(traceID) }) : path;
 }
 
 // The Go server answers this route with the original bytes as a download. Links to it need data-sveltekit-reload.
