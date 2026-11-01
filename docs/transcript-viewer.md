@@ -21,8 +21,9 @@ pairs tool results with their calls, and guards parent cycles lives in
 
 A trace opens on two tabs. **Overview** (the default, `/traces/{id}`) is the
 session at a glance: the first ask and the last reply, each opening Trace at
-that message, then harness, model, thinking level, start and last activity,
-directory, repository, Amp session facts, counts of prompts, replies, thoughts,
+that message, then when it ran and for how long, how the agent ran (model,
+thinking level, Amp agent mode and skills), where (branch and commit,
+directory, machine and client), counts of prompts, replies, thoughts,
 tool calls, and compactions, a numbered list of every prompt (the first eight,
 then all on request) that opens Trace at each one, every failed tool call with
 its command and exit code, linked to it in Trace, tool use by name (housekeeping
@@ -133,8 +134,8 @@ can drop thinking blocks. Keys from earlier versions stay as aliases. The
 normalizer retains native block order,
 tool answers and errors, summary blocks, image references, usage, timing, execution
 state, origin, phase, and environment metadata. Prompts and written replies show when
-they were sent while hovered; per-reply tokens are summed on Overview instead. Overview lists the session's agent mode, branch and commit,
-client, executor, and skills. Unknown content has a visible
+they were sent while hovered; per-reply tokens are summed on Overview instead. Overview lists the session's agent mode, skills, branch and commit,
+and the machine and client it ran on. Unknown content has a visible
 JSON fallback. Hidden context, summaries, tool answers, diffs, and arguments
 can be expanded independently.
 Reasoning signatures are not interpreted as plaintext. Tool status describes the

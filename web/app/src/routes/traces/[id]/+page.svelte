@@ -5,7 +5,7 @@
 	import MiddleTruncate from '$lib/components/MiddleTruncate.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
-	import { clockTime, dateAndTime, shortRepository } from '$lib/format';
+	import { clockTime, dateAndTime } from '$lib/format';
 	import { submitGoForm } from '$lib/forms';
 	import { revisionSourcesHref, sourceFileHref, transcriptHref, withQuery } from '$lib/links';
 	import { isHousekeepingTool, toolChipParts, toolKindIcon, type ChipIcon } from '$lib/transcript/tools';
@@ -113,27 +113,32 @@
 		{ filter: 'compaction', label: 'Compactions', icon: 'compaction', count: () => counts.compaction }
 	];
 
-	// What the Amp export says about where and how the thread ran. Missing values are left out.
+	// What the Amp export says about where and how the thread ran. Missing values are empty.
 	function ampSessionFacts(native: SessionNative | null) {
-		if (!native) return [];
 		const record = (value: unknown) => (value && typeof value === 'object' ? (value as Record<string, unknown>) : {});
 		const text = (value: unknown) => (typeof value === 'string' || typeof value === 'number' ? String(value) : '');
 		const list = (value: unknown) => (Array.isArray(value) ? value.map((item) => text(item) || text(record(item).name)).filter(Boolean).join(', ') : '');
-		const initial = record(record(native.env).initial);
+		const initial = record(record(native?.env).initial);
 		const platform = record(initial.platform);
-		const meta = record(native.meta);
+		const meta = record(native?.meta);
 		const tree = record(Array.isArray(initial.trees) ? initial.trees[0] : undefined);
 		const repository = record(tree.repository);
-		const facts: [string, string][] = [
-			['Agent mode', text(native.agentMode)],
-			['Branch', text(repository.ref).replace(/^refs\/heads\//, '')],
-			['Commit', text(repository.sha).slice(0, 12)],
-			['Client', [text(platform.client), text(platform.clientVersion), text(platform.os)].filter(Boolean).join(' · ')],
-			['Executor', [text(meta.executorType), text(initial.runnerID) || text(initial.hostname)].filter(Boolean).join(' · ')],
-			['Skills', list(native.activatedSkills)],
-			['Archived in Amp', native.archived === undefined ? '' : native.archived ? 'yes' : 'no']
-		];
-		return facts.filter(([, value]) => value);
+		return {
+			agentMode: text(native?.agentMode),
+			branch: text(repository.ref).replace(/^refs\/heads\//, ''),
+			commit: text(repository.sha).slice(0, 12),
+			ranOn: [text(meta.executorType), text(initial.runnerID) || text(initial.hostname), text(platform.client), text(platform.clientVersion), text(platform.os)]
+				.filter(Boolean)
+				.join(' · '),
+			skills: list(native?.activatedSkills),
+			archived: native?.archived === undefined ? '' : native.archived ? 'yes' : 'no'
+		};
+	}
+
+	// "Oct 30, 2026, 9:04 PM → Nov 1, 2026, 3:19 AM", with the second date left out on the same day.
+	function when(start: string, end: string) {
+		const sameDay = new Date(start).toDateString() === new Date(end).toDateString();
+		return `${dateAndTime(start)} → ${sameDay ? clockTime(end) : dateAndTime(end)}`;
 	}
 
 	let deleteError = $state('');
@@ -190,26 +195,31 @@
 
 			<section>
 				<h2>Session</h2>
+				<!-- When, then how the agent ran, then where. Harness and repository are in the header. -->
 				<dl>
-					<dt>Harness</dt><dd translate="no">{trace.harness}</dd>
-					{#if models.length}
-						<dt>{models.length > 1 ? 'Models' : 'Model'}</dt><dd translate="no">{models.join(', ')}</dd>
-					{/if}
-					{#if facts.thinkingLevel}<dt>Thinking level</dt><dd>{facts.thinkingLevel}</dd>{/if}
 					{#if span}
-						<dt>Started</dt><dd><time datetime={span.start}>{dateAndTime(span.start)}</time></dd>
-						<dt>Last activity</dt><dd><time datetime={span.end}>{dateAndTime(span.end)}</time></dd>
+						<dt>When</dt><dd><time datetime={span.start}>{when(span.start, span.end)}</time></dd>
 						{#if active}<dt>Active time</dt><dd>{active} <span class="dim">· idle time between prompts left out</span></dd>{/if}
 					{/if}
+					{#if models.length}
+						<dt class="group">{models.length > 1 ? 'Models' : 'Model'}</dt>
+						<dd class="group" translate="no">{models.join(', ')}{#if facts.thinkingLevel}<span class="dim"> · thinking {facts.thinkingLevel}</span>{/if}</dd>
+					{/if}
+					{#if ampFacts.agentMode}<dt>Agent mode</dt><dd translate="no">{ampFacts.agentMode}</dd>{/if}
+					{#if ampFacts.skills}<dt>Skills</dt><dd translate="no">{ampFacts.skills}</dd>{/if}
+					{#if ampFacts.branch || ampFacts.commit}
+						<dt class="group">{ampFacts.branch ? 'Branch' : 'Commit'}</dt>
+						<dd class="group branch" translate="no">
+							{#if ampFacts.branch}<MiddleTruncate text={ampFacts.branch} />{/if}
+							{#if ampFacts.commit}<span class={{ dim: ampFacts.branch }}>{ampFacts.branch ? '@ ' : ''}{ampFacts.commit}</span>{/if}
+						</dd>
+					{/if}
 					{#if trace.working_directory}
-						<dt>Directory</dt><dd translate="no"><MiddleTruncate text={trace.working_directory.replace(/^file:\/\//, '')} /></dd>
+						<dt class={{ group: !(ampFacts.branch || ampFacts.commit) }}>Directory</dt>
+						<dd class={{ group: !(ampFacts.branch || ampFacts.commit) }} translate="no"><MiddleTruncate text={trace.working_directory.replace(/^file:\/\//, '')} /></dd>
 					{/if}
-					{#if trace.repository}
-						<dt>Repository</dt><dd translate="no"><MiddleTruncate text={shortRepository(trace.repository)} /></dd>
-					{/if}
-					{#each ampFacts as [label, value] (label)}
-						<dt>{label}</dt><dd>{#if label === 'Branch'}<MiddleTruncate text={value} />{:else}{value}{/if}</dd>
-					{/each}
+					{#if ampFacts.ranOn}<dt>Ran on</dt><dd translate="no">{ampFacts.ranOn}</dd>{/if}
+					{#if ampFacts.archived}<dt>Archived in Amp</dt><dd>{ampFacts.archived}</dd>{/if}
 				</dl>
 			</section>
 
@@ -471,6 +481,21 @@
 		min-width: 0;
 		margin: 0;
 		font-variant-numeric: tabular-nums;
+	}
+
+	/* A little space where the facts move from when, to how, to where. */
+	dl .group {
+		margin-top: 0.6rem;
+	}
+
+	.branch {
+		display: flex;
+		min-width: 0;
+		gap: 0.4rem;
+	}
+
+	.branch > span {
+		flex-shrink: 0;
 	}
 
 	.tokens dd {
