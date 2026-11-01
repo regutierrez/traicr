@@ -77,6 +77,25 @@ export function withoutSuggestedReplies(text: string) {
 /** `id` and `replyId` are the rows' first entries, which message links (?targetId=) open. */
 export type PromptItem = { id: string; prompt: string; at: string; reply: string; replyId: string };
 
+/**
+ * Markdown as one line of plain text for previews: no fences, emphasis, heading or list
+ * markers, or table pipes; links keep their text. Literal "\n" escapes, common in text
+ * taken from JSON tool arguments, read as spaces.
+ */
+export function plainMarkdown(text: string) {
+	return text
+		.replace(/\\[ntr]/g, ' ')
+		.replace(/```[\w-]*/g, ' ')
+		.replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
+		.replace(/^\s{0,3}(?:#{1,6}|>|[-*+]|\d+\.)\s+/gm, '')
+		// Tables read as their cell text: separator rows go, pipes become spaces.
+		.replace(/^\s*\|?(?:\s*:?-{3,}:?\s*\|)+\s*:?-*:?\s*$/gm, '')
+		.replace(/\|/g, ' ')
+		.replace(/[*`]+/g, '')
+		.replace(/\s+/g, ' ')
+		.trim();
+}
+
 function plainText(entries: TranscriptEntry[]) {
 	const text = entries
 		.flatMap((entry) => entry.message?.content ?? [])
@@ -87,16 +106,7 @@ function plainText(entries: TranscriptEntry[]) {
 		})
 		.join(' ')
 		.slice(0, 1500);
-	return text
-		.replace(/```[^\n]*/g, ' ')
-		.replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
-		.replace(/^\s{0,3}(?:#{1,6}|>|[-*+]|\d+\.)\s+/gm, '')
-		// Tables read as their cell text: separator rows go, pipes become spaces.
-		.replace(/^\s*\|?(?:\s*:?-{3,}:?\s*\|)+\s*:?-*:?\s*$/gm, '')
-		.replace(/\|/g, ' ')
-		.replace(/[*`]+/g, '')
-		.replace(/\s+/g, ' ')
-		.trim();
+	return plainMarkdown(text);
 }
 
 /** One item per prompt for the Trace prompt rail: the prompt and its turn's last reply, as plain one-line text. */

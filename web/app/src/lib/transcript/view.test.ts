@@ -6,7 +6,7 @@ import { parseSkillBlock } from './skill';
 import { buildTranscriptSession } from './session';
 import { isStructuredOutput, requestedEdit, resultFiles, resultText, toolChipLabel, toolChipParts, toolStatus, toolSummary } from './tools';
 import { defaultLeafId, findNewestLeaf, getPath, graphHasFork, graphLeaves } from './tree';
-import { displayModel, foldWork, groupTurns, isToolOnlyMessage, pathSessionFacts, streamCounts, streamRows, activeTime, timeSpan, toolNameCounts, toolResults, usageTotals, withoutSuggestedReplies, workSummary, promptOutline } from './turns';
+import { displayModel, foldWork, groupTurns, isToolOnlyMessage, pathSessionFacts, streamCounts, streamRows, activeTime, timeSpan, toolNameCounts, toolResults, usageTotals, withoutSuggestedReplies, workSummary, promptOutline, plainMarkdown } from './turns';
 import type { ToolCallBlock, TranscriptEntry } from './types';
 
 test('shared tools keep original names and display shell and file operations consistently', () => {
@@ -542,4 +542,11 @@ test('the prompt outline pairs each prompt with the last reply of its turn, as p
 		{ id: 'u2', prompt: 'review it', at: '', reply: '', replyId: '' },
 		{ id: 'u3', prompt: 'thanks', at: '', reply: 'Summary: Part Status API done', replyId: 'a3' }
 	]);
+});
+
+test('previews read markdown and JSON-escaped text as one plain line', () => {
+	// Real line breaks: list and heading markers go.
+	expect(plainMarkdown('## Plan\n\n- read `a.ts`\n4. **write** tests\n| a | b |\n|---|---|')).toBe('Plan read a.ts write tests a b');
+	// Literal "\n" escapes from JSON arguments read as spaces, and a fence ends at its language.
+	expect(plainMarkdown('…ate is **not usable**.\\n```diff\\nTradeDesk [docs](https://x.y)')).toBe('…ate is not usable. TradeDesk docs');
 });

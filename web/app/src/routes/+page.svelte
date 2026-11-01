@@ -8,6 +8,7 @@
 	import { highlightParts } from '$lib/highlight';
 	import { withQuery } from '$lib/links';
 	import { sidebar } from '$lib/sidebar.svelte';
+	import { plainMarkdown } from '$lib/transcript/turns';
 	import { harnesses, type TranscriptCard } from '$lib/types';
 	import type { PageProps } from './$types';
 
@@ -178,7 +179,7 @@
 				{/if}
 				{#if card.snippet}
 					<span class="snippet">
-						{#each highlightParts(card.snippet, query, mode) as part, index (`${index}:${part.mark}:${part.text}`)}
+						{#each highlightParts(plainMarkdown(card.snippet), query, mode) as part, index (`${index}:${part.mark}:${part.text}`)}
 							{#if part.mark}<mark>{part.text}</mark>{:else}{part.text}{/if}
 						{/each}
 					</span>

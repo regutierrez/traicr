@@ -48,18 +48,38 @@ func Snippet(text, query string) string {
 	return SnippetRange(text, 0, 0)
 }
 
+// SnippetRange returns the text around a match, at most 480 bytes. A cut side
+// starts or ends at a word edge when one is near, and is marked with "…".
 func SnippetRange(text string, matchStart, matchEnd int) string {
-	const radius = 120
+	const radius, word = 120, 40
+	const mark = "…"
 	matchStart = max(0, min(matchStart, len(text)))
 	matchEnd = max(matchStart, min(matchEnd, len(text)))
 	start := max(0, matchStart-radius)
 	// A regex can match the entire event, but a result must stay a small preview.
-	end := min(len(text), matchEnd+radius, start+480)
+	end := min(len(text), matchEnd+radius, start+480-2*len(mark))
+	if start > 0 {
+		if space := strings.IndexAny(text[start:min(matchStart, start+word)], " \t\n"); space >= 0 {
+			start += space + 1
+		}
+	}
+	if end < len(text) && end > matchEnd {
+		if space := strings.LastIndexAny(text[max(matchEnd, end-word):end], " \t\n"); space >= 0 {
+			end = max(matchEnd, end-word) + space
+		}
+	}
 	for start > 0 && !utf8.RuneStart(text[start]) {
 		start++
 	}
 	for end < len(text) && !utf8.RuneStart(text[end]) {
 		end--
 	}
-	return text[start:end]
+	snippet := text[start:end]
+	if start > 0 {
+		snippet = mark + snippet
+	}
+	if end < len(text) {
+		snippet += mark
+	}
+	return snippet
 }

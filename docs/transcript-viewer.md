@@ -3,7 +3,7 @@
 The browser homepage lists sessions, not individual events. Each row opens the
 whole transcript in the Svelte Conversation view. Text search still searches
 event observations, but returns one card per matching session, with a matching
-excerpt. A matching card carries `matched_event_id`, the earliest matching Event,
+excerpt cut at word edges, marked `…` where cut, and shown as plain text. A matching card carries `matched_event_id`, the earliest matching Event,
 and opens Trace there (in the subagent when the match was in one), outlined and
 with its work row and, for tool output, its tool opened. Cards sort by session
 update time, then ID. Session-level cursors
