@@ -24,7 +24,7 @@
 <svelte:head><title>Import {report ? `#${report.id}` : 'report'} · Traicr</title></svelte:head>
 
 <header class="page-head">
-	<nav class="crumbs" aria-label="Breadcrumbs"><a href={resolve('/imports')}>Imports</a></nav>
+	<nav class="crumbs" aria-label="Breadcrumbs"><a href={resolve('/imports')}>Archive</a></nav>
 	{#if report}
 		<h1>Import #{report.id}</h1>
 		<p class="page-lede">

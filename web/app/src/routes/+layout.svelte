@@ -22,12 +22,11 @@
 		toggleSidebar();
 	}
 
-	type AppPath = '/' | '/imports' | '/machines';
+	type AppPath = '/' | '/imports';
 
-	const navigation: { href: AppPath; label: string; icon: 'sessions' | 'archive' | 'machines' }[] = [
+	const navigation: { href: AppPath; label: string; icon: 'sessions' | 'archive' }[] = [
 		{ href: '/', label: 'Sessions', icon: 'sessions' },
-		{ href: '/imports', label: 'Archive', icon: 'archive' },
-		{ href: '/machines', label: 'Machines', icon: 'machines' }
+		{ href: '/imports', label: 'Archive', icon: 'archive' }
 	];
 
 	function current(href: string) {
@@ -59,7 +58,7 @@
 
 <svelte:window onkeydown={onKeydown} />
 
-{#snippet icon(name: 'sessions' | 'archive' | 'machines' | 'logout')}
+{#snippet icon(name: 'sessions' | 'archive' | 'logout')}
 	{#if name === 'sessions'}
 		<svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
 			<path d="M3 4h10M3 8h10M3 12h7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
@@ -70,11 +69,6 @@
 			<path d="M3.5 6.5h9v6.2a.8.8 0 0 1-.8.8H4.3a.8.8 0 0 1-.8-.8V6.5Z" stroke="currentColor" stroke-width="1.4" />
 			<path d="M6.5 9h3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
 		</svg>
-	{:else if name === 'machines'}
-		<svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-			<rect x="2.5" y="3.5" width="11" height="7.5" rx="1" stroke="currentColor" stroke-width="1.4" />
-			<path d="M6 13.5h4M8 11v2.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
-		</svg>
 	{:else}
 		<svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
 			<path d="M6 4.5H4.2A1.2 1.2 0 0 0 3 5.7v6.1A1.2 1.2 0 0 0 4.2 13h7.6A1.2 1.2 0 0 0 13 11.8V5.7A1.2 1.2 0 0 0 11.8 4.5H10" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
@@ -83,7 +77,7 @@
 	{/if}
 {/snippet}
 
-{#snippet railLink(href: AppPath, label: string, name: 'sessions' | 'archive' | 'machines')}
+{#snippet railLink(href: AppPath, label: string, name: 'sessions' | 'archive')}
 	<a
 		class={['rail-link', current(href) && 'is-current']}
 		href={resolve(href)}

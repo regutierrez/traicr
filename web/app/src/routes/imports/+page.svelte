@@ -3,71 +3,144 @@
 	import { Button } from '$lib/components/ui/button';
 	import { dateAndTime } from '$lib/format';
 	import { withQuery } from '$lib/links';
+	import type { ImportReport } from '$lib/types';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
+
+	// One readable outcome per upload instead of six mostly-zero columns.
+	function outcome(item: ImportReport) {
+		const parts: { text: string; tone: '' | 'warn' | 'bad' }[] = [];
+		const add = (value: number, label: string, tone: '' | 'warn' | 'bad' = '') => value && parts.push({ text: `${value} ${label}`, tone });
+		add(item.imported, 'new');
+		add(item.updated, 'updated');
+		add(item.unchanged, 'unchanged');
+		add(item.partially_parsed, 'partly parsed', 'warn');
+		add(item.unsupported, 'unsupported', 'warn');
+		add(item.failed, 'failed', 'bad');
+		return parts.length ? parts : [{ text: 'No traces', tone: '' as const }];
+	}
 </script>
 
 <svelte:head><title>Archive · Traicr</title></svelte:head>
 
 <header class="page-head">
-	<h1>Imports</h1>
-	<p class="page-lede">Every upload, its outcome, and anything that needs your attention.</p>
+	<h1>Archive</h1>
+	<p class="page-lede">Where your traces came from and every upload, with anything that needs your attention.</p>
 </header>
 
 {#if data.error}
 	<p class="error" role="alert">{data.error}</p>
 {/if}
 
-<div class="table-wrap">
-	<table>
-		<thead>
-			<tr>
-				<th scope="col">Import</th>
-				<th scope="col">Source machine</th>
-				<th scope="col">Uploaded</th>
-				<th scope="col" class="num">New</th>
-				<th scope="col" class="num">Updated</th>
-				<th scope="col" class="num">Unchanged</th>
-				<th scope="col" class="num">Partial</th>
-				<th scope="col" class="num">Unsupported</th>
-				<th scope="col" class="num">Failed</th>
-			</tr>
-		</thead>
-		<tbody>
-			{#each data.imports as item (item.id)}
+<section>
+	<h2>Machines</h2>
+	<ul class="machines">
+		{#each data.machines as machine (machine.id)}
+			<li>
+				<span class="host" translate="no">{machine.hostname}</span>
+				<span class="dim" translate="no">{machine.os} / {machine.arch}</span>
+				<span class="dim">last upload <time datetime={machine.last_seen}>{dateAndTime(machine.last_seen)}</time></span>
+				<a href={withQuery(resolve('/'), { machine: machine.id })}>Search its sessions</a>
+			</li>
+		{:else}
+			<li class="dim">No machines yet. A source machine appears here after its first upload.</li>
+		{/each}
+	</ul>
+</section>
+
+<section>
+	<h2>Imports</h2>
+	<div class="table-wrap">
+		<table>
+			<thead>
 				<tr>
-					<td><a href={resolve('/imports/[id]', { id: String(item.id) })}>#{item.id}</a></td>
-					<td translate="no">{item.source_machine.hostname}</td>
-					<td><time datetime={item.created_at}>{dateAndTime(item.created_at)}</time></td>
-					<td class={['num', !item.imported && 'zero']}>{item.imported}</td>
-					<td class={['num', !item.updated && 'zero']}>{item.updated}</td>
-					<td class={['num', !item.unchanged && 'zero']}>{item.unchanged}</td>
-					<td class={['num', item.partially_parsed ? 'warn' : 'zero']}>{item.partially_parsed}</td>
-					<td class={['num', item.unsupported ? 'warn' : 'zero']}>{item.unsupported}</td>
-					<td class={['num', item.failed ? 'bad' : 'zero']}>{item.failed}</td>
+					<th scope="col">Import</th>
+					<th scope="col">Machine</th>
+					<th scope="col">Uploaded</th>
+					<th scope="col">Outcome</th>
 				</tr>
-			{:else}
-				<tr><td class="empty" colspan="9">No imports yet. Upload a Trace ZIP with the collector to get started.</td></tr>
-			{/each}
-		</tbody>
-	</table>
-</div>
-{#if data.next}
-	<Button class="mt-4" variant="outline" href={withQuery(resolve('/imports'), { cursor: data.next })}>Older imports</Button>
-{/if}
+			</thead>
+			<tbody>
+				{#each data.imports as item (item.id)}
+					<tr>
+						<td><a href={resolve('/imports/[id]', { id: String(item.id) })}>#{item.id}</a></td>
+						<td translate="no">{item.source_machine.hostname}</td>
+						<td><time datetime={item.created_at}>{dateAndTime(item.created_at)}</time></td>
+						<td class="outcome">
+							{#each outcome(item) as part, index (part.text)}{#if index}<span class="dim">{' · '}</span>{/if}<span class={part.tone}>{part.text}</span>{/each}
+						</td>
+					</tr>
+				{:else}
+					<tr><td class="dim" colspan="4">No imports yet. Upload a Trace ZIP with the collector to get started.</td></tr>
+				{/each}
+			</tbody>
+		</table>
+	</div>
+	{#if data.next}
+		<Button class="mt-4" variant="outline" href={withQuery(resolve('/imports'), { cursor: data.next })}>Older imports</Button>
+	{/if}
+</section>
 
 <style>
-	.empty,
-	.error {
-		margin: 0;
+	section + section {
+		margin-top: 2rem;
+	}
+
+	h2 {
+		margin: 0 0 0.5rem;
+		font-size: 13px;
+		font-weight: 600;
+	}
+
+	.dim {
 		color: var(--muted-foreground);
-		font-size: 12px;
+	}
+
+	.error,
+	.bad {
+		color: var(--destructive);
 	}
 
 	.error {
-		margin-bottom: 0.75rem;
-		color: var(--destructive);
+		margin: 0 0 1rem;
+		font-size: 13px;
+	}
+
+	.warn {
+		color: var(--primary);
+	}
+
+	.machines {
+		margin: 0;
+		padding: 0;
+		list-style: none;
+		border-top: 1px solid var(--border);
+		font-size: 13px;
+	}
+
+	.machines li {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: baseline;
+		gap: 0.25rem 1rem;
+		padding: 0.6rem 0;
+		border-bottom: 1px solid var(--border);
+	}
+
+	.host {
+		font-weight: 500;
+	}
+
+	.machines a {
+		margin-left: auto;
+		color: var(--muted-foreground);
+		font-size: 12px;
+		text-decoration: none;
+	}
+
+	.machines a:hover {
+		color: var(--foreground);
 	}
 
 	.table-wrap {
@@ -77,14 +150,14 @@
 	table {
 		width: 100%;
 		border-collapse: collapse;
+		font-size: 13px;
 	}
 
 	th,
 	td {
 		border-bottom: 1px solid var(--border);
-		padding: 0.7rem 0.6rem;
+		padding: 0.6rem 0.6rem 0.6rem 0;
 		text-align: left;
-		font-variant-numeric: tabular-nums;
 		white-space: nowrap;
 	}
 
@@ -104,24 +177,7 @@
 		text-decoration: none;
 	}
 
-	.num {
-		text-align: right;
-	}
-
-	.zero {
-		color: color-mix(in oklch, var(--muted-foreground) 55%, var(--background));
-	}
-
-	.warn {
-		color: var(--primary);
-	}
-
-	.bad {
-		color: var(--destructive);
-		font-weight: 600;
-	}
-
-	.empty {
-		padding: 1.25rem 0.4rem;
+	.outcome {
+		white-space: normal;
 	}
 </style>

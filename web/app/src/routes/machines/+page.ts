@@ -1,9 +1,5 @@
-import { readJSON } from '$lib/api';
-import type { Machine } from '$lib/types';
+import { redirect } from '@sveltejs/kit';
 import type { PageLoad } from './$types';
 
-export const load: PageLoad = async ({ fetch }) => {
-	const result = await readJSON<Machine[]>(fetch, '/api/v1/machines');
-	if (!result.ok) return { machines: [], error: result.message };
-	return { machines: result.data ?? [], error: '' };
-};
+// Machines became a section of the Archive page.
+export const load: PageLoad = () => redirect(307, '/imports');
