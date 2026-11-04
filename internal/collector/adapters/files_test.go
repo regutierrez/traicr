@@ -22,6 +22,12 @@ func TestSourceStampIncludesCompanionJSON(t *testing.T) {
 		t.Fatalf("stamp: %q %v", before, err)
 	}
 	writeTestFile(t, companion, "{\"title\":\"new\"}")
+	// Same size, so only the time can show the edit. Some kernels keep the old mtime for a
+	// rewrite within a few milliseconds; a real edit comes after the last collect, so move it on.
+	later := time.Now().Add(time.Minute)
+	if err := os.Chtimes(companion, later, later); err != nil {
+		t.Fatal(err)
+	}
 	after, err := sourceStamp(jsonlSourceFiles(adapter, session))
 	if err != nil || after == before {
 		t.Fatalf("companion change was invisible: %q %q %v", before, after, err)
