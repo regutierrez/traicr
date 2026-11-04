@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { browser } from '$app/environment';
 	import { afterNavigate, goto, replaceState } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
@@ -187,6 +188,51 @@
 		void goto(cardHref(target)).then(() => list?.querySelector('[aria-current="page"]')?.scrollIntoView({ block: 'nearest' }));
 	}
 
+	// Dragging the list's right edge sets its width, which is remembered. Double-click resets it.
+	const defaultWidth = 352;
+	const minWidth = 256;
+	const maxWidth = 400;
+	let width = $state(clampWidth(browser ? Number(localStorage.getItem('traicr.sidebar-width')) || defaultWidth : defaultWidth));
+
+	function clampWidth(value: number) {
+		return Math.round(Math.min(maxWidth, Math.max(minWidth, value)));
+	}
+
+	function saveWidth(value: number) {
+		width = clampWidth(value);
+		localStorage.setItem('traicr.sidebar-width', String(width));
+	}
+
+	function startResize(event: PointerEvent) {
+		if (event.button !== 0) return;
+		event.preventDefault();
+		const handle = event.currentTarget as HTMLElement;
+		const startX = event.clientX;
+		const startWidth = width;
+		handle.setPointerCapture(event.pointerId);
+		// The page shows the resize cursor and selects no text until the pointer is released.
+		document.documentElement.classList.add('is-resizing');
+		const move = (moved: PointerEvent) => (width = clampWidth(startWidth + moved.clientX - startX));
+		const stop = () => {
+			handle.removeEventListener('pointermove', move);
+			handle.removeEventListener('pointerup', stop);
+			handle.removeEventListener('pointercancel', stop);
+			document.documentElement.classList.remove('is-resizing');
+			saveWidth(width);
+		};
+		handle.addEventListener('pointermove', move);
+		handle.addEventListener('pointerup', stop);
+		handle.addEventListener('pointercancel', stop);
+	}
+
+	function onResizeKeydown(event: KeyboardEvent) {
+		const step = event.shiftKey ? 64 : 16;
+		const next = { ArrowLeft: width - step, ArrowRight: width + step, Home: minWidth, End: maxWidth }[event.key];
+		if (next === undefined) return;
+		event.preventDefault();
+		saveWidth(next);
+	}
+
 	// Enter searches now when a search is still waiting, else opens the first session.
 	function onQueryKeydown(event: KeyboardEvent) {
 		if (event.key === 'Escape') {
@@ -207,7 +253,7 @@
 
 <svelte:window onkeydown={onKeydown} />
 
-<aside class={['sidebar', sidebar.open && 'is-open', home && 'is-home']} aria-label="Sessions">
+<aside class={['sidebar', sidebar.open && 'is-open', home && 'is-home']} aria-label="Sessions" style:--sidebar-width="{width}px">
 	<div class="head">
 		<SidebarToggle />
 		<div class="box">
@@ -357,12 +403,29 @@
 			</button>
 		{/if}
 	</nav>
+	<!-- A focusable separator is an ARIA widget (the window splitter pattern); Svelte's lint treats every separator as static. -->
+	<!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
+	<div
+		class="resize"
+		role="separator"
+		aria-orientation="vertical"
+		aria-label="Resize session list"
+		aria-valuemin={minWidth}
+		aria-valuemax={maxWidth}
+		aria-valuenow={width}
+		tabindex="0"
+		title="Drag to resize, double-click to reset"
+		onpointerdown={startResize}
+		ondblclick={() => saveWidth(defaultWidth)}
+		onkeydown={onResizeKeydown}
+	></div>
 </aside>
 
 <style>
 	.sidebar {
+		position: relative;
 		display: none;
-		width: 22rem;
+		width: var(--sidebar-width, 22rem);
 		flex-shrink: 0;
 		flex-direction: column;
 		min-height: 0;
@@ -774,6 +837,46 @@
 		color: var(--foreground);
 	}
 
+	/* A thin strip over the list's right border; the border lights up while it is hovered or dragged. */
+	.resize {
+		position: absolute;
+		top: 0;
+		right: -4px;
+		bottom: 0;
+		z-index: 2;
+		display: none;
+		width: 7px;
+		cursor: col-resize;
+		touch-action: none;
+	}
+
+	.resize::after {
+		content: '';
+		position: absolute;
+		top: 0;
+		bottom: 0;
+		left: 2px;
+		width: 2px;
+		background: transparent;
+		transition: background-color 120ms ease;
+	}
+
+	.resize:hover::after,
+	.resize:focus-visible::after,
+	:global(html.is-resizing) .resize::after {
+		background: var(--primary);
+	}
+
+	.resize:focus-visible {
+		outline: none;
+	}
+
+	:global(html.is-resizing),
+	:global(html.is-resizing *) {
+		cursor: col-resize !important;
+		user-select: none;
+	}
+
 	/* Narrow screens have no room beside a page, so there the home page is the list at full width. */
 	@media (max-width: 1099px) {
 		.sidebar.is-home {
@@ -787,6 +890,10 @@
 	@media (min-width: 1100px) {
 		.sidebar.is-open {
 			display: flex;
+		}
+
+		.resize {
+			display: block;
 		}
 	}
 </style>
