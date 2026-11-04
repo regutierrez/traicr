@@ -2,7 +2,6 @@
 	import { resolve } from '$app/paths';
 	import { shortRepository } from '$lib/format';
 	import { withQuery } from '$lib/links';
-	import SidebarToggle from '$lib/components/SidebarToggle.svelte';
 	import type { Trace } from '$lib/types';
 
 	let {
@@ -37,10 +36,7 @@
 
 <header class="head">
 	<div class="titles">
-		<div class="title-row">
-			<SidebarToggle />
-			<h1 title={title}>{title}</h1>
-		</div>
+		<h1 title={title}>{title}</h1>
 		<p class="meta">
 			<span class="harness" translate="no" style="--ink: var(--ink-{trace.harness}, var(--muted-foreground))">{trace.harness}</span>
 			{#each trace.parents ?? [] as parent (parent.id)}
@@ -89,13 +85,6 @@
 
 	.titles {
 		min-width: 0;
-	}
-
-	.title-row {
-		display: flex;
-		min-width: 0;
-		align-items: center;
-		gap: 0.4rem;
 	}
 
 	h1 {

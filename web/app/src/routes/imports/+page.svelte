@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { Button } from '$lib/components/ui/button';
-	import { count, dateAndTime, fileSize, shortAge } from '$lib/format';
+	import { ago, count, dateAndTime, fileSize } from '$lib/format';
+	import { healthProblems, lastImportResult } from '$lib/health';
 	import { withQuery } from '$lib/links';
 	import type { ImportReport } from '$lib/types';
 	import type { PageProps } from './$types';
@@ -32,36 +33,7 @@
 		return tones.includes('bad') ? 'bad' : tones.includes('warn') ? 'warn' : '';
 	}
 
-	// "18h ago", "just now", or "on Oct 12" once shortAge switches to a date.
-	function ago(value: string) {
-		const age = shortAge(value);
-		return age === 'now' ? 'just now' : /^\d+[mhdw]$/.test(age) ? `${age} ago` : `on ${age}`;
-	}
-
-	// Each machine's newest import, from /api/v1/status.
-	let latest = $derived(new Map((data.health?.machines ?? []).map((machine) => [machine.id, machine])));
-
-	function lastResult(id: string) {
-		const machine = latest.get(id);
-		if (!machine) return null;
-		const href = resolve('/imports/[id]', { id: String(machine.last_import_id) });
-		if (machine.last_import_id === data.health?.running_import_id) return { href, text: 'running', tone: 'running' };
-		if (!machine.last_import_complete) return { href, text: 'stopped before finishing', tone: 'warn' };
-		if (machine.last_import_failed_traces) return { href, text: `${machine.last_import_failed_traces} failed`, tone: 'bad' };
-		return { href, text: 'OK', tone: 'ok' };
-	}
-
-	// Problems first, so a glance at the top says whether anything needs a look.
-	let problems = $derived.by(() => {
-		const health = data.health;
-		if (!health) return [];
-		const lines: { text: string; tone: 'warn' | 'bad' | '' }[] = [];
-		if (health.running_import_id) lines.push({ text: `Import #${health.running_import_id} is running`, tone: '' });
-		if (health.imports.with_failed_traces) lines.push({ text: `${count(health.imports.with_failed_traces, 'import')} had failed traces`, tone: 'bad' });
-		if (health.imports.incomplete) lines.push({ text: `${count(health.imports.incomplete, 'import')} stopped before finishing`, tone: 'warn' });
-		if (health.titles.enabled && health.titles.pending) lines.push({ text: `${count(health.titles.pending, 'title')} waiting to be named`, tone: '' });
-		return lines;
-	});
+	let problems = $derived(data.health ? healthProblems(data.health) : []);
 </script>
 
 <svelte:head><title>Archive · Traicr</title></svelte:head>
@@ -98,8 +70,8 @@
 	<h2>Machines</h2>
 	<ul class="machines">
 		{#each data.machines as machine (machine.id)}
-			{@const uploaded = latest.get(machine.id)?.last_import_at ?? machine.last_seen}
-			{@const result = lastResult(machine.id)}
+			{@const uploaded = data.health?.machines.find((item) => item.id === machine.id)?.last_import_at ?? machine.last_seen}
+			{@const result = lastImportResult(data.health, machine.id)}
 			<li>
 				<span class="host" translate="no">{machine.hostname}</span>
 				<span class="dim" translate="no">{machine.os} / {machine.arch}</span>

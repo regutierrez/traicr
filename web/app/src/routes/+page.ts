@@ -1,19 +1,9 @@
 import { readJSON } from '$lib/api';
-import type { Machine, TranscriptCardPage } from '$lib/types';
+import type { ArchiveStatus } from '$lib/types';
 import type { PageLoad } from './$types';
 
+// The session list beside this page searches; the page itself shows how the archive is doing.
 export const load: PageLoad = async ({ fetch, url }) => {
-	const [result, machines] = await Promise.all([
-		readJSON<TranscriptCardPage>(fetch, `/api/v1/cards?${url.searchParams.toString()}`, url),
-		readJSON<Machine[]>(fetch, '/api/v1/machines', url)
-	]);
-	const known = machines.ok ? (machines.data ?? []) : [];
-	if (!result.ok) return { cards: [], machines: known, error: result.message, next: '', partial: false };
-	return {
-		cards: result.data.cards ?? [],
-		machines: known,
-		error: '',
-		next: result.data.next_cursor ?? '',
-		partial: result.data.partial ?? false
-	};
+	const status = await readJSON<ArchiveStatus>(fetch, '/api/v1/status', url);
+	return status.ok ? { health: status.data, error: '' } : { health: null, error: status.message };
 };

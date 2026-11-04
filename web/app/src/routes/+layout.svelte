@@ -2,6 +2,7 @@
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
 	import SessionSidebar from '$lib/components/SessionSidebar.svelte';
+	import SidebarToggle from '$lib/components/SidebarToggle.svelte';
 	import { submitGoForm } from '$lib/forms';
 	import { sidebar, toggleSidebar } from '$lib/sidebar.svelte';
 	import type { LayoutProps } from './$types';
@@ -11,8 +12,9 @@
 	let path = $derived(page.url.pathname);
 	let login = $derived(path === '/login');
 	let workspace = $derived(path.startsWith('/traces/'));
-	// The session list sits beside traces and beside search, which shows only matches there.
-	let withSidebar = $derived(workspace || path === '/');
+	let home = $derived(path === '/');
+	// The session list, with its search, sits beside traces and beside the home overview.
+	let withSidebar = $derived(workspace || home);
 	let loggingOut = $state(false);
 	function onKeydown(event: KeyboardEvent) {
 		if (!withSidebar || event.key !== '[' || event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
@@ -99,8 +101,24 @@
 	</main>
 {:else}
 	<div class="app-shell">
+		<nav class="mobile-rail" aria-label="Main navigation">
+			<a class="rail-brand" href={resolve('/')} aria-label="Traicr home" title="Traicr"><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M3 14.5 7.5 6l4 7 4.5-8.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="3" cy="14.5" r="1.6" fill="currentColor"/><circle cx="16" cy="4.5" r="1.6" fill="currentColor"/></svg></a>
+			{#each navigation as item (item.href)}
+				{@render railLink(item.href, item.label, item.icon)}
+			{/each}
+			<form class="ml-auto" action="/logout" method="post" onsubmit={signOut}>
+				<input type="hidden" name="csrf" value={data.csrf} />
+				<button class="rail-link" type="submit" title="Log out" aria-label="Log out" disabled={loggingOut}>
+					{@render icon('logout')}
+				</button>
+			</form>
+		</nav>
 		<aside class="rail" aria-label="Main navigation">
 			<a class="rail-brand" href={resolve('/')} aria-label="Traicr home" title="Traicr"><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M3 14.5 7.5 6l4 7 4.5-8.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="3" cy="14.5" r="1.6" fill="currentColor"/><circle cx="16" cy="4.5" r="1.6" fill="currentColor"/></svg></a>
+			<!-- The hidden session list's toggle waits here; the open list holds it at its top. -->
+			{#if withSidebar && !sidebar.open}
+				<div class="rail-toggle"><SidebarToggle /></div>
+			{/if}
 			<nav class="rail-nav">
 				{#each navigation as item (item.href)}
 					{@render railLink(item.href, item.label, item.icon)}
@@ -113,22 +131,10 @@
 				</button>
 			</form>
 		</aside>
-		{#if withSidebar && sidebar.open}
-			<SessionSidebar current={page.params.id ?? ''} />
+		{#if withSidebar}
+			<SessionSidebar current={page.params.id ?? ''} {home} />
 		{/if}
-		<div class="workspace">
-			<nav class="mobile-rail" aria-label="Main navigation">
-				<a class="rail-brand" href={resolve('/')} aria-label="Traicr home" title="Traicr"><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M3 14.5 7.5 6l4 7 4.5-8.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="3" cy="14.5" r="1.6" fill="currentColor"/><circle cx="16" cy="4.5" r="1.6" fill="currentColor"/></svg></a>
-				{#each navigation as item (item.href)}
-					{@render railLink(item.href, item.label, item.icon)}
-				{/each}
-				<form class="ml-auto" action="/logout" method="post" onsubmit={signOut}>
-					<input type="hidden" name="csrf" value={data.csrf} />
-					<button class="rail-link" type="submit" title="Log out" aria-label="Log out" disabled={loggingOut}>
-						{@render icon('logout')}
-					</button>
-				</form>
-			</nav>
+		<div class={['workspace', home && 'is-home']}>
 			<main id="main" class={['workspace-main', workspace && 'is-workspace']}>
 				{@render children()}
 			</main>
@@ -147,6 +153,7 @@
 
 	.app-shell {
 		display: flex;
+		flex-direction: column;
 		height: 100dvh;
 		min-height: 100dvh;
 		overflow: hidden;
@@ -230,6 +237,10 @@
 		gap: 0.15rem;
 	}
 
+	.rail-toggle {
+		margin: -0.4rem 0 0.5rem;
+	}
+
 	.rail-logout {
 		margin-top: auto;
 	}
@@ -263,7 +274,18 @@
 		color: var(--primary);
 	}
 
+	/* Narrow screens show the session list itself as the home page, in place of the overview. */
+	@media (max-width: 1099px) {
+		.workspace.is-home {
+			display: none;
+		}
+	}
+
 	@media (min-width: 768px) {
+		.app-shell {
+			flex-direction: row;
+		}
+
 		.rail {
 			display: flex;
 		}

@@ -2,7 +2,7 @@
 	import { sidebar, toggleSidebar } from '$lib/sidebar.svelte';
 </script>
 
-<!-- Beside the page title, in the same spot whether the list is shown or hidden. -->
+<!-- At the top of the session list, and in the rail while the list is hidden. -->
 <button
 	class="sidebar-toggle"
 	type="button"
@@ -26,7 +26,6 @@
 		height: 1.75rem;
 		flex-shrink: 0;
 		place-items: center;
-		margin-left: -0.35rem;
 		border: 0;
 		border-radius: var(--radius);
 		background: transparent;

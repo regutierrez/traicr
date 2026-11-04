@@ -38,6 +38,12 @@ export function shortAge(value: string, now = new Date()) {
 	return date.getFullYear() === now.getFullYear() ? monthDay.format(date) : fullDay.format(date);
 }
 
+/** "18h ago", "just now", or "on Oct 12" once shortAge switches to a date. */
+export function ago(value: string) {
+	const age = shortAge(value);
+	return age === 'now' ? 'just now' : /^\d+[mhdw]$/.test(age) ? `${age} ago` : `on ${age}`;
+}
+
 /** "1 record", "880 records". */
 export function count(value: number, singular: string, plural = `${singular}s`) {
 	return `${number.format(value)} ${value === 1 ? singular : plural}`;
