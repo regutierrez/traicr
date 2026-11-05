@@ -1,59 +1,85 @@
 #!/usr/bin/env bash
-# The checks GitHub CI used to run, before any branch push. GitHub now runs only
-# the release workflow. Skip once with `git push --no-verify`.
+# Runs the checks GitHub CI used to run on every commit a push sends, branches and
+# tags alike, each in a temporary checkout of that commit. GitHub runs only the
+# release workflow. A commit that passed once is not checked again.
 set -euo pipefail
 
-cd "$(git rev-parse --show-toplevel)"
+root="$(git rev-parse --show-toplevel)"
+cd "$root"
 zero="0000000000000000000000000000000000000000"
-
-# Git passes one line per pushed ref: <local ref> <local sha> <remote ref> <remote sha>.
-# Tag pushes and branch deletions run nothing; release tags point at pushed commits.
-branches=0
-while read -r local_ref local_sha remote_ref remote_sha; do
-  [[ "$remote_ref" == refs/heads/* && "$local_sha" != "$zero" ]] || continue
-  branches=$((branches + 1))
-  # The checks read the working tree, so it must be the commit being pushed.
-  if [[ "$local_sha" != "$(git rev-parse HEAD)" ]]; then
-    echo "pre-push: ${local_ref} is not checked out; check it out to test it, or push with --no-verify" >&2
-    exit 1
-  fi
-  if [[ -n "$(git status --porcelain)" ]]; then
-    echo "pre-push: commit or stash local changes so the checks test what you push" >&2
-    exit 1
-  fi
-  base="$remote_sha"
-done
-((branches)) || exit 0
+common="$(git rev-parse --git-common-dir)"
+checked="${common}/traicr-checked"
+mkdir -p "$checked" artifacts
 
 step() { echo "pre-push: $*" >&2; }
 
-step "Go lint and race tests"
-make --no-print-directory lint test-race
-
-step "collector builds for darwin and linux, amd64 and arm64"
-for target in darwin/amd64 darwin/arm64 linux/amd64 linux/arm64; do
-  CGO_ENABLED=0 GOOS="${target%/*}" GOARCH="${target#*/}" go build -trimpath -o /dev/null ./cmd/traicr
-done
-CGO_ENABLED=0 GOOS=linux go build -trimpath -o /dev/null ./cmd/traicr-server
-
-step "UI check, tests, and build"
-(
-  cd web/app
-  # Reinstall only when the lockfile changed since the last install.
-  if [[ ! -f node_modules/.package-lock.json || package-lock.json -nt node_modules/.package-lock.json ]]; then
-    npm ci --no-audit --no-fund
+# Git passes one line per pushed ref: <local ref> <local sha> <remote ref> <remote sha>.
+# Read them all first: the checks below run commands that would read the same stdin.
+commits=()
+bases=()
+while read -r _ local_sha _ remote_sha; do
+  [[ "$local_sha" != "$zero" ]] || continue # a deletion sends no code
+  commit="$(git rev-parse --verify --quiet "${local_sha}^{commit}")" || continue
+  [[ -e "${checked}/${commit}" ]] && continue
+  # Mutation testing covers the Go code this push adds: since the remote's commit,
+  # or since origin/main for a new branch or tag.
+  base=""
+  if [[ "$remote_sha" != "$zero" ]] && git cat-file -e "${remote_sha}^{commit}" 2>/dev/null; then
+    base="$remote_sha"
+  elif git rev-parse --verify --quiet origin/main >/dev/null; then
+    base="$(git merge-base "$commit" origin/main || true)"
   fi
-  npm run --silent check
-  npm test --silent
-  npm run --silent build
-)
+  commits+=("$commit")
+  bases+=("$base")
+done
 
-step "end-to-end tests with Docker"
-go test -count=1 -tags=e2e -timeout=5m ./test/e2e
+check() {
+  local commit="$1" base="$2" dir
+  dir="$(mktemp -d "${TMPDIR:-/tmp}/traicr-push.XXXXXX")"
+  git worktree add --quiet --detach "$dir" "$commit"
+  (
+    trap 'cd "$root" && git worktree remove --force "$dir"' EXIT
+    cd "$dir"
+    step "checking ${commit:0:12}: Go lint and race tests"
+    make --no-print-directory lint test-race
 
-# Mutation testing takes up to two hours, so it runs only when asked.
-if [[ "${TRAICR_MUTATION:-}" == 1 ]]; then
-  if [[ "$base" == "$zero" ]]; then base="$(git merge-base HEAD origin/main)"; fi
-  step "mutation testing of Go code changed since ${base:0:12}"
-  ./scripts/mutation.sh changed "$base" artifacts/mutation-changed.json
+    step "collector builds for darwin and linux, amd64 and arm64, and the Linux server"
+    for target in darwin/amd64 darwin/arm64 linux/amd64 linux/arm64; do
+      CGO_ENABLED=0 GOOS="${target%/*}" GOARCH="${target#*/}" go build -trimpath -o /dev/null ./cmd/traicr
+    done
+    CGO_ENABLED=0 GOOS=linux go build -trimpath -o /dev/null ./cmd/traicr-server
+
+    step "UI check, tests, and build"
+    (cd web/app && npm ci --no-audit --no-fund --silent && npm run --silent check && npm test --silent && npm run --silent build)
+
+    step "end-to-end tests with Docker"
+    go test -count=1 -tags=e2e -timeout=5m ./test/e2e
+
+    if [[ -n "$base" && "$base" != "$commit" ]] && ! git diff --quiet "$base" "$commit" -- '*.go' go.mod go.sum; then
+      step "mutation testing of Go code changed since ${base:0:12}"
+      ./scripts/mutation.sh changed "$base" "${root}/artifacts/mutation-changed.json"
+    fi
+  )
+  touch "${checked}/${commit}"
+}
+
+for i in "${!commits[@]}"; do
+  check "${commits[$i]}" "${bases[$i]}"
+done
+
+# Mutation testing of all Go code takes hours, so it runs in the background, at
+# most once a week, on the newest commit this push checked. It never blocks a push.
+stamp="${common}/traicr-mutation-full"
+if ((${#commits[@]})) && [[ -z "$(find "$stamp" -mtime -7 2>/dev/null)" ]]; then
+  touch "$stamp"
+  commit="${commits[-1]}"
+  step "started the weekly full mutation run in the background: artifacts/mutation-full.log"
+  (
+    dir="$(mktemp -d "${TMPDIR:-/tmp}/traicr-mutation.XXXXXX")"
+    git worktree add --quiet --detach "$dir" "$commit"
+    trap 'cd "$root" && git worktree remove --force "$dir"' EXIT
+    cd "$dir"
+    nice -n 19 ./scripts/mutation.sh full "${root}/artifacts/mutation-full.json"
+  ) >artifacts/mutation-full.log 2>&1 </dev/null &
+  disown
 fi

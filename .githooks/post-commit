@@ -5,4 +5,25 @@ root="$(git rev-parse --show-toplevel)"
 # shellcheck source=../scripts/no-cursor-attribution.sh
 source "${root}/scripts/no-cursor-attribution.sh"
 
+# --no-verify skips pre-commit but not this hook. A commit whose content pre-commit
+# did not check is undone, keeping its changes staged. Rebase, cherry-pick, and
+# revert replay commits that were checked when they were made, so they pass.
+replaying() {
+  local path
+  for path in rebase-merge rebase-apply CHERRY_PICK_HEAD REVERT_HEAD sequencer; do
+    [[ -e "$(git rev-parse --git-path "$path")" ]] && return 0
+  done
+  return 1
+}
+verified="$(cat "$(git rev-parse --git-path traicr-pre-commit-tree)" 2>/dev/null || true)"
+if ! replaying && [[ "$verified" != "$(git rev-parse 'HEAD^{tree}')" ]]; then
+  if git rev-parse --verify --quiet 'HEAD@{1}' >/dev/null; then
+    git reset --quiet --soft 'HEAD@{1}'
+  else
+    git update-ref -d HEAD
+  fi
+  echo "post-commit: commit undone because pre-commit did not run; --no-verify is not allowed here. Your changes are still staged." >&2
+  exit 1
+fi
+
 amend_head_if_cursor_ident

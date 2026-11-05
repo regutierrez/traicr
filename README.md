@@ -152,7 +152,7 @@ To find why a transcript renders badly or loads slowly, follow [AGENTS.md](./AGE
 
 ### Git hooks
 
-This repository uses `core.hooksPath=.githooks` (no husky or lefthook). Enable the hooks once per clone:
+This repository uses `core.hooksPath=.githooks` (no husky or lefthook). `npm ci` in `web/app` and the orb and Cursor setup scripts turn the hooks on; to turn them on by hand:
 
 ```sh
 git config core.hooksPath .githooks
@@ -160,7 +160,14 @@ git config core.hooksPath .githooks
 
 `commit-msg` strips Cursor attribution trailers. `prepare-commit-msg` exports Rafael as `GIT_AUTHOR_*` / `GIT_COMMITTER_*` when the ident is Cursor Agent (and sets local `user.name` / `user.email`). Git resolves author before that hook, so `post-commit` amends the commit to `regutierrez <rpegutierrez@gmail.com>` when HEAD still has a Cursor author or committer. Hosted Cursor cloud agents may still force Cursor Agent as author; squash-merge to Rafael (`regutierrez` / `rpegutierrez@gmail.com`) if that happens.
 
-GitHub runs only the release workflow; the hooks run every other check. `pre-commit` runs `make lint` when the commit changes Go files and `svelte-check` when it changes `web/app`. `pre-push` runs before a branch push: lint and race tests, the collector builds for macOS and Linux on amd64 and arm64, the Linux server build, the UI check, tests, and build, and the Docker end-to-end tests. It tests the working tree, so it stops unless the pushed branch is checked out with no local changes. Mutation testing of the changed Go code takes up to two hours, so it runs only with `TRAICR_MUTATION=1 git push`. Skip the hooks once with `--no-verify`.
+GitHub runs only the release workflow; the hooks run every other check.
+
+- `pre-commit` runs `make lint` when the commit changes Go files and `svelte-check` when it changes `web/app`.
+- `post-commit` undoes a commit that `pre-commit` did not check, such as one made with `--no-verify` or `-n`, and keeps its changes staged. Rebase, cherry-pick, and revert are not affected.
+- `pre-push` checks every commit a push sends, branches and tags alike, in a temporary checkout of that commit, so uncommitted changes do not matter: lint and race tests, the collector builds for macOS and Linux on amd64 and arm64, the Linux server build, the UI check, tests, and build, the Docker end-to-end tests, and mutation testing of the Go code the push changes. A commit that passed is not checked again, so pushing a release tag for it is instant.
+- At most once a week, `pre-push` also starts mutation testing of all Go code in the background. It takes hours and never blocks the push; the report is `artifacts/mutation-full.json` and the log `artifacts/mutation-full.log`.
+
+`AGENTS.md` tells agents never to skip the hooks. Git itself cannot stop anyone from skipping `pre-push`.
 
 Run the complete local checks and builds:
 

@@ -135,6 +135,7 @@ run_timed "Go ${GO_VERSION}" ensure_go
 ensure_go_path
 run_timed "Docker group" ensure_docker_group
 run_timed "Go test cache" warm_go_cache
+git config core.hooksPath .githooks
 write_agent_notes
 
 log "Go $(go env GOVERSION)"

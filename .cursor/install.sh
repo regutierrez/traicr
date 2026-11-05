@@ -57,6 +57,9 @@ ensure_path
 
 export PATH="/usr/local/go/bin:${HOME}/go/bin:${PATH}"
 
+log "Enabling the repository git hooks"
+git config core.hooksPath .githooks
+
 log "Downloading Go modules"
 go mod download
 

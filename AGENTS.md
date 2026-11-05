@@ -2,6 +2,8 @@
 
 Use this guide to find what is wrong when a transcript renders badly or loads slowly. Read `CONTEXT.md` for the domain words (Trace, Event, Revision, Harness).
 
+The git hooks in `.githooks` run every check CI used to run (README, Git hooks). Never skip verification: do not commit or push with `--no-verify` or `-n`, and do not change or override `core.hooksPath`. When a hook fails, fix the failing check and run the command again.
+
 Every `/api/v1` call needs `Authorization: Bearer $TRAICR_TOKEN`. `traicr login` saves the server URL and admin token in `~/.config/traicr/collector.json` (`server_url`, `token`). If neither that file nor `TRAICR_TOKEN` exists, ask the user for the token. Never print the token.
 
 ## Run a local server
