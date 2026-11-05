@@ -8,7 +8,7 @@
 	import { count, dateAndTime, dayLabel, shortAge, shortRepository } from '$lib/format';
 	import { highlightParts } from '$lib/highlight';
 	import { withQuery } from '$lib/links';
-	import { search, searchFilters, sidebar, toggleSidebar } from '$lib/sidebar.svelte';
+	import { localDayBound, search, searchFilters, sidebar, toggleSidebar } from '$lib/sidebar.svelte';
 	import { plainMarkdown } from '$lib/transcript/turns';
 	import { harnesses, type Machine, type TranscriptCard, type TranscriptCardPage } from '$lib/types';
 	import { onMount, tick } from 'svelte';
@@ -47,6 +47,11 @@
 		loading = true;
 		try {
 			const query = new URLSearchParams(params);
+			// Date filters mean the reader's days, like the day headings below. A full timestamp passes through.
+			for (const name of ['after', 'before']) {
+				const date = query.get(name);
+				if (date && /^\d{4}-\d{2}-\d{2}$/.test(date)) query.set(name, localDayBound(date, name === 'before'));
+			}
 			query.set('limit', '100');
 			if (cursor) query.set('cursor', cursor);
 			const result = await readJSON<TranscriptCardPage>(fetch, `/api/v1/cards?${query}`);

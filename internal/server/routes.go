@@ -53,6 +53,7 @@ func (app *application) apiRoutes() []apiRoute {
 		{"GET /api/v1/imports/{id}", app.importReport},
 		{"GET /api/v1/search", app.search},
 		{"GET /api/v1/cards", app.cards},
+		{"GET /api/v1/activity", app.activity},
 		{"GET /api/v1/traces/{id}", app.trace},
 		{"PATCH /api/v1/traces/{id}", app.updateTrace},
 		{"DELETE /api/v1/traces/{id}", app.deleteAPI},

@@ -10,6 +10,7 @@ import (
 	"path"
 	"strings"
 	"time"
+	_ "time/tzdata"
 	"unicode/utf8"
 
 	"github.com/regutierrez/traicr/internal/store"
@@ -104,6 +105,25 @@ func (app *application) cards(w http.ResponseWriter, r *http.Request) {
 		cards = append(cards, newTranscriptCard(item))
 	}
 	writeJSON(w, transcriptCardPage{Cards: cards, NextCursor: page.NextCursor, Partial: page.Partial})
+}
+
+func (app *application) activity(w http.ResponseWriter, r *http.Request) {
+	values := r.URL.Query()
+	// The day boundaries are the reader's; the time/tzdata import keeps zone names
+	// working in images without a zone database.
+	location, err := time.LoadLocation(values.Get("tz"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_query", "tz must be an IANA time zone, such as America/New_York")
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), searchTimeout)
+	defer cancel()
+	activity, err := app.store.Activity(ctx, values.Get("after"), values.Get("before"), location)
+	if err != nil {
+		app.failure(w, err)
+		return
+	}
+	writeJSON(w, activity)
 }
 
 func (app *application) trace(w http.ResponseWriter, r *http.Request) {

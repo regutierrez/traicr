@@ -5,10 +5,10 @@ import type { ArchiveStatus } from '$lib/types';
 // The overview and the Archive page read /api/v1/status the same way.
 
 /** Problems first, so a glance at the top says whether anything needs a look. Empty when all is well. */
-export function healthProblems(health: ArchiveStatus) {
+export function healthProblems(health: ArchiveStatus, includeHistoricalFailures = true) {
 	const lines: { text: string; tone: 'warn' | 'bad' | '' }[] = [];
 	if (health.running_import_id) lines.push({ text: `Import #${health.running_import_id} is running`, tone: '' });
-	if (health.imports.with_failed_traces) lines.push({ text: `${count(health.imports.with_failed_traces, 'import')} had failed traces`, tone: 'bad' });
+	if (includeHistoricalFailures && health.imports.with_failed_traces) lines.push({ text: `${count(health.imports.with_failed_traces, 'import')} had failed traces`, tone: 'bad' });
 	if (health.imports.incomplete) lines.push({ text: `${count(health.imports.incomplete, 'import')} stopped before finishing`, tone: 'warn' });
 	if (health.titles.enabled && health.titles.pending) lines.push({ text: `${count(health.titles.pending, 'title')} waiting to be named`, tone: '' });
 	return lines;

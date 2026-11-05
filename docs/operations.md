@@ -8,6 +8,8 @@ Back up the archive before upgrading the server. Schema version 4 adds a separat
 
 Older server binaries reject schema version 4. To roll back, restore the pre-upgrade archive backup as well as the previous binary. Do not lower `user_version` on an upgraded archive: older binaries would write imports without summaries.
 
+Opening an archive adds an index on Event observation times when it is missing; on about a million observations this takes a few seconds. The home page's activity counts read it. It does not change the schema version, so older binaries still open the archive and keep the index up to date.
+
 ## Direct access over Tailscale
 
 `compose.yaml` publishes `8080:8080`, so Docker binds host port 8080 on every interface. Inside the container the process listens on `TRAICR_LISTEN_ADDRESS`, which defaults to `:8080`. Traicr does not read a bind-address environment variable.

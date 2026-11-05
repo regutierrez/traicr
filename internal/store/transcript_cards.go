@@ -47,6 +47,16 @@ type transcriptCursor struct {
 	MaxID   int64  `json:"max_id"`
 }
 
+// lineage maps each Child Trace (id) to the top collected ancestor (root) whose card
+// lists it. A child whose parent was never collected, or whose parents form a loop,
+// is not in it and keeps its own card. The walk goes up from children so every step
+// is a (harness, native_trace_id) lookup.
+const lineage = `WITH RECURSIVE up(id,ancestor) AS (
+	SELECT c.id,p.id FROM traces c JOIN traces p ON p.harness=c.harness AND p.native_trace_id=c.parent_native_trace_id WHERE c.parent_native_trace_id<>''
+	UNION SELECT u.id,p.id FROM up u JOIN traces a ON a.id=u.ancestor JOIN traces p ON p.harness=a.harness AND p.native_trace_id=a.parent_native_trace_id WHERE a.parent_native_trace_id<>''),
+lineage(id,root) AS (SELECT u.id,u.ancestor FROM up u JOIN traces a ON a.id=u.ancestor
+	WHERE NOT EXISTS(SELECT 1 FROM traces p WHERE p.harness=a.harness AND p.native_trace_id=a.parent_native_trace_id)) `
+
 // TranscriptCards searches retained observations but returns one card per transcript.
 func (s *Store) TranscriptCards(ctx context.Context, query SearchQuery) (TranscriptPage, error) {
 	encoded := query.Cursor
@@ -68,14 +78,6 @@ func (s *Store) TranscriptCards(ctx context.Context, query SearchQuery) (Transcr
 	} else if err := s.db.QueryRowContext(ctx, "SELECT COALESCE(MAX(id),0) FROM traces").Scan(&position.MaxID); err != nil {
 		return TranscriptPage{}, err
 	}
-	// Each Trace belongs to the card of its top collected ancestor (r). A child whose
-	// parent was never collected, or whose parents form a loop, keeps its own card.
-	// The walk goes up from children so every step is a (harness, native_trace_id) lookup.
-	const lineage = `WITH RECURSIVE up(id,ancestor) AS (
-		SELECT c.id,p.id FROM traces c JOIN traces p ON p.harness=c.harness AND p.native_trace_id=c.parent_native_trace_id WHERE c.parent_native_trace_id<>''
-		UNION SELECT u.id,p.id FROM up u JOIN traces a ON a.id=u.ancestor JOIN traces p ON p.harness=a.harness AND p.native_trace_id=a.parent_native_trace_id WHERE a.parent_native_trace_id<>''),
-	lineage(id,root) AS (SELECT u.id,u.ancestor FROM up u JOIN traces a ON a.id=u.ancestor
-		WHERE NOT EXISTS(SELECT 1 FROM traces p WHERE p.harness=a.harness AND p.native_trace_id=a.parent_native_trace_id)) `
 	// The query returns small candidate rows in card order; text and card details are
 	// read only for the cards the page keeps. A search starts from the matching index
 	// chunks, or from the matching observations when no index applies, never from

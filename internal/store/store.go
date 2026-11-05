@@ -70,6 +70,10 @@ func Open(dataDir string) (*Store, error) {
 		db.Close()
 		return nil, fmt.Errorf("unsupported database version %d", version)
 	}
+	if _, err = db.Exec(migrations.ObservationTimes); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("index observation times: %w", err)
+	}
 	return &Store{db: db, dataDir: dataDir, objects: filepath.Join(dataDir, "objects", "sha256"), writer: make(chan struct{}, 1), searchBudget: 5 * time.Second}, nil
 }
 

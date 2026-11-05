@@ -80,6 +80,18 @@ export type ArchiveStatus = {
 	storage: { database_bytes: number; objects_bytes: number };
 };
 
+/** GET /api/v1/activity: distinct sessions, each a session-list card, active in a range. */
+export type Activity = {
+	sessions: number;
+	/** One harness per session; adds up to `sessions`. */
+	harnesses: { name: string; sessions: number }[];
+	/** A session counts under every model it used, so these can add up to more than `sessions`. */
+	models: { name: string; sessions: number }[];
+	without_model: number;
+	/** Days with activity in the requested time zone, oldest first. */
+	days: { date: string; sessions: number }[];
+};
+
 export type TraceRef = { id: number; native_trace_id: string; title?: string };
 
 export type Revision = {

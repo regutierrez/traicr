@@ -38,3 +38,8 @@ INSERT INTO import_summaries(import_id,summary_json)
     FROM imports WHERE length(report_json)>0;
 PRAGMA user_version = 4;
 `
+
+// ObservationTimes lets date-bounded reads, such as the home page's activity
+// counts, read one index range instead of every observation. It runs on every
+// open and keeps the schema version, so older binaries still open the archive.
+const ObservationTimes = `CREATE INDEX IF NOT EXISTS event_observations_time ON event_observations(event_time, model, event_id);`

@@ -221,6 +221,95 @@
         ]
       }
     },
+    "/api/v1/activity": {
+      "get": {
+        "tags": [
+          "status"
+        ],
+        "operationId": "getActivity",
+        "summary": "Count sessions by day, harness, and model",
+        "description": "Counts distinct sessions, the cards listTraces returns: a top-level Trace with its Child Traces. Trace Revisions and repeated Event observations never add to a count. With `after` or `before`, a session counts when any of its Events falls in the range, the same rule listTraces applies, so each harness or model count equals the cards listTraces returns for that filter and range. Harness counts add up to `sessions`; model counts can add up to more, because a session counts under every model it used. Token and cost totals are not reported: harnesses do not record them consistently.",
+        "security": [
+          {
+            "adminToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/after"
+          },
+          {
+            "$ref": "#/components/parameters/before"
+          },
+          {
+            "name": "tz",
+            "in": "query",
+            "description": "IANA time zone for the `days` boundaries, such as `America/New_York`. Default UTC.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Session counts.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Activity"
+                },
+                "example": {
+                  "sessions": 42,
+                  "harnesses": [
+                    {
+                      "name": "amp",
+                      "sessions": 30
+                    },
+                    {
+                      "name": "codex",
+                      "sessions": 12
+                    }
+                  ],
+                  "models": [
+                    {
+                      "name": "claude-opus-5",
+                      "sessions": 28
+                    },
+                    {
+                      "name": "gpt-6-sol",
+                      "sessions": 15
+                    }
+                  ],
+                  "without_model": 3,
+                  "days": [
+                    {
+                      "date": "2026-10-30",
+                      "sessions": 5
+                    },
+                    {
+                      "date": "2026-11-02",
+                      "sessions": 9
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/InvalidSearch"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "408": {
+            "$ref": "#/components/responses/Timeout"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        }
+      }
+    },
     "/api/v1/traces/{id}": {
       "get": {
         "tags": [
@@ -2006,6 +2095,89 @@
           "phase"
         ],
         "description": "One line of the upload's NDJSON stream. The last line is `complete` (with `report`) or `failed` (with `error`)."
+      },
+      "Activity": {
+        "type": "object",
+        "properties": {
+          "sessions": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Sessions active in the range; every session without one."
+          },
+          "harnesses": {
+            "type": "array",
+            "description": "One harness per session, largest first. Adds up to `sessions`.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "sessions": {
+                  "type": "integer",
+                  "format": "int64"
+                }
+              },
+              "required": [
+                "name",
+                "sessions"
+              ]
+            }
+          },
+          "models": {
+            "type": "array",
+            "description": "Sessions that recorded each model in the range, largest first. A session counts under every model it used.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "sessions": {
+                  "type": "integer",
+                  "format": "int64"
+                }
+              },
+              "required": [
+                "name",
+                "sessions"
+              ]
+            }
+          },
+          "without_model": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Sessions with no model recorded in the range."
+          },
+          "days": {
+            "type": "array",
+            "description": "Sessions active on each day in `tz`, oldest first; days with none are left out. A session counts on every day it was active.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "date": {
+                  "type": "string",
+                  "format": "date"
+                },
+                "sessions": {
+                  "type": "integer",
+                  "format": "int64"
+                }
+              },
+              "required": [
+                "date",
+                "sessions"
+              ]
+            }
+          }
+        },
+        "required": [
+          "sessions",
+          "harnesses",
+          "models",
+          "without_model",
+          "days"
+        ]
       },
       "Status": {
         "type": "object",
