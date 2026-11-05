@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# Fast checks for the files this commit changes. pre-push runs the full suite.
+set -euo pipefail
+
+cd "$(git rev-parse --show-toplevel)"
+staged="$(git diff --cached --name-only --diff-filter=ACMR)"
+
+if grep -Eq '\.go$|^go\.(mod|sum)$' <<<"$staged"; then
+  echo "pre-commit: make lint" >&2
+  make --no-print-directory lint
+fi
+
+if grep -q '^web/app/' <<<"$staged"; then
+  if [[ ! -d web/app/node_modules ]]; then
+    echo "pre-commit: run 'npm ci' in web/app first" >&2
+    exit 1
+  fi
+  echo "pre-commit: svelte-check" >&2
+  npm --prefix web/app run --silent check
+fi

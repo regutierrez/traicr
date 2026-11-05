@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+# The checks GitHub CI used to run, before any branch push. GitHub now runs only
+# the release workflow. Skip once with `git push --no-verify`.
+set -euo pipefail
+
+cd "$(git rev-parse --show-toplevel)"
+zero="0000000000000000000000000000000000000000"
+
+# Git passes one line per pushed ref: <local ref> <local sha> <remote ref> <remote sha>.
+# Tag pushes and branch deletions run nothing; release tags point at pushed commits.
+branches=0
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [[ "$remote_ref" == refs/heads/* && "$local_sha" != "$zero" ]] || continue
+  branches=$((branches + 1))
+  # The checks read the working tree, so it must be the commit being pushed.
+  if [[ "$local_sha" != "$(git rev-parse HEAD)" ]]; then
+    echo "pre-push: ${local_ref} is not checked out; check it out to test it, or push with --no-verify" >&2
+    exit 1
+  fi
+  if [[ -n "$(git status --porcelain)" ]]; then
+    echo "pre-push: commit or stash local changes so the checks test what you push" >&2
+    exit 1
+  fi
+  base="$remote_sha"
+done
+((branches)) || exit 0
+
+step() { echo "pre-push: $*" >&2; }
+
+step "Go lint and race tests"
+make --no-print-directory lint test-race
+
+step "collector builds for darwin and linux, amd64 and arm64"
+for target in darwin/amd64 darwin/arm64 linux/amd64 linux/arm64; do
+  CGO_ENABLED=0 GOOS="${target%/*}" GOARCH="${target#*/}" go build -trimpath -o /dev/null ./cmd/traicr
+done
+CGO_ENABLED=0 GOOS=linux go build -trimpath -o /dev/null ./cmd/traicr-server
+
+step "UI check, tests, and build"
+(
+  cd web/app
+  # Reinstall only when the lockfile changed since the last install.
+  if [[ ! -f node_modules/.package-lock.json || package-lock.json -nt node_modules/.package-lock.json ]]; then
+    npm ci --no-audit --no-fund
+  fi
+  npm run --silent check
+  npm test --silent
+  npm run --silent build
+)
+
+step "end-to-end tests with Docker"
+go test -count=1 -tags=e2e -timeout=5m ./test/e2e
+
+# Mutation testing takes up to two hours, so it runs only when asked.
+if [[ "${TRAICR_MUTATION:-}" == 1 ]]; then
+  if [[ "$base" == "$zero" ]]; then base="$(git merge-base HEAD origin/main)"; fi
+  step "mutation testing of Go code changed since ${base:0:12}"
+  ./scripts/mutation.sh changed "$base" artifacts/mutation-changed.json
+fi

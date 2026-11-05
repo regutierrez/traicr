@@ -160,6 +160,8 @@ git config core.hooksPath .githooks
 
 `commit-msg` strips Cursor attribution trailers. `prepare-commit-msg` exports Rafael as `GIT_AUTHOR_*` / `GIT_COMMITTER_*` when the ident is Cursor Agent (and sets local `user.name` / `user.email`). Git resolves author before that hook, so `post-commit` amends the commit to `regutierrez <rpegutierrez@gmail.com>` when HEAD still has a Cursor author or committer. Hosted Cursor cloud agents may still force Cursor Agent as author; squash-merge to Rafael (`regutierrez` / `rpegutierrez@gmail.com`) if that happens.
 
+GitHub runs only the release workflow; the hooks run every other check. `pre-commit` runs `make lint` when the commit changes Go files and `svelte-check` when it changes `web/app`. `pre-push` runs before a branch push: lint and race tests, the collector builds for macOS and Linux on amd64 and arm64, the Linux server build, the UI check, tests, and build, and the Docker end-to-end tests. It tests the working tree, so it stops unless the pushed branch is checked out with no local changes. Mutation testing of the changed Go code takes up to two hours, so it runs only with `TRAICR_MUTATION=1 git push`. Skip the hooks once with `--no-verify`.
+
 Run the complete local checks and builds:
 
 ```sh
