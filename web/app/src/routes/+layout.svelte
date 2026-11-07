@@ -24,11 +24,12 @@
 		toggleSidebar();
 	}
 
-	type AppPath = '/' | '/imports';
+	type AppPath = '/' | '/imports' | '/wrapped';
 
-	const navigation: { href: AppPath; label: string; icon: 'sessions' | 'archive' }[] = [
+	const navigation: { href: AppPath; label: string; icon: 'sessions' | 'archive' | 'wrapped' }[] = [
 		{ href: '/', label: 'Sessions', icon: 'sessions' },
-		{ href: '/imports', label: 'Archive', icon: 'archive' }
+		{ href: '/imports', label: 'Archive', icon: 'archive' },
+		{ href: '/wrapped', label: 'Wrapped', icon: 'wrapped' }
 	];
 
 	function current(href: string) {
@@ -60,7 +61,7 @@
 
 <svelte:window onkeydown={onKeydown} />
 
-{#snippet icon(name: 'sessions' | 'archive' | 'logout')}
+{#snippet icon(name: 'sessions' | 'archive' | 'wrapped' | 'logout')}
 	{#if name === 'sessions'}
 		<svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
 			<path d="M3 4h10M3 8h10M3 12h7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
@@ -71,6 +72,11 @@
 			<path d="M3.5 6.5h9v6.2a.8.8 0 0 1-.8.8H4.3a.8.8 0 0 1-.8-.8V6.5Z" stroke="currentColor" stroke-width="1.4" />
 			<path d="M6.5 9h3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
 		</svg>
+	{:else if name === 'wrapped'}
+		<svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+			<rect x="2.5" y="6" width="11" height="7.5" rx="0.8" stroke="currentColor" stroke-width="1.4" />
+			<path d="M2.5 9h11M8 6v7.5M8 6C6.6 3.2 4 3.6 4.6 5.2 4.9 6 8 6 8 6Zm0 0c1.4-2.8 4-2.4 3.4-.8C11.1 6 8 6 8 6Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" />
+		</svg>
 	{:else}
 		<svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
 			<path d="M6.5 2.75H4.25a1.25 1.25 0 0 0-1.25 1.25v8a1.25 1.25 0 0 0 1.25 1.25H6.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
@@ -79,7 +85,7 @@
 	{/if}
 {/snippet}
 
-{#snippet railLink(href: AppPath, label: string, name: 'sessions' | 'archive')}
+{#snippet railLink(href: AppPath, label: string, name: 'sessions' | 'archive' | 'wrapped')}
 	<a
 		class={['rail-link', current(href) && 'is-current']}
 		href={resolve(href)}

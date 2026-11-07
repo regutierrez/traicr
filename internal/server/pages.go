@@ -126,6 +126,23 @@ func (app *application) activity(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, activity)
 }
 
+func (app *application) wrapped(w http.ResponseWriter, r *http.Request) {
+	values := r.URL.Query()
+	location, err := time.LoadLocation(values.Get("tz"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_query", "tz must be an IANA time zone, such as America/New_York")
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), searchTimeout)
+	defer cancel()
+	wrapped, err := app.store.Wrapped(ctx, values.Get("after"), values.Get("before"), location)
+	if err != nil {
+		app.failure(w, err)
+		return
+	}
+	writeJSON(w, wrapped)
+}
+
 func (app *application) trace(w http.ResponseWriter, r *http.Request) {
 	id, ok := requestID(w, r)
 	if !ok {

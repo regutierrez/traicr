@@ -168,3 +168,29 @@ export const harnesses = [
 	'opencode',
 	'pi'
 ];
+
+/** GET /api/v1/wrapped: a playful recap of the Events in a range. */
+export type Wrapped = {
+	sessions: number;
+	prompts: number;
+	tool_calls: number;
+	active_hours: number;
+	active_days: number;
+	longest_streak: number;
+	/** Prompts by local hour, midnight first. */
+	hours: number[];
+	/** Prompts by local weekday, Sunday first. */
+	weekdays: number[];
+	busiest_day?: { date: string; prompts: number };
+	tools: { name: string; count: number }[];
+	files: { name: string; count: number }[];
+	commands: { name: string; count: number }[];
+	models: { name: string; sessions: number }[];
+	rabbit_hole?: { trace_id: number; prompt: string; tool_calls: number; minutes: number };
+	marathon?: { trace_id: number; title: string; active_hours: number };
+	polite_prompts: number;
+	shortest_prompt?: { trace_id: number; text: string; chars: number };
+	longest_prompt?: { trace_id: number; text: string; chars: number };
+	/** The prompt latest in the night, counting a day as ending at 5 AM. */
+	latest_prompt?: { trace_id: number; text: string; chars: number; at: string };
+};

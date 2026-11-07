@@ -310,6 +310,61 @@
         }
       }
     },
+    "/api/v1/wrapped": {
+      "get": {
+        "tags": [
+          "status"
+        ],
+        "operationId": "getWrapped",
+        "summary": "Recap coding sessions, Spotify Wrapped style",
+        "description": "Summarizes the Events in the range for the Wrapped page: prompts by local hour and weekday, the most used tools, files, and commands, the longest rabbit hole (the prompt followed by the most tool calls before the next prompt), the session with the most active time, and a few superlatives, such as the prompt latest in the night. Each Event counts once through its preferred observation, so Trace Revisions never add to a number. Sessions are counted as in getActivity. Active time counts quarter hours with any Event. Files are absolute paths from a tool call's `path`, `file_path`, `filePath`, or `target_file` argument, leaving out search and listing tools.",
+        "security": [
+          {
+            "adminToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/after"
+          },
+          {
+            "$ref": "#/components/parameters/before"
+          },
+          {
+            "name": "tz",
+            "in": "query",
+            "description": "IANA time zone for the `days` boundaries, such as `America/New_York`. Default UTC.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The recap.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Wrapped"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/InvalidSearch"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "408": {
+            "$ref": "#/components/responses/Timeout"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        }
+      }
+    },
     "/api/v1/traces/{id}": {
       "get": {
         "tags": [
@@ -2765,6 +2820,290 @@
             "$ref": "#/components/schemas/ErrorDetail"
           }
         }
+      },
+      "Wrapped": {
+        "type": "object",
+        "properties": {
+          "sessions": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Sessions with an Event in the range."
+          },
+          "prompts": {
+            "type": "integer",
+            "format": "int64",
+            "description": "User messages a person typed. Messages Amp records as user messages but another thread, an automation, or a plugin sent are left out; they still end a rabbit hole."
+          },
+          "tool_calls": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "active_hours": {
+            "type": "number",
+            "description": "Quarter hours with any Event, in hours, including automated runs."
+          },
+          "active_days": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Local days with a prompt."
+          },
+          "longest_streak": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Most consecutive local days with a prompt."
+          },
+          "hours": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "minItems": 24,
+            "maxItems": 24,
+            "description": "Prompts by local hour, midnight first."
+          },
+          "weekdays": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "minItems": 7,
+            "maxItems": 7,
+            "description": "Prompts by local weekday, Sunday first."
+          },
+          "busiest_day": {
+            "type": "object",
+            "properties": {
+              "date": {
+                "type": "string",
+                "format": "date"
+              },
+              "prompts": {
+                "type": "integer",
+                "format": "int64"
+              }
+            },
+            "required": [
+              "date",
+              "prompts"
+            ]
+          },
+          "tools": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "count": {
+                  "type": "integer",
+                  "format": "int64"
+                }
+              },
+              "required": [
+                "name",
+                "count"
+              ]
+            },
+            "description": "Up to 10 tools by calls, largest first."
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "count": {
+                  "type": "integer",
+                  "format": "int64"
+                }
+              },
+              "required": [
+                "name",
+                "count"
+              ]
+            },
+            "description": "Up to 10 file paths by tool calls, largest first."
+          },
+          "commands": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "count": {
+                  "type": "integer",
+                  "format": "int64"
+                }
+              },
+              "required": [
+                "name",
+                "count"
+              ]
+            },
+            "description": "Up to 5 shell commands by runs, largest first."
+          },
+          "models": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "sessions": {
+                  "type": "integer",
+                  "format": "int64"
+                }
+              },
+              "required": [
+                "name",
+                "sessions"
+              ]
+            },
+            "description": "Up to 5 models by sessions, largest first."
+          },
+          "rabbit_hole": {
+            "type": "object",
+            "description": "The prompt followed by the most tool calls before the next prompt in its Trace.",
+            "properties": {
+              "trace_id": {
+                "type": "integer",
+                "format": "int64"
+              },
+              "prompt": {
+                "type": "string"
+              },
+              "tool_calls": {
+                "type": "integer",
+                "format": "int64"
+              },
+              "minutes": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "trace_id",
+              "prompt",
+              "tool_calls",
+              "minutes"
+            ]
+          },
+          "marathon": {
+            "type": "object",
+            "description": "The session with the most active time; `trace_id` is its top-level Trace.",
+            "properties": {
+              "trace_id": {
+                "type": "integer",
+                "format": "int64"
+              },
+              "title": {
+                "type": "string"
+              },
+              "active_hours": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "trace_id",
+              "title",
+              "active_hours"
+            ]
+          },
+          "polite_prompts": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Prompts that say please or thanks."
+          },
+          "shortest_prompt": {
+            "type": "object",
+            "properties": {
+              "trace_id": {
+                "type": "integer",
+                "format": "int64"
+              },
+              "text": {
+                "type": "string"
+              },
+              "chars": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "trace_id",
+              "text",
+              "chars"
+            ]
+          },
+          "longest_prompt": {
+            "type": "object",
+            "properties": {
+              "trace_id": {
+                "type": "integer",
+                "format": "int64"
+              },
+              "text": {
+                "type": "string"
+              },
+              "chars": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "trace_id",
+              "text",
+              "chars"
+            ],
+            "description": "`text` is cut to 240 characters; `chars` is the full length."
+          },
+          "latest_prompt": {
+            "type": "object",
+            "description": "The prompt latest in the night, counting a local day as ending at 5 AM. `text` is cut to 160 characters.",
+            "properties": {
+              "trace_id": {
+                "type": "integer",
+                "format": "int64"
+              },
+              "text": {
+                "type": "string"
+              },
+              "chars": {
+                "type": "integer"
+              },
+              "at": {
+                "type": "string",
+                "format": "date-time"
+              }
+            },
+            "required": [
+              "trace_id",
+              "text",
+              "chars",
+              "at"
+            ]
+          }
+        },
+        "required": [
+          "sessions",
+          "prompts",
+          "tool_calls",
+          "active_hours",
+          "active_days",
+          "longest_streak",
+          "hours",
+          "weekdays",
+          "tools",
+          "files",
+          "commands",
+          "models",
+          "polite_prompts"
+        ]
       }
     },
     "parameters": {

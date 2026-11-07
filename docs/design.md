@@ -360,6 +360,7 @@ The first API is versioned under `/api/v1`. Its full contract, with every parame
 | `GET /api/v1/events/{id}/sources` | Inspect supporting Source Records and observations |
 | `GET /api/v1/cards` | List Traces, one row per Trace, with the same filters as search |
 | `GET /api/v1/activity` | Count distinct sessions per day, harness, and model in a date range, by the rule the list's date filter uses |
+| `GET /api/v1/wrapped` | A playful recap of a date range for the Wrapped page: prompts by hour, top tools, files, and models, the longest rabbit hole, and superlatives |
 | `PATCH /api/v1/traces/{id}` | Set or clear a trace's manual title |
 | `DELETE /api/v1/traces/{id}` | Permanently delete a trace and unreferenced source objects |
 | `GET /api/v1/machines` | List Source Machines |
