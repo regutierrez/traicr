@@ -6,7 +6,7 @@ I can collect traces into Traicr, but reading them is worse than the products th
 
 ## Solution
 
-Traicr stays a private single-user archive and becomes the place I read my own agent work. After I unlock it I get a dark, Cursor-like three-pane shell: a rail, a dense session list, and a workspace with Overview and Trace (Changes and Timeline later). Trace is Turns in a column; a tree appears only when the Event graph forks. Changes lists Patches. Timeline is a log with Signal ticks and commit rows. Anchors live only in the archive. Insights wait until this workspace is not finicky.
+Traicr stays a private single-user archive and becomes the place I read my own agent work. After I unlock it I get a dark, Cursor-like three-pane shell: a rail, a dense session list, and a workspace with Overview, Trace, and Changes (Timeline later). Trace is Turns in a column; a tree appears only when the Event graph forks. Changes lists Patches. Timeline is a log with Signal ticks and commit rows. Anchors live only in the archive. Insights wait until this workspace is not finicky.
 
 This replaces the Linear-inspired, light-and-dark direction in issue #9. The reference is Cursor's agent list and chat workspace, not Linear and not the old Traicr paper/green theme.
 
@@ -42,7 +42,7 @@ Three panes, hideable:
 
 1. **Rail** (~48px): icon-only. Sessions, Repositories, Archive. Insights is omitted or visibly disabled until that ticket. Active icon: quiet fill + accent, not a badge count.
 2. **Session list** (~272px, beside an open Trace): dense rows grouped by day (`Today`, `Yesterday`, weekday, then date), each a one-line title with a short age (`3h`, `2d`) and a quiet harness · repository line. Not a card grid. `[` hides and shows it, as does a panel button just left of the trace title; the choice is remembered. `/` focuses a filter over the loaded rows. Below ~1100px the list is the full Sessions page instead. On wide screens the list also sits beside the home page, which then only searches: without a query or filter it shows a hint instead of repeating the list. `/` focuses the search box there, and `↓`/`↑` move from it through the results; `Enter` opens one at the message that matched. Search filters are harness, model, machine (by hostname), repository, and dates.
-3. **Workspace**: Overview (default) / Trace. Sticky header with title, harness, model, repository, Signal chips (only when a Signal fired), and underline tabs — not pill cards. No record counts or collection dates in the header.
+3. **Workspace**: Overview (default) / Trace / Changes. Sticky header with title, harness, model, repository, Signal chips (only when a Signal fired), and underline tabs — not pill cards. No record counts or collection dates in the header.
 
 `j` / `k` open the next and previous session; `Enter` in the filter opens the first match. The open Trace is the URL. On a wide screen the workspace updates in place so the list stays visible.
 
@@ -60,9 +60,12 @@ Three panes, hideable:
 
 ### Changes
 
-- File list on the left of the workspace (or a stacked list on narrow widths): path, tool, `+/-`.
-- Selected file shows a unified diff. No split view in the first slice.
-- Anchors for that path sit under the file as commit rows (short SHA, subject, time). Clicking a SHA opens the Repository page.
+- A file list (path, tool, number of edits, `+/-`) sits above the selected file's diffs. `j` / `k` move through the files. The selected file is the URL.
+- The selected file shows every Patch to it in order, each as a unified diff with its operation, tool, time, and an `Open in Trace` link to the call. No split view in the first slice.
+- A failed call (error, cancelled, or rejected) still lists its Patch, marked `did not apply`.
+- A call with no diff to show lists its arguments and result instead.
+- Edits made through shell commands are not Patches and are not listed.
+- Anchors for that path sit under the file as commit rows (short SHA, subject, time). Clicking a SHA opens the Repository page. (Not built yet; waits on Anchors.)
 
 ### Timeline
 
@@ -95,7 +98,7 @@ Three panes, hideable:
 11. As the archive owner, I want a full-page list under 1100px with a back chevron into the workspace, so that a laptop still works.
 12. As the archive owner, I want the URL to be the Trace when one is open, so that refresh keeps my place.
 13. As the archive owner, I want a sticky workspace header with title, harness, counts, Signal chips, and tabs, so that I can change views without losing context.
-14. As the archive owner, I want Overview and Trace as tabs, with Overview first, so that I see what a session was before reading it.
+14. As the archive owner, I want Overview, Trace, and Changes as tabs, with Overview first, so that I see what a session was before reading it.
 15. As the archive owner, I want Conversation to list Turns, so that I read a session the way I read a chat.
 16. As the archive owner, I want thinking and tools collapsed until I open them, so that prose stays readable.
 17. As the archive owner, I want one `Expand all` control (`E`), so that I can open every step without hunting for buttons.
@@ -122,7 +125,7 @@ Three panes, hideable:
 38. As the archive owner, I want copying a SHA and filtering to that commit, so that I can gather every Trace on it.
 39. As the archive owner, I want Archive to group Imports and Machines, so that collection history is one place.
 40. As the archive owner, I want Insights deferred until this workspace is boring, so that we do not polish charts on a broken reader.
-41. As the archive owner, I want Patches derived from known edit tools on rebuild, so that old traces get a Changes tab without recollection.
+41. As the archive owner, I want Patches derived from known edit tools on read, so that old traces get a Changes tab without recollection or rebuild.
 42. As the archive owner, I want Signals derived from Events on rebuild or read, so that old traces get chips without recollection.
 43. As the archive owner, I want Anchors from `git log` in the working directory at collect time, so that Git sessions link to commits.
 44. As the archive owner, I want Anchors from described Jujutsu revisions only, so that working-copy snapshots are not treated as real commits.
@@ -144,7 +147,7 @@ Three panes, hideable:
 - Show the conversation tree if and only if the Event parent graph has a fork. Linear graphs are a Turn list. This is data-driven, not harness-named, so Pi forks keep a tree and linear Pi looks like Cursor.
 - Child Traces render as cards that swap the workspace to that Trace. A missing child is an explicit empty state. Do not inline child Turns.
 - Amp revisions are chosen from Overview's Archive section; Trace names an active revision in its view bar. Native export download sits on Overview. Other harnesses use merged history.
-- Introduce Patch as a derived record from known edit tools at normalize time (write, edit, apply-patch, and the harness-specific names already recognized in the renderer). Persist enough to list path, tool, source Event, and a unified diff when the payload has old/new or patch text.
+- Introduce Patch as a record derived on read from the stored tool Events of known edit tools (write, edit, apply-patch, and the harness-specific names). Patches are not persisted. `GET /api/v1/traces/{id}/patches` (optional `revision`) returns path, operation, tool, source Event, failure, `+/-`, and a unified diff. The diff is the one the harness recorded when there is one (Amp), else one rebuilt from old/new strings, patch text, or written content. Without either, the Patch carries the call's arguments and result. Persist only if read cost is too high after measurement.
 - Introduce Signal as a deterministic function over a Trace's Events: tool errors, repeated identical commands, oversized tool results, repeated file reads, repeated searches. Surface as header chips and Timeline gutter ticks. Do not persist a parallel event log if it can be derived on read from stored Events; persist only if read cost is too high after measurement.
 - Introduce Anchor as an archive-only record: repository identity, commit SHA, optional Jujutsu change-id, subject, committer time, linked Trace. Collect at `traicr collect` by reading Git or Jujutsu history in the Trace working directory. Jujutsu: described revisions in the session window, exclude live `@`. Never write `refs/notes` or install a hook that collaborators would run.
 - Timeline is a vertical Event log with a derived phase (`user`, `think`, `read`, `exec`, `write`) and interpolated Anchor rows. No swimlanes.
@@ -153,13 +156,13 @@ Three panes, hideable:
 - Insights is specified but not built in the first implementation slice.
 - Dark-only shadcn-svelte (bits-ui) + Tailwind 4 tokens. Cursor-faithful token pass waits on screenshots. Until then, tune the default dark palette toward Cursor (near-black canvas, hairline borders, one muted accent) and delete the paper/green Traicr theme from any route the Svelte app owns.
 - Issue #9 (Linear-inspired, light-and-dark, right-hand inspector, command palette first) is superseded. Keep its useful constraints: density, keyboard, fewer cards, `prefers-reduced-motion`. Drop light mode, Linear-as-reference, and the child-transcript side pane.
-- Keyboard: `j`/`k`/`Enter` on the list, `[`/`]` for the list pane, `E`, `n`/`p`, and `.`/`,` (search hits) in Trace. Command palette is a later ticket.
+- Keyboard: `j`/`k`/`Enter` on the list, `[`/`]` for the list pane, `E`, `n`/`p`, and `.`/`,` (search hits) in Trace, `j`/`k` through the files in Changes. Command palette is a later ticket.
 
 ### Test seams
 
-Prefer existing seams: HTTP JSON for traces and events, normalizer `Run` for Patch extraction, collector collect output for Anchors, browser pages for shell and tabs.
+Prefer existing seams: HTTP JSON for traces and events, `normalize.Patches` for Patch extraction, collector collect output for Anchors, browser pages for shell and tabs.
 
-1. **Normalizer `Run`** — given Source Records, Events gain Patch-capable metadata (or sibling Patch records) for known edit tools. Highest existing seam for Changes data.
+1. **`normalize.Patches`** — given a Trace's edit-tool calls and results, returns its Patches. Highest existing seam for Changes data; the HTTP patches endpoint is its outer seam.
 2. **Store / HTTP trace + events** — Conversation, Timeline, and Signal chips consume the same Event page the viewer already loads. Add fields only through this JSON.
 3. **Collector `Collect`** — Anchor files appear in the Trace ZIP for Git and described Jujutsu history; nothing is written into the source repository.
 4. **Browser shell** — unauthenticated `GET /` is the Svelte document; authenticated session list and `/traces/{id}` render the workspace tabs.
