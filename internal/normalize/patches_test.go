@@ -2,6 +2,8 @@ package normalize
 
 import (
 	"encoding/json"
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/regutierrez/traicr/internal/domain"
@@ -112,6 +114,38 @@ func TestPatchesKeepCallsWithoutADiffAndMarkFailures(t *testing.T) {
 	}
 	if !patches[1].Failed || !patches[2].Failed || patches[1].Diff == "" {
 		t.Fatalf("failed edits = %#v %#v", patches[1], patches[2])
+	}
+}
+
+func TestPatchesShowHugeReplacementsAsWholeRemoveAndAdd(t *testing.T) {
+	// Both sides start with a shared line. At 2,000 × 2,000 lines the diff still
+	// keeps it as context; one more line on each side passes the 4,000,000-cell
+	// bound, and the shared line shows as removed and added like every other.
+	replacement := func(lines int) domain.Event {
+		before, after := []string{"same"}, []string{"same"}
+		for index := 1; index < lines; index++ {
+			before = append(before, fmt.Sprintf("old %d", index))
+			after = append(after, fmt.Sprintf("new %d", index))
+		}
+		args, _ := json.Marshal(map[string]string{"path": "/repo/big.txt", "old_str": strings.Join(before, "\n"), "new_str": strings.Join(after, "\n")})
+		return toolCall(1, "edit_file", "e1", string(args))
+	}
+	for _, test := range []struct {
+		lines, changed int
+		context        bool
+	}{{2000, 1999, true}, {2001, 2001, false}} {
+		patches := Patches([]domain.Event{replacement(test.lines)})
+		if len(patches) != 1 {
+			t.Fatalf("%d lines: %d patches", test.lines, len(patches))
+		}
+		patch := patches[0]
+		if patch.Additions != test.changed || patch.Deletions != test.changed || strings.HasPrefix(patch.Diff, "@@\n same\n") != test.context {
+			t.Errorf("%d lines: +%d −%d, diff starts %q", test.lines, patch.Additions, patch.Deletions, patch.Diff[:min(len(patch.Diff), 20)])
+		}
+		// Removed lines come before added ones either way.
+		if strings.Index(patch.Diff, "\n-old 1\n") > strings.Index(patch.Diff, "\n+new 1\n") {
+			t.Errorf("%d lines: added lines come before removed ones", test.lines)
+		}
 	}
 }
 
