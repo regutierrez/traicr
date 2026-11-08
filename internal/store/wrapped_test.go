@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -109,5 +110,77 @@ func TestWrappedCountsEachEventOnceInTheReadersTimeZone(t *testing.T) {
 	}
 	if _, err := s.Wrapped(ctx, "yesterday", "", time.UTC); !errors.Is(err, store.ErrInvalidQuery) {
 		t.Fatalf("invalid date: %v", err)
+	}
+}
+
+// Every record goes to whatever came first when two are equal: the earlier prompt,
+// the earlier day, the older session.
+func TestWrappedBreaksTiesInFavorOfWhatCameFirst(t *testing.T) {
+	ctx := context.Background()
+	s := openStore(t)
+	call := func(key, input, at string) domain.Event {
+		return domain.Event{Key: key, Kind: "tool_call", Role: "assistant", Tool: "Bash", Text: input, Timestamp: at}
+	}
+	prompt := func(key, text, at string) domain.Event {
+		return domain.Event{Key: key, Kind: "message", Role: "user", Text: text, Timestamp: at}
+	}
+	sameCommand := strings.Repeat("x", 120)
+	early := []domain.Event{
+		// Two turns of 3 calls over 30 minutes, then one of 2 calls over an hour.
+		prompt("p1", "aa", "2026-03-01T01:00:00Z"),
+		call("c1", `{}`, "2026-03-01T01:10:00Z"),
+		call("c2", `{}`, "2026-03-01T01:20:00Z"),
+		call("c3", `{}`, "2026-03-01T01:30:00Z"),
+		prompt("p2", "bb", "2026-03-02T01:00:00Z"),
+		call("c4", `{}`, "2026-03-02T01:10:00Z"),
+		call("c5", `{}`, "2026-03-02T01:20:00Z"),
+		call("c6", `{}`, "2026-03-02T01:30:00Z"),
+		prompt("p3", strings.Repeat("a", 300), "2026-03-02T12:00:00Z"),
+		call("c7", `{"command":["go","vet"]}`, "2026-03-02T12:30:00Z"),
+		call("c8", `{"command":"`+sameCommand+`"}`, "2026-03-02T13:00:00Z"),
+	}
+	// As long a prompt as p3, on p1's day, and nine quarter hours like early.
+	late := []domain.Event{prompt("p4", strings.Repeat("b", 300), "2026-03-01T12:00:00Z")}
+	for minute := 15; minute <= 120; minute += 15 {
+		at := time.Date(2026, 3, 1, 12, minute, 0, 0, time.UTC).Format(time.RFC3339)
+		late = append(late, domain.Event{Key: at, Kind: "message", Role: "assistant", Text: "working", Timestamp: at})
+	}
+	for _, trace := range []struct {
+		id     string
+		events []domain.Event
+	}{{"early", early}, {"late", late}} {
+		input := traceInput("machine", trace.id+"-1", "2026-03-05T00:00:00Z", trace.id, trace.events)
+		input.manifest.Traces[0].NativeTraceID = trace.id
+		if _, err := s.Import(ctx, input.manifest, input.files, normalizer(trace.events, "normalized", 1), nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	got, err := s.Wrapped(ctx, "", "", time.UTC)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hole := got.RabbitHole; hole == nil || hole.Prompt != "aa" || hole.ToolCalls != 3 || hole.Minutes != 30 {
+		t.Errorf("rabbit hole = %+v, want the first of the two 3-call turns", hole)
+	}
+	// p1 and p2 are both 1 AM, the latest clock time; p4, the last prompt, is noon.
+	if got.Latest == nil || got.Latest.Text != "aa" {
+		t.Errorf("latest prompt = %+v", got.Latest)
+	}
+	if got.Shortest == nil || got.Shortest.Text != "aa" {
+		t.Errorf("shortest prompt = %+v", got.Shortest)
+	}
+	if longest := got.Longest; longest == nil || longest.Chars != 300 || longest.Text != strings.Repeat("a", 239)+"…" {
+		t.Errorf("longest prompt = %+v", longest)
+	}
+	if got.BusiestDay == nil || *got.BusiestDay != (store.WrappedDay{Date: "2026-03-01", Prompts: 2}) {
+		t.Errorf("busiest day = %+v", got.BusiestDay)
+	}
+	if got.Marathon == nil || got.Marathon.Title != "early" || got.Marathon.ActiveHours != 2.25 {
+		t.Errorf("marathon = %+v", got.Marathon)
+	}
+	// A command given as a list is joined; one exactly at the length limit is kept whole.
+	if line := fmt.Sprint(got.Commands); line != "[{go vet 1} {"+sameCommand+" 1}]" {
+		t.Errorf("commands = %s", line)
 	}
 }

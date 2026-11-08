@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"path"
 	"regexp"
 	"slices"
@@ -149,7 +150,8 @@ func (s *Store) Wrapped(ctx context.Context, after, before string, location *tim
 	tools, files, commands := map[string]int64{}, map[string]int64{}, map[string]int64{}
 	models := map[string]map[int64]bool{}
 	var turn *WrappedTurn
-	var turnStart, turnLast, latestAt time.Time
+	var turnStart, turnLast time.Time
+	var latestClock string
 	closeTurn := func() {
 		if turn == nil || turn.ToolCalls == 0 {
 			turn = nil
@@ -202,8 +204,8 @@ func (s *Store) Wrapped(ctx context.Context, after, before string, location *tim
 				wrapped.Weekdays[local.Weekday()]++
 				promptDays[local.Format(time.DateOnly)]++
 				turn, turnStart, turnLast = &WrappedTurn{TraceID: trace, Prompt: clip(prompt, 240)}, at, at
-				if wrapped.Latest == nil || nightClock(local) > nightClock(latestAt) {
-					wrapped.Latest, latestAt = &WrappedPrompt{TraceID: trace, Text: clip(text, 160), Chars: chars, At: eventTime}, local
+				if clock := nightClock(local); wrapped.Latest == nil || clock > latestClock {
+					wrapped.Latest, latestClock = &WrappedPrompt{TraceID: trace, Text: clip(text, 160), Chars: chars, At: eventTime}, clock
 				}
 			}
 			if politeWords.MatchString(prompt) {
@@ -245,14 +247,15 @@ func (s *Store) Wrapped(ctx context.Context, after, before string, location *tim
 	wrapped.ActiveHours = float64(len(allSlots)) / 4
 	wrapped.ActiveDays = int64(len(promptDays))
 	wrapped.LongestStreak = longestStreak(promptDays)
-	for date, prompts := range promptDays {
-		if day := wrapped.BusiestDay; day == nil || prompts > day.Prompts || prompts == day.Prompts && date < day.Date {
-			wrapped.BusiestDay = &WrappedDay{Date: date, Prompts: prompts}
+	// In sorted order, so the earliest day and the oldest session win a tie.
+	for _, date := range slices.Sorted(maps.Keys(promptDays)) {
+		if day := wrapped.BusiestDay; day == nil || promptDays[date] > day.Prompts {
+			wrapped.BusiestDay = &WrappedDay{Date: date, Prompts: promptDays[date]}
 		}
 	}
-	for session, used := range slots {
-		hours := float64(len(used)) / 4
-		if top := wrapped.Marathon; top == nil || hours > top.ActiveHours || hours == top.ActiveHours && session < top.TraceID {
+	for _, session := range slices.Sorted(maps.Keys(slots)) {
+		hours := float64(len(slots[session])) / 4
+		if top := wrapped.Marathon; top == nil || hours > top.ActiveHours {
 			wrapped.Marathon = &WrappedSession{TraceID: session, Title: titles[session], ActiveHours: hours}
 		}
 	}
@@ -260,16 +263,14 @@ func (s *Store) Wrapped(ctx context.Context, after, before string, location *tim
 	wrapped.Files = topCounts(files, 10)
 	wrapped.Commands = topCounts(commands, 5)
 	wrapped.Models = countSessions(models)
-	if len(wrapped.Models) > 5 {
-		wrapped.Models = wrapped.Models[:5]
-	}
+	wrapped.Models = wrapped.Models[:min(5, len(wrapped.Models))]
 	return wrapped, nil
 }
 
-// nightClock is the time of day counted from 5 AM, so 2 AM is later than 11 PM.
-func nightClock(local time.Time) time.Duration {
-	shifted := local.Add(-5 * time.Hour)
-	return time.Duration(shifted.Hour())*time.Hour + time.Duration(shifted.Minute())*time.Minute + time.Duration(shifted.Second())*time.Second
+// nightClock is the time of day counted from 5 AM, as 15:04:05, so the strings
+// compare in night order: 2 AM (21:00:00) is later than 11 PM (18:00:00).
+func nightClock(local time.Time) string {
+	return local.Add(-5 * time.Hour).Format(time.TimeOnly)
 }
 
 // toolArguments reads the file path and shell command from the array json_extract
@@ -304,8 +305,8 @@ func commandText(values []any) string {
 					parts = append(parts, text)
 				}
 			}
-			if len(parts) > 0 {
-				return strings.Join(parts, " ")
+			if command := strings.Join(parts, " "); command != "" {
+				return command
 			}
 		}
 	}

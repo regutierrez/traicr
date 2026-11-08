@@ -360,6 +360,7 @@ func TestResponsesMatchThePublishedSchemas(t *testing.T) {
 	for _, check := range []struct{ path, method, target string }{
 		{"/api/v1/cards", "get", "/api/v1/cards"},
 		{"/api/v1/search", "get", "/api/v1/search?q=hello"},
+		{"/api/v1/wrapped", "get", "/api/v1/wrapped?tz=America/New_York"},
 		{"/api/v1/traces/{id}", "get", "/api/v1/traces/" + traceID},
 		{"/api/v1/traces/{id}/events", "get", "/api/v1/traces/" + traceID + "/events"},
 		{"/api/v1/traces/{id}/transcript", "get", "/api/v1/traces/" + traceID + "/transcript"},
@@ -384,6 +385,8 @@ func TestResponsesMatchThePublishedSchemas(t *testing.T) {
 		{"/api/v1/traces/{id}", "get", "/api/v1/traces/0", "", adminToken},
 		{"/api/v1/traces/{id}", "patch", "/api/v1/traces/" + traceID, `{"other":1}`, adminToken},
 		{"/api/v1/cards", "get", "/api/v1/cards?after=not-a-date", "", adminToken},
+		{"/api/v1/wrapped", "get", "/api/v1/wrapped?tz=Mars/Olympus_Mons", "", adminToken},
+		{"/api/v1/wrapped", "get", "/api/v1/wrapped?after=not-a-date", "", adminToken},
 		{"/api/v1/traces/{id}/transcript", "get", "/api/v1/traces/" + traceID + "/transcript?revision=-1", "", adminToken},
 		{"/api/v1/logs", "get", "/api/v1/logs?cursor=stale", "", adminToken},
 		{"/api/v1/status", "get", "/api/v1/status", "", ""},
