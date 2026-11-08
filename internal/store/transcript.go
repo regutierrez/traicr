@@ -1,6 +1,7 @@
 package store
 
 import (
+	"cmp"
 	"context"
 	"database/sql"
 	"encoding/base64"
@@ -9,6 +10,8 @@ import (
 	"fmt"
 	"slices"
 	"sync"
+
+	"github.com/regutierrez/traicr/internal/domain"
 )
 
 var ErrTranscriptChanged = errors.New("transcript changed; reload the page to continue")
@@ -106,6 +109,87 @@ func (s *Store) TranscriptEvents(ctx context.Context, traceID, revisionID int64,
 		page.NextCursor = base64.RawURLEncoding.EncodeToString(data)
 	}
 	return page, nil
+}
+
+// ToolEvents returns, in transcript order, the trace's calls to the named
+// tools (matched without case) and the results of those calls. Revision 0 is
+// the merged view; another revision shows that revision's observations.
+// Filtering on the tool and call_id columns keeps the event JSON of every
+// other tool call, often most of a trace, from being read.
+func (s *Store) ToolEvents(ctx context.Context, traceID, revisionID int64, tools []string) ([]domain.Event, error) {
+	if err := s.requireTrace(ctx, traceID); err != nil {
+		return nil, err
+	}
+	if revisionID != 0 {
+		var exists int
+		if err := s.db.QueryRowContext(ctx, "SELECT 1 FROM trace_revisions WHERE id=? AND trace_id=?", revisionID, traceID).Scan(&exists); err != nil {
+			return nil, err
+		}
+	}
+	names, _ := json.Marshal(tools)
+	calls := `SELECT e.id,o.call_id FROM events e JOIN event_observations o ON o.id=` + transcriptObservation + `
+WHERE e.trace_id=? AND o.kind='tool_call' AND lower(o.tool) IN (SELECT value FROM json_each(?))`
+	// Sorting in SQL would run json_extract over every selected row, which cost
+	// more than the rest of the query; the rows are sorted below instead.
+	rows, err := s.db.QueryContext(ctx, `
+WITH calls AS MATERIALIZED (`+calls+`)
+SELECT e.id,e.sort_time,e.sort_key,o.event_json FROM events e JOIN event_observations o ON o.id=`+transcriptObservation+`
+WHERE e.trace_id=? AND (e.id IN (SELECT id FROM calls)
+ OR (o.kind='tool_result' AND o.call_id IN (SELECT call_id FROM calls WHERE call_id<>'')))`,
+		revisionID, revisionID, traceID, string(names), revisionID, revisionID, traceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	type sorted struct {
+		event             domain.Event
+		sortTime, sortKey string
+		order, block      float64
+		ordered           bool
+	}
+	found := []sorted{}
+	for rows.Next() {
+		var row sorted
+		var data []byte
+		if err := rows.Scan(&row.event.ID, &row.sortTime, &row.sortKey, &data); err != nil {
+			return nil, err
+		}
+		id := row.event.ID
+		if err := json.Unmarshal(data, &row.event); err != nil {
+			return nil, err
+		}
+		row.event.ID, row.event.TraceID = id, traceID
+		var position struct {
+			Order *float64 `json:"transcript_order"`
+			Block float64  `json:"transcript_block"`
+		}
+		_ = json.Unmarshal(row.event.Metadata, &position)
+		if position.Order != nil {
+			row.order, row.ordered = *position.Order, true
+		}
+		row.block = position.Block
+		found = append(found, row)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	// The same keys transcriptOrder sorts by in SQL.
+	slices.SortFunc(found, func(a, b sorted) int {
+		timeA, timeB := a.sortTime, b.sortTime
+		if a.ordered {
+			timeA = ""
+		}
+		if b.ordered {
+			timeB = ""
+		}
+		return cmp.Or(cmp.Compare(a.order, b.order), cmp.Compare(timeA, timeB), cmp.Compare(a.block, b.block),
+			cmp.Compare(a.sortKey, b.sortKey), cmp.Compare(a.event.ID, b.event.ID))
+	})
+	events := make([]domain.Event, len(found))
+	for index, row := range found {
+		events[index] = row.event
+	}
+	return events, nil
 }
 
 // transcriptOrder returns the trace's event IDs in transcript order: Amp's

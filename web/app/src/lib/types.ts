@@ -118,6 +118,23 @@ export type Trace = {
 	children?: TraceRef[];
 };
 
+/** One file edit a tool call made, from GET /api/v1/traces/{id}/patches. */
+export type Patch = {
+	path: string;
+	tool: string;
+	event_id: number;
+	timestamp?: string;
+	operation: 'edit' | 'write' | 'delete';
+	/** Unified diff hunks without file headers. */
+	diff?: string;
+	additions: number;
+	deletions: number;
+	/** The call's own text, kept when no diff could be built. */
+	arguments?: string;
+	result?: string;
+	failed?: boolean;
+};
+
 export type TraceEvent = {
 	id: number;
 	key: string;

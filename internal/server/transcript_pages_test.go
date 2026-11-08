@@ -17,6 +17,7 @@ import (
 
 	"github.com/regutierrez/traicr/internal/archive"
 	"github.com/regutierrez/traicr/internal/domain"
+	"github.com/regutierrez/traicr/internal/normalize"
 	"github.com/regutierrez/traicr/internal/store"
 )
 
@@ -79,6 +80,20 @@ func TestAmpAgentFixturePairsToolsAndPreservesThreadOrigin(t *testing.T) {
 	}
 	if !strings.Contains(string(results["TU-thread"].Metadata), `"threadID":"T-amp-child-fixture"`) {
 		t.Fatal("spawned thread link lost")
+	}
+	// The Changes tab lists the file apply_patch changed, from the diff Amp recorded, and links back to the call.
+	for _, revision := range []string{"", "?revision=1"} {
+		var changes struct{ Patches []normalize.Patch }
+		if err := json.Unmarshal(get("/api/v1/traces/1/patches"+revision).Body.Bytes(), &changes); err != nil || len(changes.Patches) != 1 {
+			t.Fatalf("patches%s: %+v %v", revision, changes, err)
+		}
+		patch := changes.Patches[0]
+		if patch.Path != "/repo/internal/range/range.go" || patch.EventID != calls["TU-patch"].ID || patch.Diff != "-return n < end\n+return n <= end" || patch.Additions != 1 || patch.Deletions != 1 {
+			t.Fatalf("patch%s = %+v", revision, patch)
+		}
+	}
+	if response := get("/api/v1/traces/1/patches?revision=99"); response.Code != 404 {
+		t.Fatalf("patches of another trace's revision: %d %s", response.Code, response.Body)
 	}
 	originIndex := slices.IndexFunc(page.Events, func(event store.Event) bool { return event.Key == "message:13:0" })
 	if originIndex < 0 {

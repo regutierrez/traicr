@@ -12,6 +12,7 @@ import (
 
 	"github.com/regutierrez/traicr/internal/amp"
 	"github.com/regutierrez/traicr/internal/domain"
+	"github.com/regutierrez/traicr/internal/normalize"
 )
 
 func (app *application) transcriptAPI(w http.ResponseWriter, r *http.Request) {
@@ -23,14 +24,9 @@ func (app *application) transcriptAPI(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	var revision int64
-	if value := r.URL.Query().Get("revision"); value != "" {
-		var err error
-		revision, err = strconv.ParseInt(value, 10, 64)
-		if err != nil || revision < 0 {
-			writeError(w, 400, "invalid_revision", "revision must be a nonnegative integer")
-			return
-		}
+	revision, ok := revisionParam(w, r)
+	if !ok {
+		return
 	}
 	page, err := app.store.TranscriptEvents(r.Context(), id, revision, r.URL.Query().Get("cursor"), limit)
 	if err != nil {
@@ -38,6 +34,39 @@ func (app *application) transcriptAPI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, page)
+}
+
+// patches lists the file edits a trace's tool calls made, derived from its
+// stored Events on every read.
+func (app *application) patches(w http.ResponseWriter, r *http.Request) {
+	id, ok := requestID(w, r)
+	if !ok {
+		return
+	}
+	revision, ok := revisionParam(w, r)
+	if !ok {
+		return
+	}
+	events, err := app.store.ToolEvents(r.Context(), id, revision, normalize.EditTools())
+	if err != nil {
+		app.failure(w, err)
+		return
+	}
+	writeJSON(w, map[string]any{"patches": normalize.Patches(events)})
+}
+
+// revisionParam reads ?revision=, where 0 or nothing means the merged view.
+func revisionParam(w http.ResponseWriter, r *http.Request) (int64, bool) {
+	value := r.URL.Query().Get("revision")
+	if value == "" {
+		return 0, true
+	}
+	revision, err := strconv.ParseInt(value, 10, 64)
+	if err != nil || revision < 0 {
+		writeError(w, 400, "invalid_revision", "revision must be a nonnegative integer")
+		return 0, false
+	}
+	return revision, true
 }
 
 func (app *application) resolveTrace(w http.ResponseWriter, r *http.Request) {

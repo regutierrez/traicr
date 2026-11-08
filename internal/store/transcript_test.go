@@ -162,3 +162,44 @@ func TestTranscriptPagesPreserveNativeOrderAndSelectedRevision(t *testing.T) {
 		t.Fatalf("newest revision: %+v %v", latest, err)
 	}
 }
+
+func TestToolEventsKeepNamedCallsAndTheirResultsInTranscriptOrder(t *testing.T) {
+	database := openStore(t)
+	ctx := context.Background()
+	at := func(key, kind, tool, call, timestamp, position string) domain.Event {
+		return domain.Event{Key: key, Kind: kind, Tool: tool, CallID: call, Timestamp: timestamp, Text: key, Metadata: []byte(position)}
+	}
+	// Native order disagrees with time on purpose: the transcript follows transcript_order, then transcript_block.
+	events := []domain.Event{
+		at("late-edit", "tool_call", "edit_file", "c1", "2026-09-16T10:00:00Z", `{"transcript_order":3,"transcript_block":0}`),
+		at("late-edit-result", "tool_result", "edit_file", "c1", "2026-09-16T10:00:01Z", `{"transcript_order":4,"transcript_block":0}`),
+		at("second-block", "tool_call", "Edit", "c2", "2026-09-16T09:00:00Z", `{"transcript_order":1,"transcript_block":1}`),
+		at("shell", "tool_call", "shell_command", "c3", "2026-09-16T08:00:00Z", `{"transcript_order":1,"transcript_block":0}`),
+		at("shell-result", "tool_result", "shell_command", "c3", "2026-09-16T08:00:01Z", `{"transcript_order":2,"transcript_block":0}`),
+		at("first-block", "tool_call", "apply_patch", "c4", "2026-09-16T11:00:00Z", `{"transcript_order":1,"transcript_block":0}`),
+		at("message", "message", "", "", "2026-09-16T07:00:00Z", `{"transcript_order":0,"transcript_block":0}`),
+	}
+	input := traceInput("machine", "only", "2026-09-16T12:00:00Z", "Edits", events)
+	report, err := database.Import(ctx, input.manifest, input.files, normalizer(events, "normalized", 3), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	traceID := report.Traces[0].TraceID
+	trace, _ := database.Trace(ctx, traceID)
+	for _, revision := range []int64{0, trace.Revisions[0].ID} {
+		got, err := database.ToolEvents(ctx, traceID, revision, []string{"edit", "edit_file", "apply_patch"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		keys := []string{}
+		for _, event := range got {
+			keys = append(keys, event.Text)
+		}
+		if want := []string{"first-block", "second-block", "late-edit", "late-edit-result"}; !slices.Equal(keys, want) {
+			t.Fatalf("revision %d: %v, want %v", revision, keys, want)
+		}
+	}
+	if _, err := database.ToolEvents(ctx, traceID, 98765, []string{"edit"}); err == nil {
+		t.Fatal("accepted a revision outside this trace")
+	}
+}

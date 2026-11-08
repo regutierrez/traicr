@@ -60,6 +60,7 @@ func (app *application) apiRoutes() []apiRoute {
 		{"DELETE /api/v1/traces/{id}", app.deleteAPI},
 		{"GET /api/v1/traces/{id}/events", app.events},
 		{"GET /api/v1/traces/{id}/transcript", app.transcriptAPI},
+		{"GET /api/v1/traces/{id}/patches", app.patches},
 		{"GET /api/v1/events/{id}/sources", app.eventSources},
 		{"GET /api/v1/revisions/{id}/sources", app.revisionSources},
 		{"GET /api/v1/revisions/{id}/file", app.sourceFile},

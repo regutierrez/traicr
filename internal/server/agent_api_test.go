@@ -364,6 +364,7 @@ func TestResponsesMatchThePublishedSchemas(t *testing.T) {
 		{"/api/v1/traces/{id}", "get", "/api/v1/traces/" + traceID},
 		{"/api/v1/traces/{id}/events", "get", "/api/v1/traces/" + traceID + "/events"},
 		{"/api/v1/traces/{id}/transcript", "get", "/api/v1/traces/" + traceID + "/transcript"},
+		{"/api/v1/traces/{id}/patches", "get", "/api/v1/traces/" + traceID + "/patches"},
 		{"/api/v1/events/{id}/sources", "get", "/api/v1/events/" + itoa(events.Events[0].ID) + "/sources"},
 		{"/api/v1/imports", "get", "/api/v1/imports"},
 		{"/api/v1/imports/{id}", "get", "/api/v1/imports/" + itoa(interrupted.ID)},
@@ -388,6 +389,7 @@ func TestResponsesMatchThePublishedSchemas(t *testing.T) {
 		{"/api/v1/wrapped", "get", "/api/v1/wrapped?tz=Mars/Olympus_Mons", "", adminToken},
 		{"/api/v1/wrapped", "get", "/api/v1/wrapped?after=not-a-date", "", adminToken},
 		{"/api/v1/traces/{id}/transcript", "get", "/api/v1/traces/" + traceID + "/transcript?revision=-1", "", adminToken},
+		{"/api/v1/traces/{id}/patches", "get", "/api/v1/traces/" + traceID + "/patches?revision=-1", "", adminToken},
 		{"/api/v1/logs", "get", "/api/v1/logs?cursor=stale", "", adminToken},
 		{"/api/v1/status", "get", "/api/v1/status", "", ""},
 	} {

@@ -5,10 +5,11 @@ import type { PageLoad } from './$types';
 // filter, or ask for the old records view; those belong to the Trace tab or here.
 const traceParams = ['event', 'key', 'leafId', 'targetId', 'filter', 'debug'];
 
-export const load: PageLoad = ({ params, url }) => {
+export const load: PageLoad = async ({ params, parent, url }) => {
 	const query = new URLSearchParams(url.searchParams);
 	const old = query.get('view') === 'records';
 	query.delete('view');
 	if (traceParams.some((name) => query.has(name))) redirect(307, `/traces/${params.id}/trace?${query}`);
 	if (old) redirect(307, `/traces/${params.id}${query.size ? `?${query}` : ''}`);
+	return await (await parent()).transcript;
 };

@@ -783,6 +783,86 @@
         }
       }
     },
+    "/api/v1/traces/{id}/patches": {
+      "get": {
+        "tags": [
+          "traces"
+        ],
+        "operationId": "listTracePatches",
+        "summary": "List a Trace's Patches",
+        "description": "List every file edit the Trace's tool calls made, in transcript order. Patches are derived from the stored Events on each read, so they need no recollection: known edit tools (`edit`, `edit_file`, `write`, `create_file`, `apply_patch`, `StrReplace`, and the like) become one Patch per file they touched. `diff` holds unified diff hunks without file headers; a hunk header without line numbers means the call did not record where in the file the hunk is. A Patch with no `diff` keeps the call's `arguments` and `result` text instead. The web UI's Changes tab reads this.",
+        "security": [
+          {
+            "adminToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/id"
+          },
+          {
+            "name": "revision",
+            "in": "query",
+            "description": "Use one Revision's observations instead of the merged archive. Omit or pass `0` for the merged view.",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The Trace's Patches.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PatchList"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request. Codes: `invalid_id`, `invalid_revision`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/InvalidIdError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/InvalidRevisionError"
+                    }
+                  ]
+                },
+                "example": {
+                  "api_version": 1,
+                  "_tag": "invalid_revision",
+                  "message": "revision must be a nonnegative integer",
+                  "error": {
+                    "code": "invalid_revision",
+                    "message": "revision must be a nonnegative integer"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "408": {
+            "$ref": "#/components/responses/Timeout"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        }
+      }
+    },
     "/api/v1/events/{id}/sources": {
       "get": {
         "tags": [
@@ -1405,6 +1485,80 @@
         "required": [
           "id",
           "native_trace_id"
+        ]
+      },
+      "Patch": {
+        "type": "object",
+        "description": "One file edit made by a tool call.",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "The file the call edited, as the call named it."
+          },
+          "tool": {
+            "type": "string"
+          },
+          "event_id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The tool call Event. Open it in the Trace with `/traces/{id}/trace?event={event_id}`."
+          },
+          "timestamp": {
+            "type": "string"
+          },
+          "operation": {
+            "type": "string",
+            "enum": [
+              "edit",
+              "write",
+              "delete"
+            ],
+            "description": "`write` means the call wrote the whole file, so its diff is every line added."
+          },
+          "diff": {
+            "type": "string",
+            "description": "Unified diff hunks without file headers."
+          },
+          "additions": {
+            "type": "integer"
+          },
+          "deletions": {
+            "type": "integer"
+          },
+          "arguments": {
+            "type": "string",
+            "description": "The call's arguments, when no diff could be built."
+          },
+          "result": {
+            "type": "string",
+            "description": "The call's result text, when no diff could be built."
+          },
+          "failed": {
+            "type": "boolean",
+            "description": "The result says the edit did not apply."
+          }
+        },
+        "required": [
+          "path",
+          "tool",
+          "event_id",
+          "operation",
+          "additions",
+          "deletions"
+        ]
+      },
+      "PatchList": {
+        "type": "object",
+        "properties": {
+          "patches": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Patch"
+            }
+          }
+        },
+        "required": [
+          "patches"
         ]
       },
       "Revision": {

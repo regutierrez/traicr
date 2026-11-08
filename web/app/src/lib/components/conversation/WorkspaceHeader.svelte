@@ -15,7 +15,7 @@
 	}: {
 		trace: Trace;
 		revision?: string;
-		tab: 'overview' | 'trace';
+		tab: 'overview' | 'trace' | 'changes';
 		model?: string;
 		thinkingLevel?: string;
 		stepsExpanded?: boolean;
@@ -26,7 +26,11 @@
 
 </script>
 
-{#snippet tabLink(id: 'overview' | 'trace', label: string, route: '/traces/[id]' | '/traces/[id]/trace')}
+{#snippet tabLink(
+	id: 'overview' | 'trace' | 'changes',
+	label: string,
+	route: '/traces/[id]' | '/traces/[id]/trace' | '/traces/[id]/changes'
+)}
 	<a
 		class={['tab', tab === id && 'is-current']}
 		href={withQuery(resolve(route, { id: String(trace.id) }), revision ? { revision } : {})}
@@ -68,6 +72,7 @@
 	<nav class="tabs" aria-label="Trace views">
 		{@render tabLink('overview', 'Overview', '/traces/[id]')}
 		{@render tabLink('trace', 'Trace', '/traces/[id]/trace')}
+		{@render tabLink('changes', 'Changes', '/traces/[id]/changes')}
 	</nav>
 </header>
 
