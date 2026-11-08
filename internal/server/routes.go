@@ -114,6 +114,8 @@ func NewHTTPHandler(configuration config.ServerConfig, database *store.Store, lo
 	// Unknown API paths must not fall through to the browser shell below.
 	mux.HandleFunc("GET /api/", apiNotFound)
 	mux.Handle("GET /", app.browser(app.spa))
+	// Inside the recorder, so request logs count the bytes actually sent.
+	handler := compress(mux)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		started := time.Now()
 		recorder := &responseRecorder{ResponseWriter: w, status: http.StatusOK}
@@ -125,7 +127,7 @@ func NewHTTPHandler(configuration config.ServerConfig, database *store.Store, lo
 		w.Header().Set("Referrer-Policy", "same-origin")
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("Content-Security-Policy", "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'")
-		mux.ServeHTTP(w, r)
+		handler.ServeHTTP(w, r)
 	}), nil
 }
 

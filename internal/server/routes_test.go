@@ -2,6 +2,7 @@ package server_test
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -404,5 +405,53 @@ func TestRenameTraceThroughAPI(t *testing.T) {
 	cleared := request(handler, "GET", tracePath, nil, adminToken)
 	if strings.Contains(cleared.Body.String(), "title_override") {
 		t.Fatalf("cleared override still returned: %s", cleared.Body)
+	}
+}
+
+func TestGETResponsesAreGzippedOnlyForClientsThatAcceptIt(t *testing.T) {
+	server := httptest.NewServer(testHandler(t, false))
+	defer server.Close()
+	get := func(path, encoding string) (*http.Response, []byte) {
+		t.Helper()
+		req, _ := http.NewRequest(http.MethodGet, server.URL+path, nil)
+		req.Header.Set("Authorization", "Bearer "+adminToken)
+		// Setting Accept-Encoding stops the client from decompressing for us.
+		req.Header.Set("Accept-Encoding", encoding)
+		response, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer response.Body.Close()
+		body, err := io.ReadAll(response.Body)
+		if err != nil {
+			t.Fatalf("%s: body does not match its headers: %v", path, err)
+		}
+		return response, body
+	}
+	plainResponse, plain := get("/api/v1/openapi.json", "identity")
+	if plainResponse.Header.Get("Content-Encoding") != "" || !json.Valid(plain) {
+		t.Fatalf("identity: %v %q", plainResponse.Header, plain[:min(len(plain), 40)])
+	}
+	zipped, body := get("/api/v1/openapi.json", "br, gzip")
+	if zipped.Header.Get("Content-Encoding") != "gzip" || !strings.Contains(zipped.Header.Get("Vary"), "Accept-Encoding") || len(body) >= len(plain)/3 {
+		t.Fatalf("gzip: %v, %d bytes of %d", zipped.Header, len(body), len(plain))
+	}
+	reader, err := gzip.NewReader(bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if unzipped, err := io.ReadAll(reader); err != nil || !bytes.Equal(unzipped, plain) {
+		t.Fatalf("gzip body differs from the plain body: %v", err)
+	}
+	// The file server sets Content-Length for the uncompressed file; it must not reach the client.
+	if file, body := get("/static/README.md", "gzip"); file.Header.Get("Content-Encoding") != "gzip" || len(body) == 0 {
+		t.Fatalf("static file: %v", file.Header)
+	}
+	// Errors are JSON too.
+	if missing, body := get("/api/v1/traces/999", "gzip"); missing.StatusCode != 404 || missing.Header.Get("Content-Encoding") != "gzip" || len(body) == 0 {
+		t.Fatalf("404: %d %v", missing.StatusCode, missing.Header)
+	}
+	if refused, _ := get("/api/v1/openapi.json", "gzip;q=0, identity"); refused.Header.Get("Content-Encoding") != "" {
+		t.Fatalf("gzip;q=0 still compressed: %v", refused.Header)
 	}
 }

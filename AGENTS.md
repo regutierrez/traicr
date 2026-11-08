@@ -20,7 +20,7 @@ Load traces into it with `traicr collect --output /tmp/zips` and `curl -H "Autho
 
 - `GET /api/v1/status`: imports per machine, trace and event counts, storage.
 - `GET /api/v1/logs?level=warn`: the newest 1,000 server log records, kept in memory until restart. Useful records:
-  - `request`: every HTTP request with `route`, `path`, `status`, `duration_ms`, `bytes`, and `trace_id`. It is a warning when it took 1 second or more, or failed with a 5xx.
+  - `request`: every HTTP request with `route`, `path`, `status`, `duration_ms`, `bytes` (as sent, so gzipped GET responses count their compressed size), and `trace_id`. It is a warning when it took 1 second or more, or failed with a 5xx.
   - `transcript load`: what a browser measured loading a trace: `fetch_ms`, `adapter_ms`, `pages`, `events`. It is a warning at 1 second or more.
   - `transcript anomaly`: one record per anomaly kind the transcript adapter found, with `kind`, `count`, `message`, and sample `event_ids`. `off_path` is info, because sessions branch normally.
 - `GET /api/v1/openapi.json` describes every operation.
