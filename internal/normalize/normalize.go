@@ -10,7 +10,8 @@ import (
 func Version(harness string) int {
 	switch harness {
 	case "amp":
-		return 6
+		// 7: revisions also keep images that other revisions of the trace archived.
+		return 7
 	case "pi":
 		return 4
 	case "cursor":

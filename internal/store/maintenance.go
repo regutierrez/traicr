@@ -155,6 +155,11 @@ func (s *Store) Renormalize(ctx context.Context, version func(string) int, norma
 				}
 				item.descriptor.Files = append(item.descriptor.Files, domain.File{Path: path, Size: info.Size()})
 			}
+			images, imagesErr := s.addEarlierImages(ctx, &item.descriptor)
+			if imagesErr != nil {
+				s.unlockWriter()
+				return imagesErr
+			}
 			normalization, normalizeErr := normalizeResult(ctx, item.descriptor, objectFS{files: files}, normalize)
 			if normalization.Version == 0 {
 				normalization.Version = version(item.descriptor.Harness)
@@ -168,7 +173,7 @@ func (s *Store) Renormalize(ctx context.Context, version func(string) int, norma
 					s.unlockWriter()
 					return labelErr
 				}
-				_, err = s.replaceRevisionEvents(ctx, item.traceID, item.revisionID, labels, normalization)
+				_, err = s.replaceRevisionEvents(ctx, item.traceID, item.revisionID, labels, normalization, usedImages(images, normalization.Events))
 			}
 			s.unlockWriter()
 			if err != nil {
@@ -225,12 +230,19 @@ func (s *Store) recordRun(ctx context.Context, revisionID int64, version int, st
 	return err
 }
 
-func (s *Store) replaceRevisionEvents(ctx context.Context, traceID, revisionID int64, labels string, normalization domain.Normalization) ([]domain.Warning, error) {
+// replaceRevisionEvents also adds images, files from other revisions that the new
+// events show as archived, to the revision.
+func (s *Store) replaceRevisionEvents(ctx context.Context, traceID, revisionID int64, labels string, normalization domain.Normalization, images []storedObject) ([]domain.Warning, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
 	defer tx.Rollback()
+	for _, image := range images {
+		if _, err = tx.ExecContext(ctx, "INSERT OR IGNORE INTO revision_objects(revision_id,relative_path,object_digest) VALUES(?,?,?)", revisionID, image.path, image.digest); err != nil {
+			return nil, err
+		}
+	}
 	for _, event := range normalization.Events {
 		for _, key := range event.LegacyKeys {
 			if _, err = tx.ExecContext(ctx, `INSERT OR REPLACE INTO event_aliases(trace_id,legacy_key,legacy_id,event_key) SELECT trace_id,event_key,id,? FROM events WHERE trace_id=? AND event_key=?`, event.Key, traceID, key); err != nil {

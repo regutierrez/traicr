@@ -110,6 +110,64 @@ func TestAmpAgentFixturePairsToolsAndPreservesThreadOrigin(t *testing.T) {
 	}
 }
 
+// Amp stops serving old images, so a later collection can fail to download an image
+// an earlier import saved. The new revision keeps that image and reports only the
+// images no import has.
+func TestAmpImagesFromEarlierImportsSurviveFailedDownloads(t *testing.T) {
+	handler := testHandler(t, false)
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "source/attachments"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	const imagePath = "source/attachments/582a1f5b341842222df56057a4c2851406c193ab079e6c4f1237d3518fc46e9c"
+	png, _ := base64.StdEncoding.DecodeString("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9ZQmcAAAAASUVORK5CYII=")
+	upload := func(export string, warnings []domain.Warning) domain.TraceOutcome {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(dir, "source/export.json"), []byte(export), 0600); err != nil {
+			t.Fatal(err)
+		}
+		archives, err := archive.Write(context.Background(), t.TempDir(), domain.Manifest{SourceMachine: domain.Machine{ID: "test", Hostname: "test"}}, []archive.Input{{Directory: dir, Descriptor: domain.Descriptor{Harness: "amp", Adapter: "amp-thread-export", NativeTraceID: "T-images", Warnings: warnings}}}, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		data, err := os.ReadFile(archives[0])
+		if err != nil {
+			t.Fatal(err)
+		}
+		response := request(handler, "POST", "/api/v1/imports", bytes.NewReader(data), adminToken)
+		lines := bytes.Split(bytes.TrimSpace(response.Body.Bytes()), []byte("\n"))
+		var last domain.Progress
+		if err := json.Unmarshal(lines[len(lines)-1], &last); err != nil || response.Code != 200 || last.Report == nil || len(last.Report.Traces) != 1 {
+			t.Fatalf("import: %d %s", response.Code, response.Body)
+		}
+		return last.Report.Traces[0]
+	}
+	const images = `{"type":"image","url":"https://ampcode.com/user-content/attachments/fixture.png"},{"type":"image","url":"https://ampcode.com/user-content/attachments/missing.png"}`
+	if err := os.WriteFile(filepath.Join(dir, imagePath), png, 0600); err != nil {
+		t.Fatal(err)
+	}
+	upload(`{"messages":[{"id":"image","role":"user","content":[`+images+`]}]}`, nil)
+	if err := os.Remove(filepath.Join(dir, imagePath)); err != nil {
+		t.Fatal(err)
+	}
+	failed := []domain.Warning{
+		{Code: "attachment_download_failed", Message: "/messages/0/content/0: Amp image was not archived: exit status 1: Error: Attachment request failed: expected a download redirect, got HTTP 404."},
+		{Code: "attachment_download_failed", Message: "/messages/0/content/1: Amp image was not archived: exit status 1: Error: Attachment request failed: expected a download redirect, got HTTP 404."},
+	}
+	outcome := upload(`{"messages":[{"id":"image","role":"user","content":[`+images+`]},{"id":"later","role":"assistant","content":[{"type":"text","text":"later turn"}]}]}`, failed)
+	if len(outcome.Warnings) != 1 || outcome.Warnings[0].Code != "amp_image_unavailable" || !strings.Contains(outcome.Warnings[0].Message, "/messages/0/content/1") {
+		t.Fatalf("want one warning for the image no import saved: %+v", outcome.Warnings)
+	}
+	cookie, _ := login(t, handler, false)
+	r := httptest.NewRequest("GET", "/revisions/2/attachment?pointer=/messages/0/content/0", nil)
+	r.AddCookie(cookie)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, r)
+	if w.Code != 200 || !bytes.Equal(w.Body.Bytes(), png) {
+		t.Fatalf("image from the earlier import not served by the new revision: %d %s", w.Code, w.Body)
+	}
+}
+
 func TestAmpDownloadedImagesSurviveArchiveImport(t *testing.T) {
 	handler := testHandler(t, false)
 	dir := t.TempDir()
@@ -148,7 +206,7 @@ func TestAmpDownloadedImagesSurviveArchiveImport(t *testing.T) {
 	if !strings.Contains(page.Body.String(), `"archived_path":"`+imagePath+`"`) || !strings.Contains(page.Body.String(), `"path":"screenshot.png"`) {
 		t.Fatalf("archived image missing from transcript: %s", page.Body)
 	}
-	if response := request(handler, "GET", "/api/v1/traces/1", nil, adminToken); response.Code != 200 || !strings.Contains(response.Body.String(), "amp_image_unavailable") || !strings.Contains(response.Body.String(), "Recollect and upload") {
+	if response := request(handler, "GET", "/api/v1/traces/1", nil, adminToken); response.Code != 200 || !strings.Contains(response.Body.String(), "amp_image_unavailable") || !strings.Contains(response.Body.String(), "no import of this trace saved it") {
 		t.Fatalf("missing image diagnostic not shown: %d %s", response.Code, response.Body)
 	}
 	for _, path := range []string{"/revisions/1/attachment?pointer=/messages/0/content/0", "/revisions/1/file?path=" + imagePath + "&download=1"} {

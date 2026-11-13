@@ -162,10 +162,15 @@ machine's existing Amp login. User image blocks and tool-result images, includin
 export JSON stays byte-for-byte unchanged. Repeated URLs with different media
 fragments share one download within a trace. Only HTTPS attachments under
 `ampcode.com/user-content/attachments/` are eligible; arbitrary external URLs
-and local paths are never fetched. Failed downloads produce collection and
-revision warnings, preserve the transcript, and are retried on later collection.
-Reprocessing derives missing-image warnings from the export and retained files,
-so revision warnings on Overview also explain images missing from older archives.
+and local paths are never fetched. Failed downloads produce collection warnings,
+preserve the transcript, and are retried on later collection. Amp stops serving
+old images, so a later download can fail for an image an earlier import saved.
+Each image path names its URL, so a revision also keeps images that other
+revisions of the same trace archived at the paths its export refers to.
+Reprocessing derives missing-image warnings from the export, the retained files,
+and those earlier images, so revision warnings on Overview and import reports list
+each image no import saved, once. Import reports leave out the collector's
+download failures, which `traicr collect` prints.
 Older Amp CLIs without `files get` need an update to collect hosted images.
 
 Downloaded images have a separate 512 MiB total budget per trace and the existing
@@ -176,7 +181,8 @@ hosted images to existing traces; reindexing alone cannot retrieve missing bytes
 Retained images affect the revision digest, so adding them creates a new revision
 even if the native export has not changed. When native update and event timestamps
 tie, merged history prefers the observation with more archived images, before
-the existing digest tie-break. Selected revisions still show only their own files.
+the existing digest tie-break. Selected revisions show only their own files,
+including images kept from other revisions.
 
 Archived PNG, JPEG, GIF, and WebP images up to 10 MiB can be previewed through
 authenticated endpoints without Amp access. Larger downloaded originals remain

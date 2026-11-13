@@ -167,7 +167,7 @@ func normalizeAmp(ctx context.Context, sourceFS fs.FS, files []domain.File) (dom
 					attachment.ArchivedPath, attachment.Size = path, size
 				} else if path != "" && !attachment.Inline && !missingImages[path] {
 					missingImages[path] = true
-					warnings = append(warnings, warning("amp_image_unavailable", "Hosted image at "+attachment.SourcePointer+" is not archived. Recollect and upload with an authenticated Amp CLI to retry."))
+					warnings = append(warnings, warning("amp_image_unavailable", "Hosted image at "+attachment.SourcePointer+" is not archived, and no import of this trace saved it. Amp may no longer serve it; traicr collect prints why the download failed."))
 				}
 			}
 			blockID := stringValue(block["id"])

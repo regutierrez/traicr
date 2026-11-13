@@ -12,6 +12,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -173,7 +174,14 @@ func (s *Store) beginImport(ctx context.Context, report *domain.ImportReport) er
 }
 
 func (s *Store) importTrace(ctx context.Context, manifest domain.Manifest, descriptor domain.Descriptor, sources fs.FS, normalize func(context.Context, domain.Descriptor, fs.FS) (domain.Normalization, error)) domain.TraceOutcome {
-	outcome := domain.TraceOutcome{Harness: descriptor.Harness, NativeTraceID: descriptor.NativeTraceID, RevisionDigest: descriptor.RevisionDigest, Warnings: append([]domain.Warning(nil), descriptor.Warnings...)}
+	outcome := domain.TraceOutcome{Harness: descriptor.Harness, NativeTraceID: descriptor.NativeTraceID, RevisionDigest: descriptor.RevisionDigest}
+	for _, warning := range descriptor.Warnings {
+		// The normalizer reports each image that no import saved. A failed download
+		// either repeats that warning or names an image an earlier import already has.
+		if warning.Code != "attachment_download_failed" {
+			outcome.Warnings = append(outcome.Warnings, warning)
+		}
+	}
 	traceFS, err := fs.Sub(sources, descriptor.Path)
 	if err != nil {
 		outcome.Status, outcome.Error = "failed", err.Error()
@@ -206,6 +214,11 @@ func (s *Store) importTrace(ctx context.Context, manifest domain.Manifest, descr
 			}
 			return outcome
 		}
+		images, imagesErr := s.addEarlierImages(ctx, &descriptor)
+		if imagesErr != nil {
+			outcome.Status, outcome.Error = "failed", imagesErr.Error()
+			return outcome
+		}
 		normalization, normalizeErr := normalizeResult(ctx, descriptor, traceFS, normalize)
 		outcome.Warnings = append(outcome.Warnings, normalization.Warnings...)
 		if normalizeErr != nil {
@@ -224,7 +237,7 @@ func (s *Store) importTrace(ctx context.Context, manifest domain.Manifest, descr
 			outcome.Status, outcome.Error = "failed", titlesErr.Error()
 			return outcome
 		}
-		conflicts, replaceErr := s.replaceRevisionEvents(ctx, existingTraceID, existingID, searchLabels(descriptor, override, generated), normalization)
+		conflicts, replaceErr := s.replaceRevisionEvents(ctx, existingTraceID, existingID, searchLabels(descriptor, override, generated), normalization, usedImages(images, normalization.Events))
 		outcome.Warnings = append(outcome.Warnings, conflicts...)
 		if replaceErr != nil {
 			outcome.Status, outcome.Error = "failed", replaceErr.Error()
@@ -241,7 +254,13 @@ func (s *Store) importTrace(ctx context.Context, manifest domain.Manifest, descr
 		outcome.Status, outcome.Error = "failed", err.Error()
 		return outcome
 	}
+	images, err := s.addEarlierImages(ctx, &descriptor)
+	if err != nil {
+		outcome.Status, outcome.Error = "failed", err.Error()
+		return outcome
+	}
 	normalization, normalizeErr := normalizeResult(ctx, descriptor, traceFS, normalize)
+	objects = append(objects, usedImages(images, normalization.Events)...)
 	traceID, isNew, conflicts, err := s.commitRevision(ctx, manifest, descriptor, normalization, objects)
 	outcome.TraceID = traceID
 	outcome.Warnings = append(outcome.Warnings, normalization.Warnings...)
@@ -386,6 +405,54 @@ type storedObject struct {
 	path   string
 	digest string
 	size   int64
+}
+
+// addEarlierImages adds to descriptor.Files the hosted images that any revision of
+// the trace archived and the descriptor lacks, and returns them. An image's path
+// names its URL, and Amp stops serving old images, so a later collection can fail to
+// download an image an earlier import saved.
+func (s *Store) addEarlierImages(ctx context.Context, descriptor *domain.Descriptor) ([]storedObject, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT ro.relative_path,ro.object_digest,so.size FROM traces t JOIN trace_revisions r ON r.trace_id=t.id JOIN revision_objects ro ON ro.revision_id=r.id JOIN source_objects so ON so.digest=ro.object_digest WHERE t.harness=? AND t.native_trace_id=? AND ro.relative_path LIKE 'source/attachments/%' ORDER BY r.id DESC`, descriptor.Harness, descriptor.NativeTraceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	present := make(map[string]bool, len(descriptor.Files))
+	for _, file := range descriptor.Files {
+		present[file.Path] = true
+	}
+	var images []storedObject
+	for rows.Next() {
+		var image storedObject
+		if err = rows.Scan(&image.path, &image.digest, &image.size); err != nil {
+			return nil, err
+		}
+		if !present[image.path] {
+			present[image.path] = true
+			images = append(images, image)
+		}
+	}
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+	files := slices.Clip(descriptor.Files)
+	for _, image := range images {
+		files = append(files, domain.File{Path: image.path, Size: image.size, SHA256: "sha256:" + image.digest})
+	}
+	descriptor.Files = files
+	return images, nil
+}
+
+// usedImages returns the images that the events show as archived, so a revision
+// keeps only the earlier images its own export refers to.
+func usedImages(images []storedObject, events []domain.Event) []storedObject {
+	archived := map[string]bool{}
+	for _, event := range events {
+		for _, attachment := range event.Attachments {
+			archived[attachment.ArchivedPath] = true
+		}
+	}
+	return slices.DeleteFunc(images, func(image storedObject) bool { return !archived[image.path] })
 }
 
 func (s *Store) storeObjects(ctx context.Context, descriptor domain.Descriptor, source fs.FS) ([]storedObject, error) {
