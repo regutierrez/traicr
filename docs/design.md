@@ -298,7 +298,7 @@ A revision is identified by the digest of its Source Record files. Uploading the
 
 A Harness Normalizer supplies a stable Event key from the native Event ID and Event kind. When no native ID exists, it uses a deterministic fingerprint from stable native fields. Import order is never part of an identity.
 
-Events observed across revisions merge into one logical trace. Identical observations collapse. Conflicting observations remain associated with the same logical Event and produce a warning rather than losing either Source Record. The viewer chooses a deterministic preferred observation using native update time, then native Event time, then content digest; search results deduplicate by logical Event.
+Events observed across revisions merge into one logical trace. Identical observations collapse. Conflicting observations remain associated with the same logical Event and produce a warning rather than losing either Source Record. Only differences beyond the Event timestamp count as conflicts, because later exports can move it, and session_info Events never conflict, because they snapshot the session's current state. The viewer chooses a deterministic preferred observation using native update time, then native Event time, then content digest; search results deduplicate by logical Event.
 
 Branches retain native parent relationships. A session spawned by another session is a Child Trace linked through `parent_native_trace_id` rather than flattened into the parent timeline.
 

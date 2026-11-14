@@ -1,6 +1,7 @@
 package store
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"database/sql"
@@ -665,6 +666,12 @@ func (s *Store) insertEvents(ctx context.Context, tx *sql.Tx, traceID, revisionI
 			return nil, err
 		}
 		if differs {
+			differs, err = differsInContent(ctx, tx, eventID, revisionID, digest, event)
+			if err != nil {
+				return nil, err
+			}
+		}
+		if differs {
 			conflicts = append(conflicts, domain.Warning{Code: "conflicting_observation", Message: "conflicting observations retained for event " + event.Key})
 		}
 		_, err = tx.ExecContext(ctx, `INSERT OR IGNORE INTO event_observations(event_id,digest,parent_key,branch,kind,role,model,provider,tool,call_id,event_time,text,event_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`, eventID, digest, event.ParentKey, event.Branch, event.Kind, event.Role, event.Model, event.Provider, event.Tool, event.CallID, canonicalTime(event.Timestamp), event.Text, encoded)
@@ -700,6 +707,46 @@ func (s *Store) insertEvents(ctx context.Context, tx *sql.Tx, traceID, revisionI
 		}
 	}
 	return conflicts, nil
+}
+
+// differsInContent reports whether an observation of the same normalizer version
+// differs from event in more than fields that change between exports of an
+// unchanged event. A session_info event is a snapshot of the session's current
+// state, such as its title and update time, so a later export always differs. Amp
+// exports gained message createdAt times, which move event timestamps.
+func differsInContent(ctx context.Context, tx *sql.Tx, eventID, revisionID int64, digest string, event domain.Event) (bool, error) {
+	if event.Kind == "session_info" {
+		return false, nil
+	}
+	event.Timestamp = ""
+	want, err := json.Marshal(event)
+	if err != nil {
+		return false, err
+	}
+	rows, err := tx.QueryContext(ctx, `SELECT o.event_json FROM event_observations o JOIN observation_revisions x ON x.observation_id=o.id JOIN trace_revisions r ON r.id=x.revision_id WHERE o.event_id=? AND o.digest<>? AND r.normalizer_version=(SELECT normalizer_version FROM trace_revisions WHERE id=?)`, eventID, digest, revisionID)
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var encoded []byte
+		var other domain.Event
+		if err = rows.Scan(&encoded); err != nil {
+			return false, err
+		}
+		if err = json.Unmarshal(encoded, &other); err != nil {
+			return false, err
+		}
+		other.Timestamp = ""
+		got, err := json.Marshal(other)
+		if err != nil {
+			return false, err
+		}
+		if !bytes.Equal(got, want) {
+			return true, nil
+		}
+	}
+	return false, rows.Err()
 }
 
 func searchableText(event domain.Event) string {

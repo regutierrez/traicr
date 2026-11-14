@@ -10,7 +10,8 @@ import (
 func Version(harness string) int {
 	switch harness {
 	case "amp":
-		// 7: revisions also keep images that other revisions of the trace archived.
+		// 7: revisions also keep images that other revisions of the trace archived,
+		// and the re-parse drops conflicts that were only timestamp or session changes.
 		return 7
 	case "pi":
 		return 4

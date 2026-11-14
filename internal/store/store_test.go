@@ -202,6 +202,33 @@ func TestImportBackfillsTitleForPartiallyParsedRevision(t *testing.T) {
 	}
 }
 
+// A later Amp export moves message timestamps and always changes session state.
+// Neither changes what an event says, so neither is a conflict.
+func TestImportIgnoresTimestampAndSessionChangesInConflicts(t *testing.T) {
+	ctx := context.Background()
+	s := openStore(t)
+	events := func(timestamp, title, text string) []domain.Event {
+		return []domain.Event{
+			{Key: "session_info:T-1", Kind: "session_info", Text: title, Metadata: []byte(`{"session":{"title":"` + title + `"}}`)},
+			{Key: "message-1", Kind: "message", Role: "assistant", Timestamp: timestamp, Text: text},
+		}
+	}
+	first := traceInput("machine-a", "revision-1", "2026-08-22T12:00:00Z", "", events("2026-08-22T11:00:00.936Z", "Old title", "hello"))
+	if report, err := s.Import(ctx, first.manifest, first.files, normalizer(first.events, "normalized", 1), nil); err != nil || report.Imported != 1 {
+		t.Fatalf("first import: %+v %v", report, err)
+	}
+	moved := traceInput("machine-a", "revision-2", "2026-08-23T12:00:00Z", "", events("2026-08-22T11:00:07.262Z", "Renamed", "hello"))
+	report, err := s.Import(ctx, moved.manifest, moved.files, normalizer(moved.events, "normalized", 1), nil)
+	if err != nil || report.Updated != 1 || len(report.Traces[0].Warnings) != 0 {
+		t.Fatalf("timestamp or session change reported as a conflict: %+v %v", report, err)
+	}
+	edited := traceInput("machine-a", "revision-3", "2026-08-24T12:00:00Z", "", events("2026-08-22T11:00:07.262Z", "Renamed", "goodbye"))
+	report, err = s.Import(ctx, edited.manifest, edited.files, normalizer(edited.events, "normalized", 1), nil)
+	if err != nil || len(report.Traces[0].Warnings) != 1 || report.Traces[0].Warnings[0].Message != "conflicting observations retained for event message-1" {
+		t.Fatalf("changed text not reported as a conflict: %+v %v", report, err)
+	}
+}
+
 func TestImportMergesRevisionsMachinesAndConflicts(t *testing.T) {
 	ctx := context.Background()
 	s := openStore(t)
