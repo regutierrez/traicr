@@ -1,6 +1,7 @@
 package store
 
 import (
+	"cmp"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -8,6 +9,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"time"
 
 	"github.com/regutierrez/traicr/internal/domain"
@@ -104,36 +106,59 @@ func (s *Store) Renormalize(ctx context.Context, version func(string) int, norma
 	type candidate struct {
 		revisionID, traceID int64
 		descriptor          domain.Descriptor
-		currentVersion      int
 	}
-	var maximum int64
-	if err := s.db.QueryRowContext(ctx, "SELECT COALESCE(MAX(id),0) FROM trace_revisions").Scan(&maximum); err != nil {
+	// Traces whose newest revision is newest go first, so recently used traces are
+	// rebuilt first. Inside a trace, revisions still go oldest first: a revision's
+	// conflicts compare only with siblings already at the new version, so the
+	// order inside a trace decides which revision reports a conflict. Each trace's
+	// list is read once, so a revision the normalizer fails on, which keeps its old
+	// version, is tried once per pass.
+	type stale struct {
+		traceID int64
+		harness string
+	}
+	var traces []stale
+	rows, err := s.db.QueryContext(ctx, `SELECT t.id,t.harness,r.normalizer_version,MAX(r.id) FROM traces t JOIN trace_revisions r ON r.trace_id=t.id GROUP BY t.id,r.normalizer_version`)
+	if err != nil {
 		return err
 	}
-	for last := int64(0); last < maximum; {
-		rows, err := s.db.QueryContext(ctx, `SELECT r.id,r.trace_id,r.digest,r.native_updated_at,r.adapter,r.normalizer_version,t.harness,t.native_trace_id,t.parent_native_trace_id,t.title,t.working_directory,COALESCE(repo.remote,''),COALESCE(repo.root,'') FROM trace_revisions r JOIN traces t ON t.id=r.trace_id LEFT JOIN repositories repo ON repo.id=t.repository_id WHERE r.id>? AND r.id<=? ORDER BY r.id LIMIT 100`, last, maximum)
+	newest := map[int64]int64{}
+	for rows.Next() {
+		var item stale
+		var current int
+		var newestRevision int64
+		if err = rows.Scan(&item.traceID, &item.harness, &current, &newestRevision); err != nil {
+			rows.Close()
+			return err
+		}
+		if current >= version(item.harness) {
+			continue
+		}
+		if _, seen := newest[item.traceID]; !seen {
+			traces = append(traces, item)
+		}
+		newest[item.traceID] = max(newest[item.traceID], newestRevision)
+	}
+	if err = errors.Join(rows.Err(), rows.Close()); err != nil {
+		return err
+	}
+	slices.SortFunc(traces, func(a, b stale) int { return cmp.Compare(newest[b.traceID], newest[a.traceID]) })
+	for _, trace := range traces {
+		rows, err := s.db.QueryContext(ctx, `SELECT r.id,r.trace_id,r.digest,r.native_updated_at,r.adapter,t.harness,t.native_trace_id,t.parent_native_trace_id,t.title,t.working_directory,COALESCE(repo.remote,''),COALESCE(repo.root,'') FROM trace_revisions r JOIN traces t ON t.id=r.trace_id LEFT JOIN repositories repo ON repo.id=t.repository_id WHERE r.trace_id=? AND r.normalizer_version<? ORDER BY r.id`, trace.traceID, version(trace.harness))
 		if err != nil {
 			return err
 		}
 		var candidates []candidate
-		scanned := false
 		for rows.Next() {
-			scanned = true
 			var item candidate
-			if err = rows.Scan(&item.revisionID, &item.traceID, &item.descriptor.RevisionDigest, &item.descriptor.NativeUpdatedAt, &item.descriptor.Adapter, &item.currentVersion, &item.descriptor.Harness, &item.descriptor.NativeTraceID, &item.descriptor.ParentNativeTraceID, &item.descriptor.Title, &item.descriptor.WorkingDirectory, &item.descriptor.Repository.Remote, &item.descriptor.Repository.Root); err != nil {
+			if err = rows.Scan(&item.revisionID, &item.traceID, &item.descriptor.RevisionDigest, &item.descriptor.NativeUpdatedAt, &item.descriptor.Adapter, &item.descriptor.Harness, &item.descriptor.NativeTraceID, &item.descriptor.ParentNativeTraceID, &item.descriptor.Title, &item.descriptor.WorkingDirectory, &item.descriptor.Repository.Remote, &item.descriptor.Repository.Root); err != nil {
 				rows.Close()
 				return err
 			}
-			last = item.revisionID
-			if item.currentVersion < version(item.descriptor.Harness) {
-				candidates = append(candidates, item)
-			}
+			candidates = append(candidates, item)
 		}
 		if err = errors.Join(rows.Err(), rows.Close()); err != nil {
 			return err
-		}
-		if !scanned {
-			last = maximum
 		}
 		for _, item := range candidates {
 			if err = ctx.Err(); err != nil {
@@ -230,6 +255,83 @@ func (s *Store) recordRun(ctx context.Context, revisionID int64, version int, st
 	return err
 }
 
+// keepUnchangedRevision reports whether the revision already stores exactly what
+// normalization produces: the same event keys, observation digests, sources in
+// order, and search text, with one observation per event. A normalizer version
+// bump often changes nothing for most revisions, and rewriting their rows and
+// search index was nearly all the cost of a re-parse. When nothing changed it
+// raises the revision's version and status and recomputes the conflicts, which
+// depend on which sibling revisions are already at the new version.
+func keepUnchangedRevision(ctx context.Context, tx *sql.Tx, traceID, revisionID int64, labels string, normalization domain.Normalization) (bool, []domain.Warning, error) {
+	type stored struct {
+		eventID    int64
+		digest     string
+		searchable string
+		sources    []domain.SourceRef
+	}
+	rows, err := tx.QueryContext(ctx, `SELECT e.event_key,e.id,o.digest,x.searchable_text,COALESCE((SELECT json_group_array(json_array(s.path,s.line)) FROM (SELECT path,line FROM observation_sources WHERE observation_id=o.id AND revision_id=x.revision_id ORDER BY ordinal) s),'[]') FROM observation_revisions x JOIN event_observations o ON o.id=x.observation_id JOIN events e ON e.id=o.event_id WHERE x.revision_id=? AND e.trace_id=?`, revisionID, traceID)
+	if err != nil {
+		return false, nil, err
+	}
+	have := map[string]stored{}
+	for rows.Next() {
+		var key, sources string
+		var item stored
+		if err = rows.Scan(&key, &item.eventID, &item.digest, &item.searchable, &sources); err != nil {
+			rows.Close()
+			return false, nil, err
+		}
+		var pairs [][2]any
+		if err = json.Unmarshal([]byte(sources), &pairs); err != nil {
+			rows.Close()
+			return false, nil, err
+		}
+		for _, pair := range pairs {
+			path, _ := pair[0].(string)
+			line, _ := pair[1].(float64)
+			item.sources = append(item.sources, domain.SourceRef{Path: path, Line: int(line)})
+		}
+		if _, repeated := have[key]; repeated {
+			rows.Close()
+			return false, nil, nil
+		}
+		have[key] = item
+	}
+	if err = errors.Join(rows.Err(), rows.Close()); err != nil {
+		return false, nil, err
+	}
+	if len(have) != len(normalization.Events) {
+		return false, nil, nil
+	}
+	type kept struct {
+		eventID int64
+		digest  string
+		event   domain.Event
+	}
+	keep := make([]kept, 0, len(normalization.Events))
+	for _, event := range normalization.Events {
+		observation, err := prepareObservation(event, labels)
+		if err != nil {
+			return false, nil, err
+		}
+		item, ok := have[event.Key]
+		if !ok || item.digest != observation.digest || item.searchable != observation.searchable || !slices.Equal(item.sources, observation.sources) {
+			return false, nil, nil
+		}
+		keep = append(keep, kept{item.eventID, observation.digest, observation.event})
+	}
+	if _, err = tx.ExecContext(ctx, "UPDATE trace_revisions SET status=?,normalizer_version=? WHERE id=?", normalization.Status, normalization.Version, revisionID); err != nil {
+		return false, nil, err
+	}
+	var conflicts []domain.Warning
+	for _, item := range keep {
+		if conflicts, err = appendConflict(ctx, tx, conflicts, item.eventID, revisionID, item.digest, item.event); err != nil {
+			return false, nil, err
+		}
+	}
+	return true, conflicts, nil
+}
+
 // replaceRevisionEvents also adds images, files from other revisions that the new
 // events show as archived, to the revision.
 func (s *Store) replaceRevisionEvents(ctx context.Context, traceID, revisionID int64, labels string, normalization domain.Normalization, images []storedObject) ([]domain.Warning, error) {
@@ -250,11 +352,27 @@ func (s *Store) replaceRevisionEvents(ctx context.Context, traceID, revisionID i
 			}
 		}
 	}
+	if _, err = tx.ExecContext(ctx, "UPDATE traces SET title=? WHERE id=? AND title='' AND ?<>''", normalization.Title, traceID, normalization.Title); err != nil {
+		return nil, err
+	}
+	unchanged, conflicts, err := keepUnchangedRevision(ctx, tx, traceID, revisionID, labels, normalization)
+	if err != nil {
+		return nil, err
+	}
+	if unchanged {
+		diagnostics, _ := json.Marshal(append(normalization.Warnings, conflicts...))
+		if _, err = tx.ExecContext(ctx, "INSERT INTO normalizer_runs(revision_id,version,status,diagnostics_json,created_at) VALUES(?,?,?,?,?)", revisionID, normalization.Version, normalization.Status, diagnostics, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
+			return nil, err
+		}
+		return conflicts, tx.Commit()
+	}
 	// New events may give a trace that produced no title something to name.
 	if _, err = tx.ExecContext(ctx, "UPDATE traces SET generated_title_revision_id=0 WHERE id=? AND generated_title=''", traceID); err != nil {
 		return nil, err
 	}
-	if _, err = tx.ExecContext(ctx, "UPDATE traces SET title=? WHERE id=? AND title='' AND ?<>''", normalization.Title, traceID, normalization.Title); err != nil {
+	// Chunks cascade from observation_revisions, but search_chunks has no index on
+	// that key, so the cascade scanned the revision's chunks once per deleted row.
+	if _, err = tx.ExecContext(ctx, "DELETE FROM search_chunks WHERE revision_id=?", revisionID); err != nil {
 		return nil, err
 	}
 	if _, err = tx.ExecContext(ctx, "DELETE FROM observation_revisions WHERE revision_id=?", revisionID); err != nil {
@@ -266,7 +384,7 @@ func (s *Store) replaceRevisionEvents(ctx context.Context, traceID, revisionID i
 	if _, err = tx.ExecContext(ctx, "UPDATE trace_revisions SET status=?,normalizer_version=? WHERE id=?", normalization.Status, normalization.Version, revisionID); err != nil {
 		return nil, err
 	}
-	conflicts, err := s.insertEvents(ctx, tx, traceID, revisionID, labels, normalization.Events)
+	conflicts, err = s.insertEvents(ctx, tx, traceID, revisionID, labels, normalization.Events)
 	if err != nil {
 		return nil, err
 	}

@@ -638,6 +638,7 @@ func (s *Store) insertEvents(ctx context.Context, tx *sql.Tx, traceID, revisionI
 	// ids, so they hash to the same key). They map to one observation whose source
 	// references accumulate under consecutive ordinals instead of failing the import.
 	ordinals := map[int64]int{}
+	var chunks []searchChunk
 	for _, event := range events {
 		if event.Key == "" {
 			return nil, errors.New("normalized event key is required")
@@ -649,32 +650,15 @@ func (s *Store) insertEvents(ctx context.Context, tx *sql.Tx, traceID, revisionI
 		if err := tx.QueryRowContext(ctx, "SELECT id FROM events WHERE trace_id=? AND event_key=?", traceID, event.Key).Scan(&eventID); err != nil {
 			return nil, err
 		}
-		sourceRefs := append([]domain.SourceRef(nil), event.Sources...)
-		searchable := searchableText(event) + "\n" + labels
-		event.ID = 0
-		event.TraceID = 0
-		event.Sources = nil
-		digest, encoded, err := observationDigest(event)
+		observation, err := prepareObservation(event, labels)
 		if err != nil {
 			return nil, err
 		}
-		// Compare only with revisions parsed by the same normalizer version. While a
-		// server re-parses a trace after an upgrade, its other revisions still hold
-		// observations in the old shape; they report their own conflicts when re-parsed.
-		var differs bool
-		if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM event_observations o JOIN observation_revisions x ON x.observation_id=o.id JOIN trace_revisions r ON r.id=x.revision_id WHERE o.event_id=? AND o.digest<>? AND r.normalizer_version=(SELECT normalizer_version FROM trace_revisions WHERE id=?))`, eventID, digest, revisionID).Scan(&differs); err != nil {
+		sourceRefs, searchable, digest, event := observation.sources, observation.searchable, observation.digest, observation.event
+		if conflicts, err = appendConflict(ctx, tx, conflicts, eventID, revisionID, digest, event); err != nil {
 			return nil, err
 		}
-		if differs {
-			differs, err = differsInContent(ctx, tx, eventID, revisionID, digest, event)
-			if err != nil {
-				return nil, err
-			}
-		}
-		if differs {
-			conflicts = append(conflicts, domain.Warning{Code: "conflicting_observation", Message: "conflicting observations retained for event " + event.Key})
-		}
-		_, err = tx.ExecContext(ctx, `INSERT OR IGNORE INTO event_observations(event_id,digest,parent_key,branch,kind,role,model,provider,tool,call_id,event_time,text,event_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`, eventID, digest, event.ParentKey, event.Branch, event.Kind, event.Role, event.Model, event.Provider, event.Tool, event.CallID, canonicalTime(event.Timestamp), event.Text, encoded)
+		_, err = tx.ExecContext(ctx, `INSERT OR IGNORE INTO event_observations(event_id,digest,parent_key,branch,kind,role,model,provider,tool,call_id,event_time,text,event_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`, eventID, digest, event.ParentKey, event.Branch, event.Kind, event.Role, event.Model, event.Provider, event.Tool, event.CallID, canonicalTime(event.Timestamp), event.Text, observation.encoded)
 		if err != nil {
 			return nil, err
 		}
@@ -698,13 +682,73 @@ func (s *Store) insertEvents(ctx context.Context, tx *sql.Tx, traceID, revisionI
 			continue
 		}
 		for _, chunk := range searchtext.Chunks(searchable) {
-			if _, err = tx.ExecContext(ctx, "INSERT INTO search_chunks(observation_id,revision_id,event_id,content) VALUES(?,?,?,?)", observationID, revisionID, eventID, chunk); err != nil {
-				return nil, err
-			}
+			chunks = append(chunks, searchChunk{ObservationID: observationID, EventID: eventID, Content: chunk})
 		}
 		if _, err = tx.ExecContext(ctx, `UPDATE events SET preferred_observation_id=(SELECT o.id FROM event_observations o JOIN observation_revisions x ON x.observation_id=o.id JOIN trace_revisions r ON r.id=x.revision_id WHERE o.event_id=events.id ORDER BY r.native_updated_at DESC,o.event_time DESC,(SELECT COUNT(*) FROM json_each(o.event_json,'$.attachments') WHERE json_extract(value,'$.archived_path')<>'') DESC,o.digest DESC LIMIT 1) WHERE id=?`, eventID); err != nil {
 			return nil, err
 		}
+	}
+	return conflicts, insertSearchChunks(ctx, tx, revisionID, chunks)
+}
+
+// preparedObservation is what a revision stores for one normalized event.
+type preparedObservation struct {
+	event      domain.Event // without ID, trace ID, and sources, as the digest covers it
+	sources    []domain.SourceRef
+	searchable string
+	digest     string
+	encoded    []byte
+}
+
+func prepareObservation(event domain.Event, labels string) (preparedObservation, error) {
+	observation := preparedObservation{sources: append([]domain.SourceRef(nil), event.Sources...), searchable: searchableText(event) + "\n" + labels}
+	event.ID, event.TraceID, event.Sources = 0, 0, nil
+	observation.event = event
+	var err error
+	observation.digest, observation.encoded, err = observationDigest(event)
+	return observation, err
+}
+
+type searchChunk struct {
+	ObservationID int64  `json:"o"`
+	EventID       int64  `json:"e"`
+	Content       string `json:"c"`
+}
+
+// insertSearchChunks writes a revision's search chunks in one statement. FTS5
+// flushes its pending index data to disk before each statement in a transaction,
+// so inserting one chunk per statement writes one small index segment per chunk
+// and keeps merging them, which took about half of a re-parse.
+func insertSearchChunks(ctx context.Context, tx *sql.Tx, revisionID int64, chunks []searchChunk) error {
+	if len(chunks) == 0 {
+		return nil
+	}
+	encoded, err := json.Marshal(chunks)
+	if err != nil {
+		return err
+	}
+	_, err = tx.ExecContext(ctx, `INSERT INTO search_chunks(observation_id,revision_id,event_id,content) SELECT json_extract(value,'$.o'),?,json_extract(value,'$.e'),json_extract(value,'$.c') FROM json_each(?) ORDER BY key`, revisionID, string(encoded))
+	return err
+}
+
+// appendConflict adds a conflicting_observation warning when another observation
+// of the event differs from this one. It compares only with revisions parsed by
+// the same normalizer version: while a server re-parses a trace after an upgrade,
+// its other revisions still hold observations in the old shape, and they report
+// their own conflicts when re-parsed.
+func appendConflict(ctx context.Context, tx *sql.Tx, conflicts []domain.Warning, eventID, revisionID int64, digest string, event domain.Event) ([]domain.Warning, error) {
+	var differs bool
+	if err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM event_observations o JOIN observation_revisions x ON x.observation_id=o.id JOIN trace_revisions r ON r.id=x.revision_id WHERE o.event_id=? AND o.digest<>? AND r.normalizer_version=(SELECT normalizer_version FROM trace_revisions WHERE id=?))`, eventID, digest, revisionID).Scan(&differs); err != nil {
+		return nil, err
+	}
+	if differs {
+		var err error
+		if differs, err = differsInContent(ctx, tx, eventID, revisionID, digest, event); err != nil {
+			return nil, err
+		}
+	}
+	if differs {
+		conflicts = append(conflicts, domain.Warning{Code: "conflicting_observation", Message: "conflicting observations retained for event " + event.Key})
 	}
 	return conflicts, nil
 }

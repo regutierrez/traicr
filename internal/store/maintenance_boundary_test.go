@@ -10,6 +10,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"testing/fstest"
 
@@ -206,6 +207,170 @@ func TestRenormalizeReportsConflictsOnlyBetweenRevisionsOfTheNewVersion(t *testi
 	}
 	if len(conflicts) != 1 || conflicts[0] != "conflicting observations retained for event edited" {
 		t.Fatalf("diagnostics = %q; want one conflict for edited", conflicts)
+	}
+}
+
+// A version bump that changes nothing keeps the stored rows and search index, but
+// still raises the version, recomputes conflicts, and records a run. A revision
+// whose output did change is rewritten.
+func TestRenormalizeKeepsUnchangedRevisionsAndRewritesChangedOnes(t *testing.T) {
+	database, _ := openMaintenanceStore(t)
+	ctx := context.Background()
+	var traceID int64
+	for i, revision := range []string{"first", "second", "third"} {
+		input := traceInput("machine", revision, fmt.Sprintf("2026-08-22T10:00:0%dZ", i), "Kept", []domain.Event{
+			{Key: "same", Kind: "message", Text: "unchanged needle", Sources: []domain.SourceRef{{Path: "source/records.jsonl", Line: 1}}},
+			{Key: "edited", Kind: "message", Text: "old " + revision},
+		})
+		report, err := database.Import(ctx, input.manifest, input.files, normalizer(input.events, "normalized", 1), nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		traceID = report.Traces[0].TraceID
+	}
+	before, err := database.Events(ctx, traceID, "", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Version 2 changes one text in the second revision and leaves the first and
+	// third as they were. The third is kept, but still differs from the second.
+	err = database.Renormalize(ctx, func(string) int { return 2 }, func(_ context.Context, descriptor domain.Descriptor, _ fs.FS) (domain.Normalization, error) {
+		edited, line := "old "+descriptor.RevisionDigest, 1
+		switch descriptor.RevisionDigest {
+		case "first":
+			line = 7 // only the source line moves: the revision must be rewritten
+		case "second":
+			edited = "new second"
+		}
+		return domain.Normalization{Version: 2, Status: "normalized", Events: []domain.Event{
+			{Key: "same", Kind: "message", Text: "unchanged needle", Sources: []domain.SourceRef{{Path: "source/records.jsonl", Line: line}}},
+			{Key: "edited", Kind: "message", Text: edited},
+		}}, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	trace, err := database.Trace(ctx, traceID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var conflicts []string
+	for _, revision := range trace.Revisions {
+		if revision.NormalizerVersion != 2 {
+			t.Fatalf("revision %d left at version %d", revision.ID, revision.NormalizerVersion)
+		}
+		for _, warning := range revision.Diagnostics {
+			conflicts = append(conflicts, revision.Digest+": "+warning.Message)
+		}
+	}
+	// The first revision is rebuilt first and finds no sibling at version 2. The
+	// second and the kept third each differ in "edited" from those before them.
+	slices.Sort(conflicts)
+	if fmt.Sprint(conflicts) != "[second: conflicting observations retained for event edited third: conflicting observations retained for event edited]" {
+		t.Fatalf("diagnostics = %q", conflicts)
+	}
+	after, err := database.Events(ctx, traceID, "", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	texts := map[string]string{}
+	for _, event := range after.Events {
+		texts[event.Key] = event.Text
+		if event.Key != "same" {
+			continue
+		}
+		sources, err := database.Sources(ctx, event.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		lines := map[string]int{}
+		for _, source := range sources {
+			lines[source.RevisionDigest] = source.Line
+		}
+		if fmt.Sprint(lines) != "map[first:7 second:1 third:1]" {
+			t.Fatalf("source lines per revision = %v", lines)
+		}
+	}
+	if len(after.Events) != len(before.Events) || texts["same"] != "unchanged needle" || texts["edited"] != "old third" {
+		t.Fatalf("events after rebuild: %+v", after.Events)
+	}
+	for query, want := range map[string]int{"unchanged needle": 1, "new second": 1, "old second": 0, "old third": 1} {
+		page, err := database.Search(ctx, store.SearchQuery{Query: query, Mode: "exact"})
+		if err != nil || len(page.Results) != want {
+			t.Fatalf("search %q: %d results, want %d (%v)", query, len(page.Results), want, err)
+		}
+	}
+}
+
+// Recently used traces are rebuilt first, but inside a trace revisions keep their
+// import order, because that order decides which revision reports a conflict.
+func TestRenormalizeRebuildsNewestTracesFirstAndRevisionsInOrder(t *testing.T) {
+	database, _ := openMaintenanceStore(t)
+	ctx := context.Background()
+	importRevision := func(trace, revision string) {
+		t.Helper()
+		input := traceInput("machine", revision, "2026-08-22T10:00:00Z", trace, []domain.Event{{Key: "event", Kind: "message", Text: revision}})
+		input.manifest.Traces[0].NativeTraceID = trace
+		if _, err := database.Import(ctx, input.manifest, input.files, normalizer(input.events, "normalized", 1), nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	importRevision("old-trace", "old-1")
+	importRevision("busy-trace", "busy-1")
+	importRevision("old-trace", "old-2")
+	importRevision("busy-trace", "busy-2")
+	var order []string
+	failed := 0
+	err := database.Renormalize(ctx, func(string) int { return 2 }, func(_ context.Context, descriptor domain.Descriptor, _ fs.FS) (domain.Normalization, error) {
+		order = append(order, descriptor.RevisionDigest)
+		if descriptor.RevisionDigest == "old-1" {
+			failed++
+			return domain.Normalization{Version: 2, Status: "failed"}, errors.New("cannot parse")
+		}
+		return domain.Normalization{Version: 2, Status: "normalized", Events: []domain.Event{{Key: "event", Kind: "message", Text: descriptor.RevisionDigest}}}, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fmt.Sprint(order) != "[busy-1 busy-2 old-1 old-2]" || failed != 1 {
+		t.Fatalf("rebuild order = %v, failed revision tried %d times", order, failed)
+	}
+}
+
+// A rebuild that drops an event must rewrite the revision, even though every
+// event it still produces is stored unchanged. A revision whose working directory
+// was backfilled after import keeps that label searchable through the rebuild.
+func TestRenormalizeRewritesRevisionsThatDropEventsAndKeepsBackfilledLabels(t *testing.T) {
+	ctx := context.Background()
+	events := []domain.Event{{Key: "kept", Kind: "message", Text: "kept text"}, {Key: "dropped", Kind: "message", Text: "dropped text"}}
+	for _, backfill := range []bool{false, true} {
+		database, _ := openMaintenanceStore(t)
+		input := traceInput("machine", "revision", "2026-08-22T10:00:00Z", "Original", events)
+		report, err := database.Import(ctx, input.manifest, input.files, normalizer(input.events, "normalized", 1), nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		search := map[string]int{"dropped text": 0, "kept text": 1}
+		if backfill {
+			input.manifest.Traces[0].WorkingDirectory = "/backfilled/workdir"
+			if _, err := database.Import(ctx, input.manifest, input.files, normalizer(input.events, "normalized", 1), nil); err != nil {
+				t.Fatal(err)
+			}
+			search["/backfilled/workdir"] = 1
+		}
+		if err := database.Renormalize(ctx, func(string) int { return 2 }, normalizer(events[:1], "normalized", 2)); err != nil {
+			t.Fatal(err)
+		}
+		page, err := database.Events(ctx, report.Traces[0].TraceID, "", 10)
+		if err != nil || len(page.Events) != 1 || page.Events[0].Key != "kept" {
+			t.Fatalf("backfill=%v: events after rebuild: %+v %v", backfill, page.Events, err)
+		}
+		for query, want := range search {
+			page, err := database.Search(ctx, store.SearchQuery{Query: query, Mode: "exact"})
+			if err != nil || len(page.Results) != want {
+				t.Fatalf("backfill=%v: search %q: %d results, want %d (%v)", backfill, query, len(page.Results), want, err)
+			}
+		}
 	}
 }
 

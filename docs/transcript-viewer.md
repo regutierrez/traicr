@@ -205,7 +205,10 @@ that change transcript events must record a normalizer run in the same transacti
 each page reads the generation and events from one database snapshot.
 
 On server startup, the existing reindex worker rebuilds older Amp revisions from
-retained exports. Rebuilds record aliases from old hashed event keys and IDs to
+retained exports. It takes traces with the newest revisions first and each
+trace's revisions oldest first, because that order decides which revision
+reports a conflict. A revision whose stored events already match the rebuild is
+kept as is: only its version, conflicts, and normalizer run change. Rebuilds record aliases from old hashed event keys and IDs to
 stable native keys so event, key, target, leaf, and source-inspection links
 continue to resolve. Reindexing does not require recollection for transcript
 details. Recollect with `traicr collect --all` using the updated collector and
