@@ -315,10 +315,18 @@ func TestRenormalizeRebuildsNewestTracesFirstAndRevisionsInOrder(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	// A trace whose newest revision is already current still goes first: its
+	// older revisions belong to the most recently used trace.
+	importRevision("current-trace", "current-1")
 	importRevision("old-trace", "old-1")
 	importRevision("busy-trace", "busy-1")
 	importRevision("old-trace", "old-2")
 	importRevision("busy-trace", "busy-2")
+	input := traceInput("machine", "current-2", "2026-08-22T10:00:00Z", "current-trace", []domain.Event{{Key: "event", Kind: "message", Text: "current-2"}})
+	input.manifest.Traces[0].NativeTraceID = "current-trace"
+	if _, err := database.Import(ctx, input.manifest, input.files, normalizer(input.events, "normalized", 2), nil); err != nil {
+		t.Fatal(err)
+	}
 	var order []string
 	failed := 0
 	err := database.Renormalize(ctx, func(string) int { return 2 }, func(_ context.Context, descriptor domain.Descriptor, _ fs.FS) (domain.Normalization, error) {
@@ -332,7 +340,7 @@ func TestRenormalizeRebuildsNewestTracesFirstAndRevisionsInOrder(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if fmt.Sprint(order) != "[busy-1 busy-2 old-1 old-2]" || failed != 1 {
+	if fmt.Sprint(order) != "[current-1 busy-1 busy-2 old-1 old-2]" || failed != 1 {
 		t.Fatalf("rebuild order = %v, failed revision tried %d times", order, failed)
 	}
 }
@@ -364,6 +372,14 @@ func TestRenormalizeRewritesRevisionsThatDropEventsAndKeepsBackfilledLabels(t *t
 		page, err := database.Events(ctx, report.Traces[0].TraceID, "", 10)
 		if err != nil || len(page.Events) != 1 || page.Events[0].Key != "kept" {
 			t.Fatalf("backfill=%v: events after rebuild: %+v %v", backfill, page.Events, err)
+		}
+		// A change outside the search text, such as a new parent key, also rewrites it.
+		if err := database.Renormalize(ctx, func(string) int { return 3 }, normalizer([]domain.Event{{Key: "kept", Kind: "message", ParentKey: "parent", Text: "kept text"}}, "normalized", 3)); err != nil {
+			t.Fatal(err)
+		}
+		page, err = database.Events(ctx, report.Traces[0].TraceID, "", 10)
+		if err != nil || len(page.Events) != 1 || page.Events[0].ParentKey != "parent" {
+			t.Fatalf("backfill=%v: parent key not rewritten: %+v %v", backfill, page.Events, err)
 		}
 		for query, want := range search {
 			page, err := database.Search(ctx, store.SearchQuery{Query: query, Mode: "exact"})

@@ -114,35 +114,29 @@ func (s *Store) Renormalize(ctx context.Context, version func(string) int, norma
 	// list is read once, so a revision the normalizer fails on, which keeps its old
 	// version, is tried once per pass.
 	type stale struct {
-		traceID int64
-		harness string
+		traceID, newestRevision int64
+		harness                 string
 	}
 	var traces []stale
-	rows, err := s.db.QueryContext(ctx, `SELECT t.id,t.harness,r.normalizer_version,MAX(r.id) FROM traces t JOIN trace_revisions r ON r.trace_id=t.id GROUP BY t.id,r.normalizer_version`)
+	rows, err := s.db.QueryContext(ctx, `SELECT t.id,t.harness,MAX(r.id),MIN(r.normalizer_version) FROM traces t JOIN trace_revisions r ON r.trace_id=t.id GROUP BY t.id`)
 	if err != nil {
 		return err
 	}
-	newest := map[int64]int64{}
 	for rows.Next() {
 		var item stale
-		var current int
-		var newestRevision int64
-		if err = rows.Scan(&item.traceID, &item.harness, &current, &newestRevision); err != nil {
+		var oldest int
+		if err = rows.Scan(&item.traceID, &item.harness, &item.newestRevision, &oldest); err != nil {
 			rows.Close()
 			return err
 		}
-		if current >= version(item.harness) {
-			continue
-		}
-		if _, seen := newest[item.traceID]; !seen {
+		if oldest < version(item.harness) {
 			traces = append(traces, item)
 		}
-		newest[item.traceID] = max(newest[item.traceID], newestRevision)
 	}
 	if err = errors.Join(rows.Err(), rows.Close()); err != nil {
 		return err
 	}
-	slices.SortFunc(traces, func(a, b stale) int { return cmp.Compare(newest[b.traceID], newest[a.traceID]) })
+	slices.SortFunc(traces, func(a, b stale) int { return cmp.Compare(b.newestRevision, a.newestRevision) })
 	for _, trace := range traces {
 		rows, err := s.db.QueryContext(ctx, `SELECT r.id,r.trace_id,r.digest,r.native_updated_at,r.adapter,t.harness,t.native_trace_id,t.parent_native_trace_id,t.title,t.working_directory,COALESCE(repo.remote,''),COALESCE(repo.root,'') FROM trace_revisions r JOIN traces t ON t.id=r.trace_id LEFT JOIN repositories repo ON repo.id=t.repository_id WHERE r.trace_id=? AND r.normalizer_version<? ORDER BY r.id`, trace.traceID, version(trace.harness))
 		if err != nil {
